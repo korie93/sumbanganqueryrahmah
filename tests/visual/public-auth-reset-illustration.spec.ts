@@ -373,7 +373,7 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       const status = page.locator('.public-auth-status-card--success[role="status"]');
       await expect(status).toBeFocused();
       await expect(status).toContainText("Jika akaun wujud");
-      await expect(status).toContainText("selepas permintaan diluluskan");
+      await expect(status).toContainText("permintaan anda telah dihantar untuk semakan");
       await expect(page.getByRole("heading", { name: "Permintaan diterima", exact: true })).toBeVisible();
       await expect(page.locator(".auth-v17-subtitle")).toHaveText("Emel tetapan semula hanya dihantar selepas kelulusan superuser.");
       await expect(identifier).toHaveCount(0);
@@ -392,7 +392,7 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       await edit.focus(); await edit.press("Enter");
       await expect(identifier).toBeFocused();
       await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
-      await expect(page.getByRole("heading", { name: "Request a password reset", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Forgot your password?", exact: true })).toBeVisible();
       await expect(status).toHaveCount(0);
       await expectForgotIllustration(page, "dark");
       await page.locator(".auth-v17-theme").click();
@@ -400,7 +400,13 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
       expect(fixture.state.counts.forgot).toBe(before + 1);
 
-      await page.locator(".auth-v17-content > button.public-auth-button-ghost").click();
+      await page.locator('form button[type="submit"]').click();
+      await expect(status).toBeFocused();
+      expect(fixture.state.counts.forgot).toBe(before + 2);
+      const backToLogin = page.getByRole("button", { name: "Back to sign in", exact: true });
+      await expect(backToLogin).toHaveAttribute("type", "button");
+      await backToLogin.focus();
+      await backToLogin.press("Enter");
       await expect(page.locator(".auth-v17-login")).toBeVisible();
       await expect(page.locator(".auth-v17")).not.toHaveClass(/(?:^|\s)auth-v17-recovery-artwork(?:\s|$)/);
       await expect(page.locator(".auth-v17-recovery-illustration")).toHaveCount(0);
@@ -411,6 +417,7 @@ test("Forgot request confirmation retains themed illustration and generic workfl
         return style.display !== "none" && style.content !== "none" && style.backgroundImage !== "none";
       }), "Login retains its original artwork").toBe(true);
       expect(fixture.state.counts.login).toBe(0);
+      expect(fixture.state.counts.forgot).toBe(before + 2);
     }
   } finally { await finish(); }
 });

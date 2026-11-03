@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { expect, test, type Page, type Route } from "@playwright/test";
+import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 import type { AxeResults, RunOptions } from "axe-core";
 import { createAuthV17Fixture, authV17FixtureIdentity } from "../../scripts/lib/auth-v17-browser-fixture.mjs";
 import { initializeBrowserThemeFixture, type BrowserThemeFixtureOptions } from "../../scripts/lib/browser-theme-fixture.mjs";
@@ -12,7 +12,10 @@ test.describe.configure({ retries: 0 });
 type Theme = "light" | "dark";
 type ValidationResponse = { kind: "valid" | "network" | "malformed" }
   | { kind: "http"; status: number; code: string; retryAfterMs?: number };
+type ForgotResponse = { kind: "success" | "network" }
+  | { kind: "http"; status: number; code: string; message: string; requestId?: string };
 const tokenPath = `/reset-password?token=${authV17FixtureIdentity.token}`;
+const forgotReferenceId = "api-forgot-retry-fixture-31a5b8c2";
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 const strictPolicy = "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self'; style-src-elem 'self'; style-src-attr 'none'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; trusted-types default sqr-ui dompurify; require-trusted-types-for 'script'";
 
@@ -23,11 +26,17 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: Th
   expect(new URL(origin).hostname).toBe("127.0.0.1");
   expect(new URL(origin).port).not.toBe("");
   const fixture = createAuthV17Fixture(origin);
-  const state: { validation: ValidationResponse; validationGate: Promise<void> | null; forgotGate: Promise<void> | null; forgotIdentifiers: string[] } = {
-    validation: { kind: "valid" }, validationGate: null, forgotGate: null, forgotIdentifiers: [],
+  const state: { validation: ValidationResponse; validationGate: Promise<void> | null; forgot: ForgotResponse;
+    forgotGate: Promise<void> | null; forgotIdentifiers: string[]; canceledForgotRequests: number } = {
+    validation: { kind: "valid" }, validationGate: null, forgot: { kind: "success" },
+    forgotGate: null, forgotIdentifiers: [], canceledForgotRequests: 0,
   };
-  const errors: string[] = [], expectedHttpErrors = new Set<string>();
-  const pending = new Set<Promise<void>>();
+  const errors: string[] = [], expectedHttpErrors = new Map<string, Set<string>>();
+  const pending = new Set<Promise<void>>(), canceled = new WeakSet<Request>();
+  const allowRequestError = (pathname: string, message: string) => {
+    const allowed = expectedHttpErrors.get(pathname) ?? new Set<string>();
+    allowed.add(message); expectedHttpErrors.set(pathname, allowed);
+  };
   await page.emulateMedia({ colorScheme: theme === "light" ? "dark" : "light", reducedMotion: "reduce" });
   await page.addInitScript<BrowserThemeFixtureOptions>(initializeBrowserThemeFixture,
     { origin, mode: "preserve-choice", theme, performanceMode: "high" });
@@ -36,12 +45,16 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: Th
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
   }, origin);
   page.on("pageerror", error => errors.push(error.message));
+  page.on("requestfailed", request => {
+    if (!/ERR_ABORTED|aborted|cancel/i.test(request.failure()?.errorText ?? "")) return;
+    canceled.add(request);
+    if (new URL(request.url()).pathname === "/api/auth/request-password-reset") state.canceledForgotRequests++;
+  });
   page.on("console", message => {
     if (message.type() !== "error") return;
     const text = message.text(), url = new URL(message.location().url || origin, origin);
     if (url.origin === origin && url.pathname === "/api/me" && text.includes("status of 401")) return;
-    if (url.origin === origin && url.pathname === "/api/auth/validate-password-reset-token"
-      && [...expectedHttpErrors].some(expected => text.includes(expected))) return;
+    if (url.origin === origin && [...(expectedHttpErrors.get(url.pathname) ?? [])].some(expected => text.includes(expected))) return;
     errors.push(text);
   });
   await page.context().routeWebSocket("**/*", socket => {
@@ -67,8 +80,31 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: Th
       expect(typeof body.identifier).toBe("string");
       state.forgotIdentifiers.push(body.identifier as string);
       fixture.state.counts.forgot++;
-      if (state.forgotGate) await state.forgotGate;
-      return route.fulfill({ json: { ok: true, message: "If the account exists, its administrator will review the request." } });
+      const response = state.forgot, gate = state.forgotGate;
+      if (gate) {
+        allowRequestError(url.pathname, "net::ERR_ABORTED");
+        await gate;
+      }
+      try {
+        if (response.kind === "network") {
+          allowRequestError(url.pathname, "net::ERR_FAILED");
+          return await route.abort("failed");
+        }
+        if (response.kind === "http") {
+          allowRequestError(url.pathname, `status of ${response.status}`);
+          return await route.fulfill({ status: response.status,
+            ...(response.requestId ? { headers: { "x-request-id": response.requestId } } : {}),
+            json: { ok: false, message: response.message, error: { code: response.code, message: response.message },
+              ...(response.requestId ? { requestId: response.requestId } : {}) },
+          });
+        }
+        return await route.fulfill({ json: { ok: true, message: "If the account exists, its administrator will review the request." } });
+      } catch (error) {
+        // Only a gated request canceled by the actual caller AbortSignal may
+        // ignore late fulfillment. A mocked network failure is not that signal.
+        if (!gate || !canceled.has(request)) throw error;
+      }
+      return;
     }
     if (url.pathname === "/api/auth/validate-password-reset-token" && request.method() === "POST") {
       expect(request.postDataJSON()).toEqual({ token: authV17FixtureIdentity.token });
@@ -78,12 +114,12 @@ async function installFixture(page: Page, baseURL: string | undefined, theme: Th
       fixture.state.counts.validate++;
       if (state.validationGate) await state.validationGate;
       if (response.kind === "network") {
-        expectedHttpErrors.add("net::ERR_FAILED");
+        allowRequestError(url.pathname, "net::ERR_FAILED");
         return route.abort("failed");
       }
       if (response.kind === "malformed") return route.fulfill({ json: { ok: true, reset: { username: "unvalidated.fixture" } } });
       if (response.kind === "http") {
-        expectedHttpErrors.add(`status of ${response.status}`);
+        allowRequestError(url.pathname, `status of ${response.status}`);
         const message = response.status === 429 ? "Too many attempts. Try again in 1 seconds." : "The request was not accepted.";
         return route.fulfill({ status: response.status, json: {
           ok: false, message, error: { code: response.code, message },
@@ -161,6 +197,142 @@ async function expectStableRecoveryGeometry(page: Page, expected: Awaited<Return
 }
 
 for (const theme of ["light", "dark"] as const) {
+  test(`Forgot temporary failure offers a manual localized retry (${theme})`, async ({ page, baseURL }) => {
+    test.setTimeout(90_000);
+    const { fixture, state, settle, finish } = await installFixture(page, baseURL, theme);
+    let releaseForgot: (() => void) | undefined;
+    try {
+      await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+      await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+      const identifier = page.locator("#forgot-password-identifier");
+      const submit = page.locator('form button[type="submit"]');
+      const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+      const reference = page.locator(".public-auth-request-reference__value");
+      await identifier.fill(authV17FixtureIdentity.username);
+
+      for (const response of [{ kind: "network" }, { kind: "http", status: 503, code: "SERVICE_UNAVAILABLE",
+        message: "The recovery service is temporarily unavailable.", requestId: forgotReferenceId }] as const) {
+        state.forgot = response;
+        const before = fixture.state.counts.forgot;
+        await expect(submit).toHaveText("Hantar Permintaan");
+        await submit.focus(); await submit.press("Enter");
+        await expect(submit).toHaveText("Cuba hantar semula");
+        await expect(submit).toBeEnabled();
+        await expect(alert).toBeVisible();
+        const malayError = await alert.innerText();
+        expect(malayError.trim()).not.toBe("");
+        await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
+        if (response.kind === "http") await expect(reference).toHaveText(forgotReferenceId);
+        else await expect(reference).toHaveCount(0);
+        await page.clock.fastForward(60_000);
+        expect(fixture.state.counts.forgot).toBe(before + 1);
+        await expect(alert).toHaveText(malayError);
+
+        await page.getByRole("button", { name: "English", exact: true }).click();
+        await expect(submit).toHaveText("Try sending again");
+        await expect(alert).toBeVisible();
+        const englishError = await alert.innerText();
+        expect(englishError.trim()).not.toBe("");
+        await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
+        if (response.kind === "http") await expect(reference).toHaveText(forgotReferenceId);
+        expect(fixture.state.counts.forgot).toBe(before + 1);
+        await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+        await expect(submit).toHaveText("Cuba hantar semula");
+        await expect(alert).toHaveText(malayError);
+        expect(fixture.state.counts.forgot).toBe(before + 1);
+
+        if (response.kind === "network") {
+          await identifier.fill("corrected.fixture@example.invalid");
+          await expect(submit).toHaveText("Hantar Permintaan");
+          await expect(alert).toHaveCount(0);
+          await expect(reference).toHaveCount(0);
+          expect(fixture.state.counts.forgot).toBe(before + 1);
+          await identifier.fill(authV17FixtureIdentity.username);
+          continue;
+        }
+
+        await page.getByRole("button", { name: "English", exact: true }).click();
+        await expect(submit).toHaveText("Try sending again");
+        await expect(alert).toHaveText(englishError);
+        await expect(reference).toHaveText(forgotReferenceId);
+        state.forgot = { kind: "success" };
+        state.forgotGate = new Promise<void>(resolve => { releaseForgot = resolve; });
+        await submit.focus(); await submit.press("Enter");
+        await expect.poll(() => fixture.state.counts.forgot).toBe(before + 2);
+        await expect(submit).toHaveText("Sending…");
+        await expect(submit).toBeDisabled();
+        await expect(identifier).toBeDisabled();
+        await page.keyboard.press("Enter"); await page.keyboard.press("Enter");
+        await page.clock.fastForward(60_000);
+        expect(fixture.state.counts.forgot).toBe(before + 2);
+        releaseForgot?.(); state.forgotGate = null; await settle();
+
+        const success = page.locator('.public-auth-status-card--success[role="status"]');
+        await expect(success).toContainText("If the account exists");
+        await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeVisible();
+        await expect(page.locator(".auth-v17-subtitle")).toHaveText("A reset email is only sent after superuser approval.");
+        const back = page.getByRole("button", { name: "Back to sign in", exact: true });
+        await expect(back).toHaveClass(/(?:^|\s)public-auth-button-primary(?:\s|$)/);
+        await expect(back).toHaveAttribute("type", "button");
+        await expect(reference).toHaveCount(0);
+        await expect(alert).toHaveCount(0);
+        const edit = page.getByRole("button", { name: "Use a different username/email", exact: true });
+        await edit.focus(); await edit.press("Enter");
+        await expect(identifier).toBeFocused();
+        await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
+        await expect(submit).toHaveText("Send request");
+        expect(fixture.state.counts.forgot).toBe(before + 2);
+      }
+      expect(fixture.state.counts.forgot).toBe(3);
+      expect(state.forgotIdentifiers).toEqual(Array(3).fill(authV17FixtureIdentity.username));
+    } finally { releaseForgot?.(); state.forgotGate = null; await finish(); }
+  });
+
+  test(`Forgot validation and rate limits retain ordinary submission (${theme})`, async ({ page, baseURL }) => {
+    test.setTimeout(90_000);
+    const { fixture, state, finish } = await installFixture(page, baseURL, theme);
+    try {
+      await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+      await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+      await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+      const identifier = page.locator("#forgot-password-identifier");
+      const submit = page.locator('form button[type="submit"]');
+      await submit.focus(); await submit.press("Enter");
+      await expect(identifier).toBeFocused();
+      await expect(identifier).toHaveAttribute("aria-invalid", "true");
+      await expect(submit).toHaveText("Hantar Permintaan");
+      expect(fixture.state.counts.forgot).toBe(0);
+
+      for (const response of [
+        { kind: "http", status: 400, code: "INVALID_IDENTIFIER", message: "Review the recovery identifier before submitting." },
+        { kind: "http", status: 429, code: "AUTH_RECOVERY_RATE_LIMITED", message: "Too many activation or password reset attempts. Please try again shortly." },
+        { kind: "http", status: 503, code: "AUTH_RECOVERY_RATE_LIMITED", message: "Too many activation or password reset attempts. Please try again shortly." },
+      ] as const) {
+        state.forgot = response;
+        const before = fixture.state.counts.forgot;
+        await identifier.fill(authV17FixtureIdentity.username);
+        await submit.focus(); await submit.press("Enter");
+        const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+        await expect(alert).toHaveText(response.message);
+        await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
+        await expect(submit).toHaveText("Hantar Permintaan");
+        await expect(submit).toBeEnabled();
+        await expect(page.locator(".public-auth-request-reference")).toHaveCount(0);
+        await page.getByRole("button", { name: "English", exact: true }).click();
+        await expect(submit).toHaveText("Send request");
+        await expect(alert).toHaveText(response.message);
+        await page.clock.fastForward(60_000);
+        expect(fixture.state.counts.forgot).toBe(before + 1);
+        await expect(alert).toHaveText(response.message);
+        await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+        await expect(submit).toHaveText("Hantar Permintaan");
+        expect(fixture.state.counts.forgot).toBe(before + 1);
+      }
+      expect(fixture.state.counts.forgot).toBe(3);
+    } finally { await finish(); }
+  });
+
   test(`Reset validation recovers manually from connection/server/contract failures (${theme})`, async ({ page, baseURL }, testInfo) => {
     test.setTimeout(90_000);
     const { fixture, state, finish } = await installFixture(page, baseURL, theme);
@@ -199,13 +371,13 @@ for (const theme of ["light", "dark"] as const) {
     const { fixture, state, finish } = await installFixture(page, baseURL, theme);
     try {
       await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("heading", { name: "Permintaan Tetapan Semula Kata Laluan", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Lupa Kata Laluan?", exact: true })).toBeVisible();
       const identifier = page.locator("#forgot-password-identifier");
       await identifier.fill(authV17FixtureIdentity.username);
       await page.locator('form button[type="submit"]').click();
       const success = page.locator('.public-auth-status-card--success[role="status"]');
       await expect(success).toContainText("Jika akaun wujud");
-      await expect(success).toContainText("selepas permintaan diluluskan");
+      await expect(success).toContainText("permintaan anda telah dihantar untuk semakan");
       await expect(page.getByRole("heading", { name: "Permintaan diterima", exact: true })).toBeVisible();
       await expect(page.locator(".auth-v17-subtitle")).toHaveText("Emel tetapan semula hanya dihantar selepas kelulusan superuser.");
       await expect(success).toBeFocused();
@@ -225,7 +397,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(identifier).toBeFocused();
       await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
       await expect(success).toHaveCount(0);
-      await expect(page.getByRole("heading", { name: "Request a password reset", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Forgot your password?", exact: true })).toBeVisible();
       await expect(page.locator(".auth-v17-subtitle")).toContainText("Enter your username or email.");
       expect(fixture.state.counts.forgot).toBe(1);
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
@@ -240,7 +412,7 @@ for (const theme of ["light", "dark"] as const) {
       await editMalay.focus(); await editMalay.press("Space");
       await expect(identifier).toBeFocused();
       await expect(identifier).toHaveValue("corrected.fixture@example.invalid");
-      await expect(page.getByRole("heading", { name: "Permintaan Tetapan Semula Kata Laluan", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Lupa Kata Laluan?", exact: true })).toBeVisible();
       expect(fixture.state.counts.forgot).toBe(2);
     } finally { await finish(); }
   });
@@ -310,6 +482,41 @@ for (const theme of ["light", "dark"] as const) {
     }
   });
 }
+
+test("Leaving a pending Forgot request aborts the caller without offering retry", async ({ page, baseURL }) => {
+  test.setTimeout(90_000);
+  const { fixture, state, settle, finish } = await installFixture(page, baseURL, "light");
+  let releaseForgot: (() => void) | undefined;
+  try {
+    await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+    state.forgot = { kind: "http", status: 503, code: "SERVICE_UNAVAILABLE",
+      message: "The recovery service is temporarily unavailable.", requestId: forgotReferenceId };
+    state.forgotGate = new Promise<void>(resolve => { releaseForgot = resolve; });
+    await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+    await page.locator("#forgot-password-identifier").fill(authV17FixtureIdentity.username);
+    await page.locator('form button[type="submit"]').click();
+    await expect.poll(() => fixture.state.counts.forgot).toBe(1);
+    await expect(page.locator('form button[type="submit"]')).toBeDisabled();
+    await page.getByRole("button", { name: "Kembali ke log masuk", exact: true }).click();
+    await expect(page.locator(".auth-v17-login")).toBeVisible();
+    // Observe the request canceled by the component's real AbortController;
+    // route.abort("aborted") would only simulate a different fetch failure.
+    await expect.poll(() => state.canceledForgotRequests).toBe(1);
+    releaseForgot?.(); state.forgotGate = null; await settle();
+    await page.clock.fastForward(60_000);
+    await expect(page.locator(".auth-v17-login")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Cuba hantar semula", exact: true })).toHaveCount(0);
+    await expect(page.locator(".public-auth-request-reference")).toHaveCount(0);
+    expect(fixture.state.counts.forgot).toBe(1);
+    expect(fixture.state.counts.login).toBe(0);
+    await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#forgot-password-identifier")).toHaveValue("");
+    await expect(page.locator('form button[type="submit"]')).toHaveText("Hantar Permintaan");
+    await expect(page.locator('.public-auth-status-card--error[role="alert"]')).toHaveCount(0);
+    expect(fixture.state.counts.forgot).toBe(1);
+  } finally { releaseForgot?.(); state.forgotGate = null; await finish(); }
+});
 
 test("Authoritative token and access rejections cannot reveal the reset form", async ({ page, baseURL }) => {
   test.setTimeout(90_000);

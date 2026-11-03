@@ -12,7 +12,7 @@ import {
   hasPublicAuthFieldErrors,
   validateIdentifierField,
 } from "@/pages/public-auth-form-utils";
-import { isPublicAuthAbortError } from "@/pages/public-auth-runtime-utils";
+import { isPublicAuthAbortError, isTemporaryPublicAuthRequestError } from "@/pages/public-auth-runtime-utils";
 import { beginPublicAuthActionFocus } from "@/pages/public-auth-action-focus";
 import { getPublicAuthRequestReference } from "@/pages/public-auth-request-reference";
 
@@ -31,6 +31,7 @@ export default function ForgotPasswordPage({
   const [identifierError, setIdentifierError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showRetryHint, setShowRetryHint] = useState(false);
   const [requestReference, setRequestReference] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [invalidFocusRequest, setInvalidFocusRequest] = useState<{ field: "identifier" } | null>(null);
@@ -77,6 +78,7 @@ export default function ForgotPasswordPage({
     }
 
     setError("");
+    setShowRetryHint(false);
     setRequestReference(null);
     setIdentifierError("");
     setInvalidFocusRequest(null);
@@ -107,6 +109,7 @@ export default function ForgotPasswordPage({
         return;
       }
       setError(getApiErrorMessage(submitError, "Permintaan tetapan semula gagal dihantar."));
+      setShowRetryHint(isTemporaryPublicAuthRequestError(submitError));
       setRequestReference(getPublicAuthRequestReference(submitError));
     } finally {
       requestAbortControllerRef.current = null;
@@ -152,6 +155,7 @@ export default function ForgotPasswordPage({
             onClick={() => {
               setIdentifierError("");
               setError("");
+              setShowRetryHint(false);
               setRequestReference(null);
               focusIdentifierAfterEditRef.current = true;
               setSubmitted(false);
@@ -178,6 +182,7 @@ export default function ForgotPasswordPage({
                 setIdentifier(event.target.value);
                 setIdentifierError("");
                 setError("");
+                setShowRetryHint(false);
                 setRequestReference(null);
               }}
               onBlur={handleIdentifierBlur}
@@ -208,14 +213,15 @@ export default function ForgotPasswordPage({
             type="submit"
             disabled={loading}
           >
-            {t(loading ? "auth.v17Recovery.sending" : "auth.v17Recovery.sendRequest")}
+            {t(loading ? "auth.v17Recovery.sending"
+              : showRetryHint ? "auth.v17Recovery.forgotRetry" : "auth.v17Recovery.sendRequest")}
           </PublicAuthButton>
         </form>
       )}
 
       <PublicAuthButton
         type="button"
-        variant="ghost"
+        variant={submitted ? "primary" : "ghost"}
         onClick={() => {
           if (onBackToLogin) {
             onBackToLogin();

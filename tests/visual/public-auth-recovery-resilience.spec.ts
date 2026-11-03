@@ -247,12 +247,28 @@ for (const theme of ["light", "dark"] as const) {
 test("Clipboard denial leaves a truthful manual-copy instruction on a recovery request error", async ({ page, baseURL }) => {
   const { fixture, state, finish } = await installFixture(page, baseURL, "dark");
   try {
-    state.forgotFailure = { status: 500, code: "INTERNAL_SERVER_ERROR", requestId: referenceId };
+    await page.clock.install({ time: new Date("2030-01-01T00:00:00Z") });
+    state.forgotFailure = { status: 500, code: "INTERNAL_ERROR", requestId: referenceId };
     await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => { (window as unknown as ClipboardWindow).__sqrClipboardDenied = true; });
     await page.locator("#forgot-password-identifier").fill(authV17FixtureIdentity.username);
     await page.locator('form button[type="submit"]').click();
     const reference = page.locator(".public-auth-request-reference");
+    const submit = page.locator('form button[type="submit"]');
+    const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+    await expect(submit).toHaveText("Cuba hantar semula");
+    await expect(alert).toHaveText("Synthetic server response.");
+    await expect(page.locator("#forgot-password-identifier")).toHaveValue(authV17FixtureIdentity.username);
+    await expect(reference.locator(".public-auth-request-reference__value")).toHaveText(referenceId);
+    await page.getByRole("button", { name: "English", exact: true }).click();
+    await expect(submit).toHaveText("Try sending again");
+    await expect(alert).toHaveText("Synthetic server response.");
+    await expect(reference.locator(".public-auth-request-reference__value")).toHaveText(referenceId);
+    await page.clock.fastForward(60_000);
+    expect(fixture.state.counts.forgot).toBe(1);
+    await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
+    await expect(submit).toHaveText("Cuba hantar semula");
+    await expect(alert).toHaveText("Synthetic server response.");
     await expect(reference.locator(".public-auth-request-reference__value")).toHaveText(referenceId);
     await reference.getByRole("button", { name: "Salin kod rujukan", exact: true }).click();
     await expect(reference.getByRole("status")).toHaveText("Kod rujukan tidak dapat disalin. Pilih dan salin kod ini secara manual.");
