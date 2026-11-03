@@ -77,6 +77,7 @@
     "collection:reencrypt-sensitive-pii": "tsx scripts/reencrypt-collection-pii.ts --fields icNumber,customerPhone,accountNumber",
     "collection:reencrypt-retired-fields": "tsx scripts/reencrypt-collection-pii.ts --fields-env COLLECTION_PII_RETIRED_FIELDS",
     "collection:audit-receipt-storage": "tsx server/maintenance/audit-collection-receipt-storage.ts",
+    "collection:diagnose-receipt-jpeg": "tsx server/maintenance/diagnose-collection-receipt-jpeg.ts",
     "collection:redact-plaintext-pii": "tsx scripts/redact-collection-pii-plaintext.ts",
     "collection:redact-sensitive-plaintext-pii": "tsx scripts/redact-collection-pii-plaintext.ts --fields icNumber,customerPhone,accountNumber",
     "collection:redact-retired-fields-plaintext-pii": "tsx scripts/redact-collection-pii-plaintext.ts --fields-env COLLECTION_PII_RETIRED_FIELDS",

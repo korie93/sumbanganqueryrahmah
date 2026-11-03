@@ -1,5 +1,6 @@
 import type { ImageDimensions } from "./collection-receipt-image-security-shared";
 import { securityError, uniqueValues } from "./collection-receipt-image-security-shared";
+import { CollectionReceiptSecurityError } from "./collection-receipt-security-shared";
 
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0,
@@ -155,7 +156,10 @@ export function stripJpegMetadata(buffer: Buffer): { buffer: Buffer; removedMeta
   };
 }
 
-export function validateJpegStructure(buffer: Buffer) {
+// Shared structural walk. An offset is observational; callers must still enforce
+// EOF before accepting an upload. Never locate EOI with a raw byte search: APP
+// payloads and scan stuffing can contain bytes that resemble markers.
+function findJpegEoiEndOffset(buffer: Buffer): number {
   if (buffer.length < 4 || buffer[0] !== 0xff || buffer[1] !== 0xd8) {
     throw securityError("Receipt JPEG header is invalid.", "jpeg-header-invalid");
   }
@@ -174,10 +178,7 @@ export function validateJpegStructure(buffer: Buffer) {
     offset += 1;
 
     if (marker === 0xd9) {
-      if (offset !== buffer.length) {
-        throw securityError("Receipt JPEG contains trailing data after the EOI marker.", "jpeg-trailing-data");
-      }
-      return;
+      return offset;
     }
 
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
@@ -218,13 +219,7 @@ export function validateJpegStructure(buffer: Buffer) {
 
         if (next === 0xd9) {
           scanOffset += 1;
-          if (scanOffset !== buffer.length) {
-            throw securityError(
-              "Receipt JPEG contains trailing data after the EOI marker.",
-              "jpeg-trailing-data",
-            );
-          }
-          return;
+          return scanOffset;
         }
 
         offset = markerStart;
@@ -242,4 +237,71 @@ export function validateJpegStructure(buffer: Buffer) {
   }
 
   throw securityError("Receipt JPEG appears incomplete.", "jpeg-eoi-missing");
+}
+
+export function validateJpegStructure(buffer: Buffer): void {
+  if (findJpegEoiEndOffset(buffer) !== buffer.length) {
+    throw securityError("Receipt JPEG contains trailing data after the EOI marker.", "jpeg-trailing-data");
+  }
+}
+
+export type JpegTrailingClassification =
+  | "none"
+  | "nul-only"
+  | "ascii-whitespace-only"
+  | "nul-and-ascii-whitespace"
+  | "jpeg-signature-prefix"
+  | "other"
+  | "unavailable";
+
+export type JpegStructureDiagnostic = {
+  fileBytes: number;
+  /** Zero-based exclusive end offset, including the parser-recognized FF D9. */
+  eoiEndOffset: number | null;
+  trailingBytes: number | null;
+  trailingClassification: JpegTrailingClassification;
+  reasonCode: string | null;
+};
+
+function classifyJpegTrailingBytes(buffer: Buffer, start: number): JpegTrailingClassification {
+  if (start === buffer.length) return "none";
+  if (buffer[start] === 0xff && buffer[start + 1] === 0xd8) return "jpeg-signature-prefix";
+
+  let hasNul = false;
+  let hasWhitespace = false;
+  for (let offset = start; offset < buffer.length; offset += 1) {
+    const byte = buffer[offset];
+    if (byte === 0) {
+      hasNul = true;
+    } else if (byte === 0x20 || (byte >= 0x09 && byte <= 0x0d)) {
+      hasWhitespace = true;
+    } else {
+      return "other";
+    }
+  }
+  if (hasNul && hasWhitespace) return "nul-and-ascii-whitespace";
+  return hasNul ? "nul-only" : "ascii-whitespace-only";
+}
+
+/** Read-only structural metadata. Classification never approves an upload. */
+export function diagnoseJpegStructure(buffer: Buffer): JpegStructureDiagnostic {
+  try {
+    const eoiEndOffset = findJpegEoiEndOffset(buffer);
+    return {
+      fileBytes: buffer.length,
+      eoiEndOffset,
+      trailingBytes: buffer.length - eoiEndOffset,
+      trailingClassification: classifyJpegTrailingBytes(buffer, eoiEndOffset),
+      reasonCode: eoiEndOffset === buffer.length ? null : "jpeg-trailing-data",
+    };
+  } catch (error) {
+    if (!(error instanceof CollectionReceiptSecurityError)) throw error;
+    return {
+      fileBytes: buffer.length,
+      eoiEndOffset: null,
+      trailingBytes: null,
+      trailingClassification: "unavailable",
+      reasonCode: error.reasonCode,
+    };
+  }
 }

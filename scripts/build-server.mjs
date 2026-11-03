@@ -35,6 +35,10 @@ const serverBuilds = [
     entryPoint: path.resolve(cwd, "server/maintenance/audit-collection-receipt-storage.ts"),
     outfile: path.resolve(cwd, "dist-local/scripts/audit-collection-receipt-storage.js"),
   },
+  {
+    entryPoint: path.resolve(cwd, "server/maintenance/diagnose-collection-receipt-jpeg.ts"),
+    outfile: path.resolve(cwd, "dist-local/scripts/diagnose-collection-receipt-jpeg.js"),
+  },
 ];
 
 for (const target of serverBuilds) {
