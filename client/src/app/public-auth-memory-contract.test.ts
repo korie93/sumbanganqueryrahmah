@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,6 +16,28 @@ function readFirstCssRuleBlock(source: string, selector: string) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = source.match(new RegExp(`${escapedSelector}\\s*{([^}]*)}`));
   return match?.[1] ?? "";
+}
+
+function publicAuthButtonClickReferences(source: string) {
+  const file = ts.createSourceFile("recovery.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const references = new Set<string>();
+  const collect = (node: ts.Node) => {
+    if (ts.isIdentifier(node)) references.add(node.text);
+    ts.forEachChild(node, collect);
+  };
+  const visit = (node: ts.Node) => {
+    if ((ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node))
+      && node.tagName.getText(file) === "PublicAuthButton") {
+      const click = node.attributes.properties.filter(ts.isJsxAttribute)
+        .find(attribute => attribute.name.getText(file) === "onClick");
+      if (click?.initializer && ts.isJsxExpression(click.initializer) && click.initializer.expression) {
+        collect(click.initializer.expression);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return references;
 }
 
 test("public authentication routes do not warm the authenticated shell before login succeeds", () => {
@@ -63,9 +86,15 @@ test("public auth recovery routes receive SPA navigation callbacks", () => {
   assert.match(appSource, /onBanned=\{handleBannedSessionDetected\}/);
   assert.match(appSource, /<ResetPasswordPage[\s\S]*onBackToHome=\{\(\) => handlePublicNavigate\("home"\)\}/);
   assert.match(appSource, /onBackToLogin=\{\(\) => handlePublicNavigate\("login"\)\}/);
+  assert.match(appSource, /onRequestNewLink=\{\(\) => handlePublicNavigate\("forgot-password"\)\}/);
   assert.match(activateSource, /<ActivationActions[\s\S]*onBackToLogin=\{navigateToLogin\}/);
   assert.match(resetPasswordSource, /const layoutBackProps = onBackToHome \? \{ onBackClick: onBackToHome \} : \{\};/);
-  assert.match(resetPasswordSource, /onClick=\{navigateToLogin\}/);
+  assert.match(resetPasswordSource, /const navigateToLogin = \(\) => \{\s*if \(onBackToLogin\) \{\s*onBackToLogin\(\);\s*return;\s*\}\s*navigate\("\/"\);/);
+  assert.match(resetPasswordSource, /const navigateToNewLink = \(\) => \{\s*if \(onRequestNewLink\) \{\s*onRequestNewLink\(\);\s*return;\s*\}\s*navigate\("\/forgot-password"\);/);
+  // Contextual buttons can select a callback without binding a literal handler.
+  const clickReferences = publicAuthButtonClickReferences(resetPasswordSource);
+  assert.ok(clickReferences.has("navigateToLogin"), "A reset action must use the SPA sign-in callback");
+  assert.ok(clickReferences.has("navigateToNewLink"), "A reset action must use the SPA new-link callback");
 });
 
 test("glass wrapper base styles are owned by the component stylesheet", () => {
