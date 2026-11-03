@@ -94,7 +94,7 @@ export function CredentialRecoveryLayout({
               aria-hidden="true"
               loading="eager"
               decoding="async"
-              fetchPriority="low"
+              {...{ fetchpriority: "low" }}
               className="credential-recovery__illustration-image"
             />
           </div> : null}

@@ -4,6 +4,7 @@ import { registerHooks } from "node:module";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { Router } from "wouter";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { getPasswordRequirements } from "@/lib/password-requirements";
 
@@ -14,6 +15,7 @@ const stylesheetHook = registerHooks({
   },
 });
 const { CredentialRecoveryLayout } = await import("./CredentialRecoveryLayout");
+const { AuthV17Layout } = await import("./AuthV17Layout");
 stylesheetHook.deregister();
 
 const account = { username: "operator.long-name", role: "user", expiresAt: "2099-01-01T00:00:00Z" };
@@ -27,6 +29,38 @@ function render(accountDetails: typeof account | null = account) {
     intent: "activation",
   }));
 }
+
+test("recovery illustrations retain low fetch priority without React development warnings", () => {
+  const originalError = console.error;
+  let warningCount = 0;
+  let markup: string[];
+  console.error = () => { warningCount++; };
+  try {
+    markup = [
+      renderToStaticMarkup(createElement(CredentialRecoveryLayout, {
+        intent: "reset", illustration: true, title: "Reset password",
+        description: "Create a new password.", children: createElement("form"),
+      })),
+      renderToStaticMarkup(createElement(Router, {
+        ssrPath: "/forgot-password",
+        children: createElement(AuthV17Layout, {
+          recoveryArtwork: true, title: "Request a reset",
+          description: "Enter your account identifier.", children: createElement("form"),
+        }),
+      })),
+    ];
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(warningCount, 0, "Rendering recovery artwork must not log React warnings");
+  for (const html of markup) {
+    const image = html.match(/<img\b[^>]*class="(?:credential-recovery__illustration-image|auth-v17-recovery-illustration)"[^>]*>/)?.[0];
+    assert.ok(image, "The real recovery illustration must render");
+    // React 18 accepts the lowercase HTML hint; camelCase emits a dev warning.
+    assert.match(image, /\bfetchpriority="low"/);
+    assert.doesNotMatch(image, /\bfetchPriority=/);
+  }
+});
 
 test("recovery shell has one heading and contextual account details outside the form", () => {
   const markup = render();

@@ -883,8 +883,11 @@ try {
   }
   console.log("[auth-feedback-browser] PASS 390px/1280px input labels, description references and no horizontal overflow; local screenshots saved");
   await checkAdditionalAuthStateCaptures();
+  markPhase("final audit: unexpected network requests");
   assert.deepEqual(unexpectedRequests, [], "No unexpected or external network access.");
+  markPhase("final audit: browser runtime errors");
   assert.deepEqual(pageErrors, [], "No browser runtime errors.");
+  markPhase("final audit: React warnings");
   assert.deepEqual(reactWarnings, [], "No React warnings.");
   console.log("[auth-feedback-browser] PASS all isolated UI contracts (mocked HTTP, not backend E2E)");
 } catch (error) {

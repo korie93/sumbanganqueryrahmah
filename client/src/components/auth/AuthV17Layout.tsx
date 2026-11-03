@@ -85,7 +85,7 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
             aria-hidden="true"
             loading="eager"
             decoding="async"
-            fetchPriority="low"
+            {...{ fetchpriority: "low" }}
             className="auth-v17-recovery-illustration"
           /> : null}
         </div>
