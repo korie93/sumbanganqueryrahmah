@@ -315,7 +315,7 @@
 .auth-v17.auth-v17-recovery-artwork .auth-v17-art::before { content: none; }
 /* Use the existing full-width art track; the supplied scene has its own padding. */
 .auth-v17 .auth-v17-recovery-illustration { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; max-height: none; margin: auto; object-fit: contain; }
-@media (min-width: 1201px) and (min-height: 761px) {
+@media (min-width: 1200px) and (min-height: 761px) {
   /* The scene starts below an empty top margin in the supplied square asset. */
   .auth-v17 .auth-v17-recovery-illustration { inset: auto 0 0; height: 115%; object-position: center bottom; }
 }
