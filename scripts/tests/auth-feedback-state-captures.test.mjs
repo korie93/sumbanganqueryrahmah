@@ -30,6 +30,55 @@ test("auth fixture seeds a sanitized theme preference before mounting recovery p
     "Every navigation must verify the requested theme rather than silently testing light twice.");
 });
 
+test("forgot-password state captures retry the enabled localized action after the request error", () => {
+  const auth = JSON.parse(readFileSync(new URL("../../client/src/locales/ms/auth.json", import.meta.url), "utf8"));
+  assert.equal(auth["v17Recovery.sendRequest"], "Hantar Permintaan");
+  assert.equal(auth["v17Recovery.forgotRetry"], "Cuba hantar semula");
+  const start = source.indexOf("async function checkAdditionalAuthStateCaptures() {");
+  const end = source.indexOf('await go("change", "fixture-link", theme)', start);
+  assert.ok(start >= 0 && end > start, "The forgot-password state-capture sequence must remain identifiable.");
+  const forgot = source.slice(start, end);
+  const errorCapture = forgot.indexOf('await captureAuthState("forgot-request-error", theme)');
+  assert.ok(errorCapture >= 0, "Capture the failed request before attempting recovery.");
+  const initial = forgot.slice(0, errorCapture);
+  const retry = forgot.slice(errorCapture);
+  assert.match(initial, /forgotRejection = true;\s*await page\.getByRole\("button", \{ name: "Hantar Permintaan", exact: true \}\)\.click\(\)/,
+    "The initial request must use the exact initial localized button.");
+  assert.match(retry, /const retryButton = page\.getByRole\("button", \{ name: "Cuba hantar semula", exact: true \}\)/,
+    "A rejected request changes the action label; do not weaken the selector to any submit button.");
+  assert.match(retry, /await expect\(retryButton\)\.toBeEnabled\(\{ timeout: 5_000 \}\)/,
+    "Observe application retry readiness with a bounded assertion before clicking.");
+  assert.match(retry, /await retryButton\.click\(\)/);
+  assert.doesNotMatch(retry, /name: "Hantar Permintaan"|waitForTimeout|\.catch\s*\(/,
+    "Do not reuse the stale label, sleep through readiness, or swallow a failed retry.");
+
+  const orderedSteps = [
+    'forgotRejection = false;',
+    'markPhase(`forgot/${width}/${theme}: retry readiness`)',
+    'const retryButton = page.getByRole("button", { name: "Cuba hantar semula", exact: true })',
+    'await expect(retryButton).toBeEnabled({ timeout: 5_000 })',
+    'markPhase(`forgot/${width}/${theme}: retry submission`)',
+    'await retryButton.click()',
+    'await captureAuthState("forgot-pending", theme)',
+    'releaseForgot(); forgotResponseGate = null;',
+    'markPhase(`forgot/${width}/${theme}: retry completion`)',
+    'await visibleText(page.locator("[role=status]"), "Jika akaun wujud")',
+    'await captureAuthState("forgot-submitted", theme)',
+  ];
+  let previousIndex = -1;
+  for (const step of orderedSteps) {
+    const index = retry.indexOf(step);
+    assert.ok(index > previousIndex, `Forgot-password retry must observe this ordered step: ${step}`);
+    previousIndex = index;
+  }
+  const retryPhases = [...retry.matchAll(/markPhase\(([^\r\n]*)\)/g)].map((match) => match[1]);
+  assert.deepEqual(retryPhases, [
+    '`forgot/${width}/${theme}: retry readiness`',
+    '`forgot/${width}/${theme}: retry submission`',
+    '`forgot/${width}/${theme}: retry completion`',
+  ], "Retry failure phases contain only the view, viewport, theme and fixed state, never identifiers or response data.");
+});
+
 test("expanded screenshots mask credential and manual key values while retaining visible labels", () => {
   assert.match(source, /mask: \[page\.locator\('input\[type="password"\], #my-account-two-factor-secret, #my-account-two-factor-code, #login-two-factor-code'\)\]/);
   for (const state of [

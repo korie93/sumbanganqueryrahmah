@@ -133,13 +133,18 @@ async function checkAdditionalAuthStateCaptures() {
       await page.locator(".public-auth-status-card--error").waitFor({ state: "visible" });
       await captureAuthState("forgot-request-error", theme);
       forgotRejection = false;
+      markPhase(`forgot/${width}/${theme}: retry readiness`);
+      const retryButton = page.getByRole("button", { name: "Cuba hantar semula", exact: true });
+      await expect(retryButton).toBeEnabled({ timeout: 5_000 });
       let releaseForgot;
       forgotResponseGate = new Promise((resolve) => { releaseForgot = resolve; });
       try {
-        await page.getByRole("button", { name: "Hantar Permintaan", exact: true }).click();
+        markPhase(`forgot/${width}/${theme}: retry submission`);
+        await retryButton.click();
         await page.waitForFunction(() => document.getElementById("forgot-password-identifier")?.disabled === true);
         await captureAuthState("forgot-pending", theme);
       } finally { releaseForgot(); forgotResponseGate = null; }
+      markPhase(`forgot/${width}/${theme}: retry completion`);
       await visibleText(page.locator("[role=status]"), "Jika akaun wujud");
       await captureAuthState("forgot-submitted", theme);
 
