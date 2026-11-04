@@ -17,6 +17,8 @@ declare module "react-window" {
     itemSize: number;
     itemData: T;
     overscanCount?: number;
+    outerElementType?: React.ElementType;
+    innerElementType?: React.ElementType;
     initialScrollOffset?: number;
     layout?: "horizontal" | "vertical";
   }

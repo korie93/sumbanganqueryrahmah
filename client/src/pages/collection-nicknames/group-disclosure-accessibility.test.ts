@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import type { CollectionAdminGroup } from "@/lib/api";
 import { GroupListPanel } from "./GroupListPanel";
 
 test("each group disclosure names its visible leader and preserves expanded/controls state", () => {
   const html = renderToStaticMarkup(createElement(GroupListPanel, {
     loadingGroups: false, selectedGroupId: "", groupSearch: "", expandedGroupIds: ["first"],
-    filteredGroups: ["Amina", "Wei Lin"].map((leaderNickname, index) => ({
+    filteredGroups: ["Amina", "Wei Lin"].map<CollectionAdminGroup>((leaderNickname, index) => ({
       id: index ? "second" : "first", leaderNickname, leaderNicknameId: null,
       leaderIsActive: true, leaderRoleScope: "admin", memberNicknames: [], memberNicknameIds: [],
       createdBy: null, createdAt: "2026-11-04", updatedAt: "2026-11-04",
