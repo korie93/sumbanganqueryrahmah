@@ -83,6 +83,8 @@ function runCli(args: string[], directory: string) {
     cwd: directory,
     env: {
       NODE_ENV: "test",
+      // Keep tsx's bootstrap cache out of the input directory audited below.
+      TSX_DISABLE_CACHE: "1",
       HOME: directory,
       XDG_CACHE_HOME: directory,
       TMPDIR: directory,
