@@ -974,7 +974,18 @@ test("Billing OSP V3 additive schema preserves legacy history and constrains pri
     await pool.query("UPDATE public.users SET username = 'osp-admin-renamed' WHERE id = 'osp-admin-id'");
     const renamed = (await pool.query("SELECT owner_user_id, created_by, updated_by FROM public.collection_osp_private_client_results WHERE owner_user_id = 'osp-admin-id'")).rows[0];
     assert.deepEqual(renamed, { owner_user_id: "osp-admin-id", created_by: "osp-admin-renamed", updated_by: "osp-admin-renamed" });
-    await assert.rejects(pool.query("DELETE FROM public.users WHERE id = 'osp-admin-id'"), { code: "23503" });
+    const serverVersion = Number((await pool.query("SHOW server_version_num")).rows[0]?.server_version_num);
+    assert.ok(Number.isSafeInteger(serverVersion) && serverVersion >= 100000);
+    // PostgreSQL 18 distinguishes RESTRICT from missing-parent FK violations.
+    await assert.rejects(pool.query("DELETE FROM public.users WHERE id = 'osp-admin-id'"), {
+      code: serverVersion >= 180000 ? "23001" : "23503",
+      constraint: "collection_osp_saved_targets_assigned_admin_user_id_fkey",
+      schema: "public",
+      table: "collection_osp_saved_targets",
+    });
+    assert.equal((await pool.query("SELECT username FROM public.users WHERE id = 'osp-admin-id'")).rows[0]?.username, "osp-admin-renamed");
+    assert.equal((await pool.query("SELECT assigned_admin_user_id FROM public.collection_osp_saved_targets WHERE id = $1", [targetId])).rows[0]?.assigned_admin_user_id, "osp-admin-id");
+    assert.equal((await pool.query("SELECT count(*)::int AS count FROM public.collection_osp_private_client_results WHERE target_id = $1", [targetId])).rows[0]?.count, 3);
     const indexes = (await pool.query(`SELECT indexname FROM pg_indexes
       WHERE tablename = 'collection_osp_private_client_results' OR
         indexname = 'idx_collection_osp_saved_targets_assigned_admin_active'`)).rows.map((row) => row.indexname);
