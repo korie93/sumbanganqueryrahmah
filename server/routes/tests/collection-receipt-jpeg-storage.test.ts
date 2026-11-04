@@ -13,6 +13,7 @@ const FIXED_SUFFIX = Buffer.from("ffe000124a465858005741000000000000000000", "he
 const RAW_MAX_BYTES = 5 * 1024 * 1024;
 const ENV_KEYS = [
   "NODE_ENV",
+  "SEED_DEFAULT_USERS",
   "COLLECTION_RECEIPT_QUARANTINE_ENABLED",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED",
   "COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND",
@@ -46,6 +47,8 @@ test("synthetic JPEG receipt storage preserves canonical bytes and upload securi
     // selecting a disposable cwd, keeping all staging/final files isolated.
     process.chdir(fixtureRoot);
     process.env.NODE_ENV = "test";
+    // Release checks seed their own local server; this storage fixture must not.
+    process.env.SEED_DEFAULT_USERS = "0";
     process.env.COLLECTION_RECEIPT_QUARANTINE_ENABLED = "0";
     process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_ENABLED = "1";
     process.env.COLLECTION_RECEIPT_EXTERNAL_SCAN_COMMAND = process.execPath;
