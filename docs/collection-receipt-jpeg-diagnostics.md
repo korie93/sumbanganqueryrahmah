@@ -2,7 +2,7 @@
 
 The message `Receipt JPEG contains trailing data after the EOI marker.` means the structural parser found the JPEG end marker before the end of the uploaded file. The associated API code is `COLLECTION_RECEIPT_JPEG_TRAILING_DATA`. It does not identify the suffix or establish that the suffix is safe.
 
-The read-only diagnostic command produces structural counts and fixed classifications without sharing the image. It uses the same marker walk as upload validation, including progressive scans, marker fill, byte stuffing and length-delimited metadata. Upload validation still requires EOI at EOF and continues to reject every suffix.
+The read-only diagnostic command produces structural counts and fixed classifications without sharing the image. It uses the same marker walk as upload validation, including progressive scans, marker fill, byte stuffing and length-delimited metadata. The shared JPEG validator still requires EOI at EOF and rejects every suffix. Receipt ingestion has the exact-match compatibility normalization described below, before strict validation; the diagnostic itself never normalizes files.
 
 ## Local use
 
@@ -70,16 +70,30 @@ The command opens one regular, singly linked file read-only with final-component
 
 `O_NOFOLLOW` protects the final component only. The operator must supply a trusted, stable parent directory; the command does not promise race-safe traversal of mutable ancestors. It never rewrites, trims, repairs, scans, quarantines, deletes or stores the selected file.
 
-## Investigation status
+## Confirmed cause and receipt-only compatibility
 
-Ordinary synthetic baseline/progressive JPEGs and multipart uploads have passed local checks. The reported failure's suffix remains unclassified until this metadata or a reproducing synthetic input is available. This diagnostic addition is not a claimed permanent fix for that unavailable input. Do not remove strict EOF validation, invent an EOI marker, or silently discard an unclassified suffix to hide the failure.
+Two operator-supplied failing receipts reproduced `jpeg-trailing-data`. Both had a complete JPEG primary stream followed by the same fixed 20 bytes:
+
+```text
+FF E0 00 12 4A 46 58 58 00 57 41 00 00 00 00 00 00 00 00 00
+```
+
+This is an observed nonstandard APP0/JFXX-WA-shaped trailer, not an incomplete image. Its producer has not been established. The `JFXX` identifier alone does not make it a standard JFIF extension: [ITU T.871](https://www.itu.int/rec/dologin_pub.asp?id=T-REC-T.871-201105-I%21%21PDF-E&lang=e&type=items), section 10.2, defines extension codes `10`, `11` and `13`, whereas these bytes contain `57` after the identifier.
+
+`sanitizeAndInspectCollectionReceiptBuffer()` removes exactly this entire constant suffix, only for JPEG receipt ingestion. The candidate must then pass the unchanged sanitizer, including structural EOI-at-EOF validation, metadata removal and image dimension/pixel limits. No EOI is invented, no arbitrary trailer is accepted, and no raster is recompressed. Altered, shortened, repeated or extended trailers and appended second images remain rejected. The removal is recorded as `jpeg-jfxx-wa-trailer`.
+
+Both base64 and multipart ingestion scan, hash and persist the sanitized bytes, with their sanitized size. Raw upload limits and declared MIME/extension checks run before normalization. Scanner failure remains fail closed. Shared validation, avatar uploads, recovery of stored files, permissions and collection transactions are unchanged. Existing stored receipts are not rewritten.
+
+Tests use genuine baseline/progressive encodings of synthetic 2x2 images and the fixed non-image constant; the supplied receipts are not repository fixtures. The diagnostic continues to report their original suffix as `other` / `jpeg-trailing-data`, even though receipt ingestion can safely remove this exact constant before validating the remaining JPEG.
 
 Run the focused regressions with the existing toolchain:
 
 ```bash
 node --import tsx --test --test-concurrency=1 \
   server/lib/tests/collection-receipt-jpeg-diagnostics.test.ts \
-  server/lib/tests/collection-receipt-jpeg-diagnostic-file.test.ts
+  server/lib/tests/collection-receipt-jpeg-diagnostic-file.test.ts \
+  server/routes/tests/collection-receipt-jpeg-compatibility.test.ts \
+  server/routes/tests/collection-receipt-jpeg-storage.test.ts
 ```
 
-Both files also participate in `npm run test:services`. Tests use synthetic bytes and disposable directories only. No dependency was added for the diagnostic tool.
+The diagnostic tests also participate in `npm run test:services`; the compatibility/storage tests participate in `npm run test:routes`. Tests use synthetic bytes and disposable directories only. No dependency was added.

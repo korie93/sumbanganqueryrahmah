@@ -12,6 +12,12 @@ import {
 } from "./collection-receipt-file-type-utils";
 import { logCollectionReceiptSanitization } from "./collection-receipt-storage-utils";
 
+// Exact fixed trailer observed in receipt exports. This is not a general APP0
+// allowance: every byte must match and the remaining JPEG must pass the strict
+// sanitizer below, including EOI at EOF. Keep shared/avatar/recovery validation
+// unchanged, and never store or scan the discarded trailer as image content.
+const JPEG_JFXX_WA_TRAILER = Buffer.from("ffe000124a465858005741000000000000000000", "hex");
+
 export type StoredCollectionReceiptFile = CreateCollectionRecordReceiptInput & {
   extractionMessage?: string | null | undefined;
 };
@@ -44,7 +50,16 @@ export async function sanitizeAndInspectCollectionReceiptBuffer(params: {
   buffer: Buffer;
   signatureType: CollectionReceiptFileType;
 }) {
-  const sanitized = sanitizeCollectionReceiptBuffer(params.buffer, params.signatureType);
+  const hasKnownJpegTrailer = params.signatureType === "jpg"
+    && params.buffer.length > JPEG_JFXX_WA_TRAILER.length
+    && params.buffer.subarray(-JPEG_JFXX_WA_TRAILER.length).equals(JPEG_JFXX_WA_TRAILER);
+  const candidate = hasKnownJpegTrailer
+    ? params.buffer.subarray(0, -JPEG_JFXX_WA_TRAILER.length)
+    : params.buffer;
+  const sanitized = sanitizeCollectionReceiptBuffer(candidate, params.signatureType);
+  if (hasKnownJpegTrailer) {
+    sanitized.removedMetadataKinds.push("jpeg-jfxx-wa-trailer");
+  }
   logCollectionReceiptSanitization({
     fileName: params.fileName,
     signatureType: params.signatureType,
