@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { MonitorOverviewHero } from "@/components/monitor/MonitorOverviewHero";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import { MonitorOverviewStatsGrid } from "@/components/monitor/MonitorOverviewStatsGrid";
 import {
   buildMonitorOverviewCompactSummary,
@@ -102,10 +103,10 @@ function MonitorOverviewSectionImpl({
                     variant="outline"
                     className={
                       compactSummary.tone === "stable"
-                        ? "rounded-full border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-600 dark:text-emerald-400"
+                        ? `rounded-full border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs ${monitorStatusTextClass.good}`
                         : compactSummary.tone === "attention"
-                          ? "rounded-full border-red-500/30 bg-red-500/10 px-3 py-1 text-xs text-red-600 dark:text-red-400"
-                          : "rounded-full border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-700 dark:text-amber-400"
+                          ? `rounded-full border-red-500/30 bg-red-500/10 px-3 py-1 text-xs ${monitorStatusTextClass.critical}`
+                          : `rounded-full border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs ${monitorStatusTextClass.warning}`
                     }
                   >
                     {compactSummary.badge}

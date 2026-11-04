@@ -95,7 +95,7 @@ export function GroupListPanel({
                       onClick={() => onToggleExpandGroup(group.id)}
                       aria-expanded="true"
                       aria-controls={memberListId}
-                      aria-label="Collapse group members"
+                      aria-label={`Collapse group members: ${group.leaderNickname}`}
                     >
                       {groupToggleContent}
                     </button>
@@ -106,7 +106,7 @@ export function GroupListPanel({
                       onClick={() => onToggleExpandGroup(group.id)}
                       aria-expanded="false"
                       aria-controls={memberListId}
-                      aria-label="Expand group members"
+                      aria-label={`Expand group members: ${group.leaderNickname}`}
                     >
                       {groupToggleContent}
                     </button>

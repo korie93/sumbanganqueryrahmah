@@ -8,6 +8,7 @@ import {
 import { MonitorActiveAlertsList } from "@/components/monitor/MonitorActiveAlertsList";
 import { MonitorAlertHistoryList } from "@/components/monitor/MonitorAlertHistoryList";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -41,7 +42,7 @@ function getMonitorAlertSummaryToneClass(tone: MonitorAlertSummaryTone) {
   }
 
   if (tone === "watch") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    return `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`;
   }
 
   return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
@@ -196,21 +197,23 @@ function MonitorAlertsSectionImpl({
       <Collapsible open={alertsOpen} onOpenChange={onAlertsOpenChange}>
         <Card className="border-border/60 bg-background/35 sqr-backdrop-blur-sm">
           <CardContent className="p-4">
-            <CollapsibleTrigger asChild>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between rounded-md px-1 text-left"
-                data-testid="monitor-alerts-toggle"
-              >
-                <span className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                  {isMobile ? "Alerts" : "Active Alerts"}
-                  <span className="hidden sm:inline-flex">
-                    <InfoHint text="Live alerts generated from monitor thresholds. Critical alerts indicate urgent action." />
+            <div className="flex items-center gap-2">
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex min-h-8 min-w-0 flex-1 items-center justify-between rounded-md px-1 text-left"
+                  data-testid="monitor-alerts-toggle"
+                >
+                  <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                    {isMobile ? "Alerts" : "Active Alerts"}
                   </span>
-                </span>
-                {alertsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </button>
-            </CollapsibleTrigger>
+                  {alertsOpen ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
+                </button>
+              </CollapsibleTrigger>
+              <span className="hidden sm:inline-flex">
+                <InfoHint label="Maklumat bantuan Active Alerts" text="Live alerts generated from monitor thresholds. Critical alerts indicate urgent action." />
+              </span>
+            </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge
                 variant="outline"

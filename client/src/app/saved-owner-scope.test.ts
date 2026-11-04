@@ -19,5 +19,5 @@ test("the authenticated permission gate denies Saved before creating its owner",
   const gate = source.indexOf("if (!pageEnabled)");
   const saved = source.indexOf('case "saved":');
   assert.ok(gate >= 0 && gate < saved);
-  assert.match(source.slice(gate, saved), /return <ForbiddenPage \/>/);
+  assert.match(source.slice(gate, saved), /return <ForbiddenPage embedded \/>/);
 });

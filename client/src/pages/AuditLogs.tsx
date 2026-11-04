@@ -49,6 +49,9 @@ export default function AuditLogs() {
     logs,
     stats,
     loading,
+    error,
+    hasCurrentResults,
+    hasPreviousResults,
     setPage,
     pagination,
     filters,
@@ -148,7 +151,7 @@ export default function AuditLogs() {
             <PopoverTrigger asChild>
               <Button
                 variant="outline"
-                disabled={loading || logs.length === 0 || exportingPdf}
+                disabled={!hasCurrentResults || logs.length === 0 || exportingPdf}
                 className="w-full"
                 data-testid="button-export-logs"
               >
@@ -162,7 +165,7 @@ export default function AuditLogs() {
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={() => void handleExportCsv()}
-                  disabled={exportingPdf}
+                  disabled={!hasCurrentResults || exportingPdf}
                   data-testid="button-export-csv"
                 >
                   <Download className="mr-2 h-4 w-4" />
@@ -172,7 +175,7 @@ export default function AuditLogs() {
                   variant="ghost"
                   className="w-full justify-start"
                   onClick={() => void handleExportPdf()}
-                  disabled={exportingPdf}
+                  disabled={!hasCurrentResults || exportingPdf}
                   data-testid="button-export-pdf"
                 >
                   <FileText className="mr-2 h-4 w-4" />
@@ -240,19 +243,29 @@ export default function AuditLogs() {
         </Suspense>
       ) : null}
 
-      <AuditLogsSummaryStrip loading={loading} logs={logs} total={pagination.total} />
+      {error ? (
+        <div role="alert" className="space-y-3 rounded-xl border border-border bg-card p-4" data-testid="audit-logs-load-error">
+          <p className="font-medium">Unable to load audit records</p>
+          <p className="break-words text-sm text-muted-foreground">{error}</p>
+          {hasPreviousResults ? <p className="text-sm text-muted-foreground">Previous results are not shown because they may not match the current request.</p> : null}
+          <Button type="button" variant="outline" onClick={refreshNow} data-testid="button-retry-audit-logs">Retry</Button>
+        </div>
+      ) : null}
 
-      <AuditLogsRequestTimeline
+      {hasCurrentResults ? <AuditLogsSummaryStrip loading={false} logs={logs} total={pagination.total} /> : null}
+
+      {hasCurrentResults ? <AuditLogsRequestTimeline
         loading={loading}
         logs={logs}
         requestId={activeRequestId}
         total={pagination.total}
-      />
+      /> : null}
 
       <Suspense fallback={<AuditLogsRecordsFallback />}>
         <AuditLogsRecordsList
           filteredLogs={logs}
           loading={loading}
+          unavailable={!hasCurrentResults}
           onClearFilters={handleClearFilters}
           onRecordsOpenChange={setRecordsOpen}
           onTraceRequestId={handleTraceRequestId}
@@ -261,7 +274,7 @@ export default function AuditLogs() {
         />
       </Suspense>
 
-      <AppPaginationBar
+      {hasCurrentResults ? <AppPaginationBar
         disabled={loading}
         loading={loading}
         page={pagination.page}
@@ -271,7 +284,7 @@ export default function AuditLogs() {
         itemLabel="audit logs"
         onPageChange={setPage}
         onPageSizeChange={handlePageSizeChange}
-      />
+      /> : null}
     </div>
   );
 }

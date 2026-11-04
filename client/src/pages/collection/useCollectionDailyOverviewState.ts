@@ -186,6 +186,7 @@ export function useCollectionDailyOverviewState({
   ]);
 
   return {
+    isOverviewLoading: useCallback(() => overviewAbortControllerRef.current !== null, []),
     overview,
     loadingOverview,
     monthlyTargetInput,

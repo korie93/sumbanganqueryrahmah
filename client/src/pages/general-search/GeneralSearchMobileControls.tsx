@@ -33,6 +33,8 @@ interface GeneralSearchMobileControlsProps {
   filters: FilterRow[];
   loading: boolean;
   loadingColumns: boolean;
+  columnsError?: string;
+  onRetryColumns?: () => void;
   logic: "AND" | "OR";
   query: string;
   onAddFilter: () => void;
@@ -54,6 +56,8 @@ export function GeneralSearchMobileControls({
   filters,
   loading,
   loadingColumns,
+  columnsError = "",
+  onRetryColumns,
   logic,
   query,
   onAddFilter,
@@ -318,6 +322,8 @@ export function GeneralSearchMobileControls({
                     filters={filters}
                     loading={loading}
                     loadingColumns={loadingColumns}
+                    columnsError={columnsError}
+                    onRetryColumns={onRetryColumns}
                     logic={logic}
                     onAddFilter={onAddFilter}
                     onLogicChange={onLogicChange}

@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { CHAOS_OPTIONS, type ChaosOption } from "@/components/monitor/monitorData";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -39,11 +40,13 @@ function MonitorChaosControlsImpl({
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Scenario Type</p>
+              <Label htmlFor="monitor-chaos-type" className="text-xs uppercase tracking-wide text-muted-foreground">
+                Scenario Type
+              </Label>
               <InfoHint text="Select the fault profile to inject into intelligence simulation stream." />
             </div>
             <Select value={chaosType} onValueChange={(value) => onChaosTypeChange(value as ChaosType)}>
-              <SelectTrigger>
+              <SelectTrigger id="monitor-chaos-type">
                 <SelectValue placeholder="Choose scenario" />
               </SelectTrigger>
               <SelectContent>
@@ -118,7 +121,7 @@ function MonitorChaosControlsImpl({
         </div>
 
         {lastChaosMessage ? (
-          <p className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+          <p className={`rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs ${monitorStatusTextClass.good}`}>
             {lastChaosMessage}
           </p>
         ) : null}

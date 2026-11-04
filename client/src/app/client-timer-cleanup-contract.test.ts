@@ -199,7 +199,9 @@ test("AI page typing interval remains owned by runtime cleanup refs", () => {
   const typingSource = readClientSource("../pages/ai/useAIPageTypingAction.ts");
   const runtimeSource = readClientSource("../pages/ai/useAIPageRuntimeRefs.ts");
 
-  assert.match(typingSource, /stopTyping\(\);[\s\S]*typingTimerRef\.current = window\.setInterval/);
+  assert.match(typingSource, /stopTyping\(\);[\s\S]*const timerId = window\.setInterval/);
+  assert.match(typingSource, /typingTimerRef\.current = timerId/);
+  assert.match(typingSource, /typingTimerRef\.current !== timerId[\s\S]*window\.clearInterval\(timerId\)/);
   assert.match(runtimeSource, /window\.clearInterval\(typingTimerRef\.current\)/);
   assert.match(runtimeSource, /typingTimerRef\.current = null/);
 });

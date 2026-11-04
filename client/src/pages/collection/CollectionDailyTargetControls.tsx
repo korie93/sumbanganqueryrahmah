@@ -17,6 +17,7 @@ export type CollectionDailyTargetControlsProps = {
   onSaveCalendar: () => void;
   calendarDays: EditableCalendarDay[];
   dirtyCalendarDaysCount: number;
+  loadingOverview?: boolean;
 };
 
 export function CollectionDailyTargetControls({
@@ -30,8 +31,10 @@ export function CollectionDailyTargetControls({
   onSaveCalendar,
   calendarDays,
   dirtyCalendarDaysCount,
+  loadingOverview = false,
 }: CollectionDailyTargetControlsProps) {
   const isMobile = useIsMobile();
+  const busy = savingTarget || savingCalendar || loadingOverview;
   const canSaveCalendarChanges =
     canEditCalendar && calendarDays.length > 0 && dirtyCalendarDaysCount > 0;
   const calendarSaveHelpText = !canEditCalendar
@@ -60,7 +63,7 @@ export function CollectionDailyTargetControls({
           autoComplete="off"
           value={monthlyTargetInput}
           onChange={(event) => onMonthlyTargetInputChange(event.target.value)}
-          disabled={!canEditTarget}
+          disabled={!canEditTarget || busy}
           className={isMobile ? "h-11 rounded-md bg-background" : "h-9 rounded-md bg-background"}
         />
         {!canEditTarget ? (
@@ -83,7 +86,8 @@ export function CollectionDailyTargetControls({
             isMobile ? "min-h-11 h-auto rounded-md px-2 py-2" : "min-h-9 h-auto rounded-md py-2 sm:w-auto",
           )}
           onClick={onSaveTarget}
-          disabled={savingTarget || !canEditTarget}
+          disabled={busy || !canEditTarget || dirtyCalendarDaysCount > 0}
+          aria-describedby={dirtyCalendarDaysCount > 0 ? "collection-daily-calendar-save-help" : undefined}
         >
           {savingTarget ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -100,7 +104,7 @@ export function CollectionDailyTargetControls({
             isMobile ? "min-h-11 h-auto rounded-md px-2 py-2" : "min-h-9 h-auto rounded-md py-2 sm:w-auto",
           )}
           onClick={onSaveCalendar}
-          disabled={savingCalendar || !canSaveCalendarChanges}
+          disabled={busy || !canSaveCalendarChanges}
         >
           {savingCalendar ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -111,11 +115,15 @@ export function CollectionDailyTargetControls({
         </Button>
       </div>
       <p
+        id="collection-daily-calendar-save-help"
         className={cn("text-xs text-muted-foreground", isMobile ? "sm:col-span-2" : "md:col-span-2")}
         aria-live="polite"
         aria-atomic="true"
       >
         {calendarSaveHelpText}
+        {canEditTarget && dirtyCalendarDaysCount > 0
+          ? " Save Changed Days dahulu, atau klik Refresh dan sahkan pembatalan perubahan sebelum Save Target."
+          : null}
       </p>
     </div>
   );

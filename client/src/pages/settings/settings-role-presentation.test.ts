@@ -30,11 +30,16 @@ const roles: RoleSections = {
   other: [setting("canViewSystemPerformance", "true", false)],
 };
 
-function render(roleSections: RoleSections | null = roles, rolePermissionImpacts: RolePermissionImpact[] = []) {
+function render(
+  roleSections: RoleSections | null = roles,
+  rolePermissionImpacts: RolePermissionImpact[] = [],
+  getEffectiveValue?: ComponentProps<typeof SettingsRoleSections>["getEffectiveValue"],
+) {
   const renderedSettings: SettingItem[] = [];
   const markup = renderToStaticMarkup(createElement(SettingsRoleSections, {
     roleSections,
     rolePermissionImpacts,
+    getEffectiveValue,
     renderSettingCard: (item) => {
       renderedSettings.push(item);
       return createElement("div", { key: item.key, "data-setting": item.key }, item.label);
@@ -59,6 +64,50 @@ test("role search and manager-first tabs precede a collapsed native comparison d
   assert.doesNotMatch(markup, /shadcn-card|backdrop|min-w-\[560px\]/);
   const source = readFileSync(new URL("./SettingsRoleSections.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(source, /<Card|shadow-sm|bg-background\/55/);
+});
+
+test("role counts and comparison preview draft grants, blocks and reverts without mutating saved settings", () => {
+  const managerHome = setting("tab_manager_home_enabled", "true");
+  const managerBackup = setting("tab_manager_backup_enabled", "false", false);
+  const adminHome = setting("tab_admin_home_enabled", "true");
+  const previewRoles: RoleSections = {
+    manager: [managerHome, managerBackup], admin: [adminHome], user: [], other: [],
+  };
+  const savedValues = previewRoles.manager.map((item) => item.value);
+  const drafts: Record<string, boolean> = {
+    tab_manager_home_enabled: false,
+    tab_manager_backup_enabled: true,
+    tab_admin_home_enabled: false,
+  };
+  const readEffective = (item: SettingItem) => Object.prototype.hasOwnProperty.call(drafts, item.key) ? drafts[item.key] : item.value;
+  const preview = render(previewRoles, [], readEffective);
+  const rows = [...preview.markup.matchAll(/<tr>[^]*?<\/tr>/g)].map(([row]) => row);
+  const backupRow = rows.find((row) => row.includes("manager_backup"));
+  const homeRow = rows.find((row) => row.includes("manager_home"));
+  assert.ok(backupRow && homeRow);
+  assert.equal((backupRow.match(/Allowed/g) ?? []).length, 1);
+  assert.equal((homeRow.match(/Blocked/g) ?? []).length, 2);
+  assert.match(preview.markup, /Counts and comparison include unsaved changes/);
+  assert.match(preview.markup, /Access changes only after saving/);
+  assert.ok(preview.renderedSettings.includes(managerBackup));
+  assert.equal(managerBackup.permission.canEdit, false);
+  assert.deepEqual(previewRoles.manager.map((item) => item.value), savedValues);
+
+  // Change one draft without changing the saved section reference.
+  drafts.tab_manager_backup_enabled = false;
+  const blocked = render(previewRoles, [], readEffective);
+  const counts = blocked.markup.match(/role="group" aria-label="Permission counts"[^]*?<\/div>/)?.[0];
+  assert.ok(counts);
+  assert.match(counts, /0 enabled/);
+  assert.match(counts, /2 blocked/);
+  for (const key of Object.keys(drafts)) delete drafts[key];
+  const reverted = render(previewRoles, [], readEffective);
+  const revertedCounts = reverted.markup.match(/role="group" aria-label="Permission counts"[^]*?<\/div>/)?.[0];
+  assert.ok(revertedCounts);
+  assert.match(revertedCounts, /1 enabled/);
+  assert.match(revertedCounts, /1 blocked/);
+  assert.equal((reverted.markup.match(/Allowed/g) ?? []).length, 2);
+  assert.deepEqual(previewRoles.manager.map((item) => item.value), savedValues);
 });
 
 test("comparison retains every module and Allowed, Blocked and Not set states with table headers", () => {

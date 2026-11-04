@@ -22,6 +22,7 @@ function ViewerVirtualizedRowImpl({
   return (
     <PositionedRowShell positionStyle={style}>
       <ViewerGridShell
+        rowIndex={index + 2}
         ariaLabel={buildViewerRowAriaLabel({
           row,
           visibleHeaders: data.visibleHeaders,
@@ -31,22 +32,24 @@ function ViewerVirtualizedRowImpl({
           selected ? "bg-primary/10" : ""
         }`}
       >
-        <div className={data.density === "compact" ? "px-2" : "px-3"}>
+        <div role="cell" aria-colindex={1} className={data.density === "compact" ? "px-2" : "px-3"}>
           <Checkbox
             checked={selected}
             onCheckedChange={() => data.onToggleRowSelection(row.__rowId)}
             aria-label={`Select row ${row.__rowId + 1}`}
           />
         </div>
-        <div className={`${data.density === "compact" ? "px-2" : "px-3"} text-muted-foreground`}>
+        <div role="cell" aria-colindex={2} className={`${data.density === "compact" ? "px-2" : "px-3"} text-muted-foreground`}>
           {row.__rowId + 1}
         </div>
-        {data.visibleHeaders.map((header) => {
+        {data.visibleHeaders.map((header, index) => {
           const cellText = formatViewerCellValue(row[header]);
 
           return (
             <div
               key={`${row.__rowId}-${header}`}
+              role="cell"
+              aria-colindex={index + 3}
               className={`${header === data.pinnedColumn ? styles.pinnedCell : ""} truncate whitespace-nowrap px-3 text-foreground`}
               title={cellText}
               aria-label={cellText}
@@ -58,7 +61,7 @@ function ViewerVirtualizedRowImpl({
             </div>
           );
         })}
-        <div className="flex justify-center px-2">
+        <div role="cell" aria-colindex={data.visibleHeaders.length + 3} className="flex justify-center px-2">
           <ViewerRowDetailsButton row={row} onInspectRow={data.onInspectRow} />
         </div>
       </ViewerGridShell>

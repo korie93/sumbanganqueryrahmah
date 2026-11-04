@@ -1,39 +1,43 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { getAuditLogs, getAuditLogStats } from "@/lib/api";
+import { getApiErrorMessage } from "@/lib/api-errors";
 import { logClientError } from "@/lib/client-logger";
 import {
   buildAuditLogsRequestParams,
   DEFAULT_AUDIT_LOG_FILTERS,
   hasActiveAuditLogFilters,
-  normalizeAuditLogsPagination,
 } from "@/pages/audit-logs/audit-log-page-state-utils";
+import { buildAuditLogsReadKey, createAuditLogsReadState, reduceAuditLogsReadState, selectAuditLogsReadView } from "@/pages/audit-logs/audit-logs-read-state";
 import type { AuditLogFilters, AuditLogRecord, AuditLogsResponse, AuditLogStats } from "@/pages/audit-logs/types";
 
-const initialPagination = {
-  page: 1,
-  pageSize: 20,
-  total: 0,
-  totalPages: 1,
-};
-
 export function useAuditLogsDataState() {
-  const [logs, setLogs] = useState<AuditLogRecord[]>([]);
+  const [readState, dispatchRead] = useReducer(reduceAuditLogsReadState, undefined, createAuditLogsReadState);
   const [stats, setStats] = useState<AuditLogStats | null>(null);
-  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<AuditLogFilters>(DEFAULT_AUDIT_LOG_FILTERS);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [pagination, setPagination] = useState(initialPagination);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const deferredSearchText = useDeferredValue(filters.searchText.trim());
   const mountedRef = useRef(true);
   const logsRequestIdRef = useRef(0);
   const statsRequestIdRef = useRef(0);
+  const queryKey = buildAuditLogsReadKey(filters, page, pageSize, refreshNonce);
+  const requestKey = buildAuditLogsReadKey(filters, page, pageSize, refreshNonce, deferredSearchText);
+  const currentReadRef = useRef({ state: readState, queryKey, page, pageSize });
+  currentReadRef.current = { state: readState, queryKey, page, pageSize };
+  const view = selectAuditLogsReadView(readState, queryKey, page, pageSize);
+  const { logs, pagination, loading, error, hasCurrentResults, hasPreviousResults } = view;
+  const getExportLogs = useCallback((): AuditLogRecord[] | null => {
+    const current = currentReadRef.current;
+    const currentView = selectAuditLogsReadView(current.state, current.queryKey, current.page, current.pageSize);
+    return mountedRef.current && currentView.hasCurrentResults ? currentView.logs : null;
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      logsRequestIdRef.current += 1;
     };
   }, []);
 
@@ -54,46 +58,44 @@ export function useAuditLogsDataState() {
   }, []);
 
   useEffect(() => {
+    if (queryKey !== requestKey) return;
     const requestId = ++logsRequestIdRef.current;
+    let active = true;
+    const isCurrent = () => active && mountedRef.current && requestId === logsRequestIdRef.current
+      && currentReadRef.current.queryKey === requestKey;
     const run = async () => {
-      setLoading(true);
+      dispatchRead({ type: "loading", requestId, queryKey: requestKey });
       try {
         const response = await getAuditLogs(
           buildAuditLogsRequestParams(filters, page, pageSize, deferredSearchText),
         ) as AuditLogsResponse;
-        if (!mountedRef.current || requestId !== logsRequestIdRef.current) {
+        if (!isCurrent()) {
           return;
         }
 
-        const items = Array.isArray(response?.logs) ? response.logs : [];
-        setLogs(items);
-        setPagination(
-          normalizeAuditLogsPagination(response?.pagination, page, pageSize, items.length),
-        );
+        dispatchRead({ type: "success", requestId, queryKey: requestKey, response, page, pageSize });
       } catch (error) {
-        if (!mountedRef.current || requestId !== logsRequestIdRef.current) {
+        if (!isCurrent()) {
           return;
         }
         logClientError("Failed to fetch audit logs:", error);
-      } finally {
-        if (mountedRef.current && requestId === logsRequestIdRef.current) {
-          setLoading(false);
-        }
+        dispatchRead({ type: "error", requestId, queryKey: requestKey, error: getApiErrorMessage(error, "Audit records could not be loaded. Please try again.") });
       }
     };
 
     void run();
-  }, [deferredSearchText, filters, page, pageSize, refreshNonce]);
+    return () => { active = false; };
+  }, [deferredSearchText, filters, page, pageSize, queryKey, requestKey]);
 
   useEffect(() => {
     void fetchStats();
   }, [fetchStats]);
 
   useEffect(() => {
-    if (page > pagination.totalPages) {
+    if (hasCurrentResults && page > pagination.totalPages) {
       setPage(pagination.totalPages);
     }
-  }, [page, pagination.totalPages]);
+  }, [hasCurrentResults, page, pagination.totalPages]);
 
   const clearAllFilters = useCallback(() => {
     setFilters(DEFAULT_AUDIT_LOG_FILTERS);
@@ -169,6 +171,10 @@ export function useAuditLogsDataState() {
     logs,
     stats,
     loading,
+    error,
+    hasCurrentResults,
+    hasPreviousResults,
+    getExportLogs,
     page,
     setPage,
     pageSize,

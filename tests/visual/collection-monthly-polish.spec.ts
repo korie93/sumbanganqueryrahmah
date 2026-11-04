@@ -645,6 +645,49 @@ for (const role of ["admin", "user"] as const) {
   });
 }
 
+test("Monthly month typing preserves unfinished months until blur or Enter", async ({ page, baseURL }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  const fixture = await installFixture(page, baseURL, "light");
+  await page.goto("/collection/monthly-comparison");
+  const panel = page.locator(".collection-monthly-comparison-panel");
+  await expect(panel.getByRole("button", { name: "Export CSV", exact: true })).toBeEnabled();
+  const start = panel.getByLabel("Start month", { exact: true });
+  const requestCount = fixture.comparisonRequests.length;
+
+  await start.fill("");
+  await start.pressSequentially("2026-1");
+  await expect(start).toHaveValue("2026-1");
+  await start.pressSequentially("2");
+  await expect(start).toHaveValue("2026-12");
+  await start.press("Backspace");
+  await expect(start).toHaveValue("2026-1");
+  await start.pressSequentially("0");
+  await expect(start).toHaveValue("2026-10");
+
+  for (const month of ["01", "09", "10", "11", "12"]) {
+    await start.fill("");
+    await start.pressSequentially(`2026-${month}`, { delay: 15 });
+    await expect(start).toHaveValue(`2026-${month}`);
+  }
+
+  await start.fill("2026-5");
+  await expect(start).toHaveValue("2026-5");
+  await start.press("Tab");
+  await expect(start).toHaveValue("2026-05");
+  await start.fill("2026-9");
+  await start.press("Enter");
+  await expect(start).toHaveValue("2026-09");
+  for (const invalid of ["2026-00", "2026-13"]) {
+    await start.fill(invalid);
+    await expect(start).toHaveAttribute("aria-invalid", "true");
+    await start.press("Tab");
+    await expect(start).toHaveValue("2026-09");
+  }
+  expect(fixture.comparisonRequests).toHaveLength(requestCount);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
 test("Monthly visual ledger native quick range applies once and preserves labelled keyboard controls", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, "dark");
   await page.goto("/collection/monthly-comparison");

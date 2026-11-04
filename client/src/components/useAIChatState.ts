@@ -336,7 +336,7 @@ export function useAIChatState({
     startSlowNoticeWatch,
   ]);
 
-  useAIChatExternalEffects({
+  const messageFollow = useAIChatExternalEffects({
     aiStatus,
     cancelAISearch,
     messages,
@@ -350,6 +350,7 @@ export function useAIChatState({
   const statusMeta = useMemo(() => getAIChatStatusMeta(aiStatus), [aiStatus]);
 
   return {
+    ...messageFollow,
     aiStatus,
     cancelAISearch,
     gateNotice,

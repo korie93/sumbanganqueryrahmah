@@ -139,6 +139,7 @@ export function useGeneralSearchController({
       setResultsPerPage: handleResultsPerPageChange,
       setSelectedRecord,
       updateFilter,
+      retryColumns: dataState.actions.retryColumns,
     },
   };
 }

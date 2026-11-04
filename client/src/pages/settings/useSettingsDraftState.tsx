@@ -205,6 +205,7 @@ export function useSettingsDraftState({
     clearSettingsDraftState,
     confirmCriticalOpen,
     dirtyCount,
+    getEffectiveValue,
     handleSave,
     maintenanceSettingsSummary,
     persistChanges,

@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import { useId, type RefObject } from "react";
+import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
 import { StopCircle, TriangleAlert } from "lucide-react";
 import {
   AI_PROCESSING_INDICATOR_DELAY_MS,
@@ -36,6 +37,8 @@ interface AIConversationCardProps {
   onSend: () => void;
   onCancel: () => void;
   onReset: () => void;
+  showJumpToLatest?: boolean | undefined;
+  onJumpToLatest?: (() => void) | undefined;
 }
 
 export function AIConversationCard({
@@ -59,7 +62,10 @@ export function AIConversationCard({
   onSend,
   onCancel,
   onReset,
+  showJumpToLatest = false,
+  onJumpToLatest,
 }: AIConversationCardProps) {
+  const messagesId = useId();
   const chatHeightClass = embedded
     ? "h-full max-h-[350px]"
     : "ai-page-message-log";
@@ -124,6 +130,7 @@ export function AIConversationCard({
 
         <div
           ref={messagesContainerRef}
+          id={messagesId}
           className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2 scroll-fade-y`}
           role="log"
           aria-live="polite"
@@ -164,6 +171,7 @@ export function AIConversationCard({
           ) : null}
         </div>
 
+        {onJumpToLatest ? <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={onJumpToLatest} /> : null}
         <div className="flex items-end gap-2">
           <label htmlFor="ai-conversation-query" className="sr-only">
             Taip soalan kepada {assistantLabel}

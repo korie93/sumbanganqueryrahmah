@@ -13,6 +13,9 @@ export interface NicknameAssignmentTableProps {
   selectedGroupId: string;
   loadingNicknames: boolean;
   filteredNicknames: CollectionStaffNickname[];
+  totalNicknameCount?: number | undefined;
+  nicknameSearch?: string;
+  onClearSearch?: () => void;
   assignedIds: string[];
   statusBusyId: string | null;
   resettingNicknameId: string | null;
@@ -30,6 +33,9 @@ export function NicknameAssignmentTable({
   selectedGroupId,
   loadingNicknames,
   filteredNicknames,
+  totalNicknameCount,
+  nicknameSearch = "",
+  onClearSearch,
   assignedIds,
   statusBusyId,
   resettingNicknameId,
@@ -80,6 +86,17 @@ export function NicknameAssignmentTable({
       {loadingNicknames ? (
         <div role="status" className="rounded-md border border-border/60 p-6 text-center text-sm text-muted-foreground">
           Loading nickname data...
+        </div>
+      ) : filteredNicknames.length === 0 ? (
+        <div role="status" className="space-y-3 rounded-md border border-border/60 p-6 text-center text-sm" data-testid="nickname-assignment-empty">
+          <p className="text-muted-foreground">
+            {nicknameSearch.trim() && totalNicknameCount !== 0
+              ? "Tiada nickname sepadan dengan carian ini."
+              : "Belum ada nickname untuk dipaparkan."}
+          </p>
+          {nicknameSearch.trim() && totalNicknameCount !== 0 ? (
+            <Button type="button" variant="outline" onClick={onClearSearch}>Kosongkan carian</Button>
+          ) : null}
         </div>
       ) : isMobile ? (
         <div className="space-y-3">

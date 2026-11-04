@@ -18,7 +18,7 @@ function loadAuditLogsExportModule() {
 
 type UseAuditLogsActionStateOptions = {
   currentRole: string | null;
-  logs: AuditLogRecord[];
+  getExportLogs: () => AuditLogRecord[] | null;
   stats: AuditLogStats | null;
   onRefresh: () => void;
   onFetchStats: () => Promise<void>;
@@ -27,7 +27,7 @@ type UseAuditLogsActionStateOptions = {
 
 export function useAuditLogsActionState({
   currentRole,
-  logs,
+  getExportLogs,
   stats,
   onRefresh,
   onFetchStats,
@@ -96,14 +96,15 @@ export function useAuditLogsActionState({
   }, [cleanupDays, onFetchStats, onRefresh, onResetPage, toast]);
 
   const handleExportPdf = useCallback(async () => {
+    const exportLogs = getExportLogs();
     const blockReason = resolveAuditLogsExportBlockReason({
-      logsLength: logs.length,
+      logsLength: exportLogs?.length ?? 0,
       exportingPdf,
     });
     if (blockReason === "busy" || exportInFlightRef.current) {
       return;
     }
-    if (blockReason === "no_data") {
+    if (blockReason === "no_data" || !exportLogs) {
       return;
     }
 
@@ -111,7 +112,8 @@ export function useAuditLogsActionState({
     setExportingPdf(true);
     try {
       const { exportAuditLogsToPdf } = await loadAuditLogsExportModule();
-      await exportAuditLogsToPdf(logs);
+      if (!isMountedRef.current || getExportLogs() !== exportLogs) return;
+      await exportAuditLogsToPdf(exportLogs);
     } catch (error: unknown) {
       logClientError("Failed to export audit logs PDF:", error);
       if (isMountedRef.current) {
@@ -127,16 +129,18 @@ export function useAuditLogsActionState({
         setExportingPdf(false);
       }
     }
-  }, [exportingPdf, logs, toast]);
+  }, [exportingPdf, getExportLogs, toast]);
 
   const handleExportCsv = useCallback(async () => {
-    if (logs.length === 0) {
+    const exportLogs = getExportLogs();
+    if (!exportLogs?.length) {
       return;
     }
 
     try {
       const { exportAuditLogsToCsv } = await loadAuditLogsExportModule();
-      exportAuditLogsToCsv(logs);
+      if (!isMountedRef.current || getExportLogs() !== exportLogs) return;
+      exportAuditLogsToCsv(exportLogs);
     } catch (error: unknown) {
       logClientError("Failed to export audit logs CSV:", error);
       if (isMountedRef.current) {
@@ -147,7 +151,7 @@ export function useAuditLogsActionState({
         });
       }
     }
-  }, [logs, toast]);
+  }, [getExportLogs, toast]);
 
   return {
     canCleanupLogs,

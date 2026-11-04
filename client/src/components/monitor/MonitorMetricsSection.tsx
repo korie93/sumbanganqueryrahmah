@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 
 type MonitorMetricsSectionProps = {
   metricGroups: MonitorMetricGroup[];
@@ -28,40 +29,35 @@ function MonitorMetricGroupToggle({
 }) {
   const toggleContent = (
     <>
-      <div className="min-w-0 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</h3>
-          <InfoHint text={group.description} />
+      <span className="min-w-0 space-y-2">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{group.title}</span>
           <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xxs">
             {group.items.length} metrics
           </Badge>
-        </div>
-        <p className="text-xs text-muted-foreground">{group.description}</p>
-      </div>
+        </span>
+        <span className="block text-xs font-normal text-muted-foreground">{group.description}</span>
+      </span>
       <span className="shrink-0 pt-1 text-muted-foreground">
-        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        {open ? <ChevronUp className="h-4 w-4" aria-hidden="true" /> : <ChevronDown className="h-4 w-4" aria-hidden="true" />}
       </span>
     </>
   );
 
-  return open ? (
-    <button
-      type="button"
-      className="flex w-full items-start justify-between gap-3 text-left"
-      onClick={onToggle}
-      aria-expanded="true"
-    >
-      {toggleContent}
-    </button>
-  ) : (
-    <button
-      type="button"
-      className="flex w-full items-start justify-between gap-3 text-left"
-      onClick={onToggle}
-      aria-expanded="false"
-    >
-      {toggleContent}
-    </button>
+  return (
+    <div className="flex items-start gap-2">
+      <h3 className="min-w-0 flex-1">
+        <button
+          type="button"
+          className="flex min-h-8 w-full items-start justify-between gap-3 text-left"
+          onClick={onToggle}
+          {...getAriaExpandedProps(open)}
+        >
+          {toggleContent}
+        </button>
+      </h3>
+      <InfoHint label={`Maklumat bantuan ${group.title}`} text={group.description} />
+    </div>
   );
 }
 

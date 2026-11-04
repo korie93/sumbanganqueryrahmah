@@ -12,7 +12,8 @@ test("settings role permission UI exposes compact manager-first controls", () =>
   assert.match(source, /Role permission workspace/);
   assert.match(source, /Search permission or module/);
   assert.match(source, /Role Comparison/);
-  assert.match(source, /Compare module access across Manager, Admin, and User/);
+  assert.match(source, /Preview module access across Manager, Admin, and User, including unsaved changes/);
+  assert.match(source, /Counts and comparison include unsaved changes\. Access changes only after saving\./);
   assert.match(source, /Pending permission impact/);
   assert.match(source, /Pending role permission changes/);
   assert.match(source, /Will allow access/);

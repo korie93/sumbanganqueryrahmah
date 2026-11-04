@@ -19,6 +19,8 @@ interface GeneralSearchDesktopControlsProps {
   filters: FilterRow[];
   loading: boolean;
   loadingColumns: boolean;
+  columnsError?: string;
+  onRetryColumns?: () => void;
   logic: "AND" | "OR";
   query: string;
   onAddFilter: () => void;
@@ -39,6 +41,8 @@ export function GeneralSearchDesktopControls({
   filters,
   loading,
   loadingColumns,
+  columnsError = "",
+  onRetryColumns,
   logic,
   query,
   onAddFilter,
@@ -145,6 +149,8 @@ export function GeneralSearchDesktopControls({
             filters={filters}
             loading={loading}
             loadingColumns={loadingColumns}
+            columnsError={columnsError}
+            onRetryColumns={onRetryColumns}
             logic={logic}
             onAddFilter={onAddFilter}
             onLogicChange={onLogicChange}

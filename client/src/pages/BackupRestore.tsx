@@ -13,6 +13,7 @@ import { useBackupExportState } from "@/pages/backup-restore/useBackupExportStat
 import { useBackupListState } from "@/pages/backup-restore/useBackupListState";
 import { useBackupMutationState } from "@/pages/backup-restore/useBackupMutationState";
 import { formatBackupTime } from "@/pages/backup-restore/utils";
+import { getBackupJobStatusLabel } from "@/pages/backup-restore/backup-job-recovery";
 
 const LazyBackupActiveJobCard = lazy(() =>
   import("@/pages/backup-restore/BackupActiveJobCard").then((module) => ({
@@ -53,7 +54,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
   const exportState = useBackupExportState(visibleBackups);
 
   const hasActiveBackupJobCard =
-    mutationState.activeBackupJobBusy && Boolean(mutationState.activeBackupJob);
+    mutationState.activeBackupJobBusy || mutationState.backupJobError;
   const hasRestoreResultCard = Boolean(mutationState.lastRestoreResult);
   const hasBackupDialogs =
     mutationState.showCreateDialog
@@ -64,11 +65,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
     const latestLabel = latestBackup ? formatBackupTime(latestBackup.createdAt) : "Belum ada sandaran";
     const filteredLabel = `${visibleBackups.length} dipaparkan`;
     const totalLabel = `${listState.pagination.total} jumlah`;
-    const jobLabel = mutationState.activeBackupJobBusy
-      ? mutationState.activeBackupJob?.type === "restore"
-        ? "Restore sedang berjalan"
-        : "Backup sedang berjalan"
-      : "Tiada tugasan aktif";
+    const jobLabel = getBackupJobStatusLabel(mutationState.backupJobState, mutationState.activeBackupJob?.type);
 
     return {
       filteredLabel,
@@ -79,7 +76,7 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
   }, [
     listState.pagination.total,
     mutationState.activeBackupJob?.type,
-    mutationState.activeBackupJobBusy,
+    mutationState.backupJobState,
     visibleBackups,
   ]);
 
@@ -119,7 +116,9 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         <OperationalMetric
           label="Status kerja"
           value={backupOverview.jobLabel}
-          supporting="Dipantau terus daripada job backup semasa"
+          supporting={mutationState.backupJobState === "unknown"
+            ? "Status belum dapat disahkan untuk sesi ini"
+            : "Status kerja terakhir yang dijejak dalam sesi ini"}
           tone={mutationState.activeBackupJobBusy ? "warning" : "default"}
         />
       </OperationalSummaryStrip>
@@ -129,6 +128,10 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
           <LazyBackupActiveJobCard
             activeBackupJob={mutationState.activeBackupJob}
             activeBackupJobBusy={mutationState.activeBackupJobBusy}
+            backupJobState={mutationState.backupJobState}
+            backupJobError={mutationState.backupJobError}
+            backupJobChecking={mutationState.backupJobChecking}
+            onRetry={mutationState.retryBackupJob}
           />
         </Suspense>
       ) : null}

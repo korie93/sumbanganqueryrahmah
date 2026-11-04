@@ -1,22 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, type QueryKey } from "@tanstack/react-query";
+import { useMutation, type QueryKey } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import {
   createBackupAsync,
   deleteBackup,
-  getBackupJob,
   restoreBackupAsync,
 } from "@/lib/api";
 import { logClientError } from "@/lib/client-logger";
 import { useMutationFeedback } from "@/hooks/useMutationFeedback";
 import type {
-  BackupJobRecord,
   BackupRecord,
   BackupsResponse,
   RestoreResponse,
 } from "@/pages/backup-restore/types";
 import { removeBackupFromBackupsResponse } from "@/pages/backup-restore/backup-optimistic-updates";
 import { resolveBackupMutationResponse } from "@/pages/backup-restore/backup-mutation-response";
+import { useBackupJobRecovery } from "@/pages/backup-restore/useBackupJobRecovery";
 import {
   buildRestoreSuccessSummary,
   isBackupJobInProgress,
@@ -30,6 +29,7 @@ type BackupMutationStateOptions = {
 
 type DeleteBackupMutationContext = {
   previousBackupQueries: Array<[QueryKey, BackupsResponse | undefined]>;
+  isCurrentSession: () => boolean;
 };
 
 export function useBackupMutationState({
@@ -43,22 +43,14 @@ export function useBackupMutationState({
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [lastRestoreResult, setLastRestoreResult] = useState<RestoreResponse | null>(null);
-  const [activeBackupJobId, setActiveBackupJobId] = useState<string | null>(null);
+  const {
+    activeBackupJob, activeBackupJobId, backupJobState, backupJobError,
+    backupJobChecking, backupJobHandled, isCurrentSession, markBackupJobHandled,
+    retryBackupJob, trackBackupJob,
+  } = useBackupJobRecovery();
 
   const handledBackupJobIdRef = useRef<string | null>(null);
   const { notifyMutationError, notifyMutationSuccess } = useMutationFeedback();
-
-  const { data: activeBackupJob } = useQuery<BackupJobRecord>({
-    queryKey: ["/api/backups/jobs", activeBackupJobId],
-    enabled: Boolean(activeBackupJobId),
-    queryFn: async () => getBackupJob(String(activeBackupJobId)),
-    refetchInterval: (query) => {
-      if (!activeBackupJobId) {
-        return false;
-      }
-      return isBackupJobTerminal(query.state.data?.status) ? false : 2000;
-    },
-  });
 
   const notifyRestoreSuccess = useCallback(
     (result: RestoreResponse) => {
@@ -74,15 +66,17 @@ export function useBackupMutationState({
   );
 
   const createBackupMutation = useMutation({
+    onMutate: () => ({ isCurrentSession }),
     mutationFn: async (name: string) =>
       resolveBackupMutationResponse(await createBackupAsync(name), "Backup creation queued."),
-    onSuccess: async (result) => {
+    onSuccess: async (result, _name, context) => {
+      if (!context?.isCurrentSession()) return;
       handledBackupJobIdRef.current = null;
       setShowCreateDialog(false);
       setBackupName("");
 
       if (result.mode === "queued") {
-        setActiveBackupJobId(result.job.id);
+        trackBackupJob(result.job.id);
         notifyMutationSuccess({
           title: "Backup Queued",
           description: "Backup creation is running in the background.",
@@ -100,7 +94,8 @@ export function useBackupMutationState({
         refetchBackups(),
       ]);
     },
-    onError: (error) => {
+    onError: (error, _name, context) => {
+      if (!context?.isCurrentSession()) return;
       logClientError("Failed to create backup:", error);
       notifyMutationError({
         title: "Backup Failed",
@@ -111,14 +106,16 @@ export function useBackupMutationState({
   });
 
   const restoreBackupMutation = useMutation({
+    onMutate: () => ({ isCurrentSession }),
     mutationFn: async (backupId: string) =>
       resolveBackupMutationResponse(await restoreBackupAsync(backupId), "Backup restore queued."),
-    onSuccess: async (result) => {
+    onSuccess: async (result, _backupId, context) => {
+      if (!context?.isCurrentSession()) return;
       handledBackupJobIdRef.current = null;
       setShowRestoreDialog(null);
 
       if (result.mode === "queued") {
-        setActiveBackupJobId(result.job.id);
+        trackBackupJob(result.job.id);
         notifyMutationSuccess({
           title: "Restore Queued",
           description: "Backup restore is running in the background.",
@@ -140,7 +137,8 @@ export function useBackupMutationState({
       setRestoringId(null);
       await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
-    onError: (error) => {
+    onError: (error, _backupId, context) => {
+      if (!context?.isCurrentSession()) return;
       logClientError("Failed to restore backup:", error);
       notifyMutationError({
         title: "Restore Failed",
@@ -154,7 +152,9 @@ export function useBackupMutationState({
   const deleteBackupMutation = useMutation<unknown, Error, string, DeleteBackupMutationContext>({
     mutationFn: (backupId: string) => deleteBackup(backupId),
     onMutate: async (backupId) => {
+      const sessionIsCurrent = isCurrentSession;
       await queryClient.cancelQueries({ queryKey: ["/api/backups"] });
+      if (!sessionIsCurrent()) return { previousBackupQueries: [], isCurrentSession: sessionIsCurrent };
       const previousBackupQueries = queryClient.getQueriesData<BackupsResponse>({
         queryKey: ["/api/backups"],
       });
@@ -163,9 +163,10 @@ export function useBackupMutationState({
         removeBackupFromBackupsResponse(previous, backupId),
       );
 
-      return { previousBackupQueries };
+      return { previousBackupQueries, isCurrentSession: sessionIsCurrent };
     },
-    onSuccess: () => {
+    onSuccess: (_result, _backupId, context) => {
+      if (!context?.isCurrentSession()) return;
       notifyMutationSuccess({
         title: "Success",
         description: "Backup has been successfully deleted.",
@@ -174,6 +175,7 @@ export function useBackupMutationState({
       setDeletingId(null);
     },
     onError: (error, backupId, context) => {
+      if (!context?.isCurrentSession()) return;
       for (const [queryKey, previousData] of context?.previousBackupQueries ?? []) {
         queryClient.setQueryData(queryKey, previousData);
       }
@@ -186,13 +188,14 @@ export function useBackupMutationState({
       });
       setDeletingId(null);
     },
-    onSettled: async () => {
+    onSettled: async (_result, _error, _backupId, context) => {
+      if (!context?.isCurrentSession()) return;
       await queryClient.invalidateQueries({ queryKey: ["/api/backups"] });
     },
   });
 
   useEffect(() => {
-    if (!activeBackupJob || !activeBackupJobId || !isBackupJobTerminal(activeBackupJob.status)) {
+    if (!isCurrentSession() || backupJobHandled || !activeBackupJob || !activeBackupJobId || !isBackupJobTerminal(activeBackupJob.status)) {
       return;
     }
     if (handledBackupJobIdRef.current === activeBackupJob.id) {
@@ -200,7 +203,8 @@ export function useBackupMutationState({
     }
 
     handledBackupJobIdRef.current = activeBackupJob.id;
-    let cancelled = false;
+    markBackupJobHandled(activeBackupJob.id);
+    setRestoringId(null);
 
     const finalizeBackupJob = async () => {
       if (activeBackupJob.status === "completed") {
@@ -235,25 +239,20 @@ export function useBackupMutationState({
         });
       }
 
-      if (cancelled) {
-        return;
-      }
-      setRestoringId(null);
-      setActiveBackupJobId(null);
     };
 
     void finalizeBackupJob();
-    return () => {
-      cancelled = true;
-    };
   }, [
     activeBackupJob,
     activeBackupJobId,
+    backupJobHandled,
     clearAllFilters,
     notifyMutationError,
     notifyMutationSuccess,
     notifyRestoreSuccess,
     refetchBackups,
+    isCurrentSession,
+    markBackupJobHandled,
   ]);
 
   const activeBackupJobBusy = isBackupJobInProgress(activeBackupJob, activeBackupJobId);
@@ -295,6 +294,10 @@ export function useBackupMutationState({
     lastRestoreResult,
     activeBackupJob,
     activeBackupJobBusy,
+    backupJobState,
+    backupJobError,
+    backupJobChecking,
+    retryBackupJob,
     setShowCreateDialog,
     setShowRestoreDialog,
     setShowDeleteDialog,

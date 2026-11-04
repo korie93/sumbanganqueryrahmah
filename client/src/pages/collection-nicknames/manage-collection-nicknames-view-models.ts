@@ -50,6 +50,7 @@ export function buildManageCollectionNicknamePageViewModels({
       nicknameSearch: nicknameData.nicknameSearch,
       loadingNicknames: nicknameData.loadingNicknames,
       filteredNicknames: nicknameData.filteredNicknames,
+      totalNicknameCount: nicknameData.nicknames.length,
       assignedIds: nicknameData.assignedIds,
       savingAssignment: actions.savingAssignment,
       statusBusyId: dialogs.statusBusyId,

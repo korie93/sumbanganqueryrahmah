@@ -25,11 +25,12 @@ export const PositionedRowShell = memo(function PositionedRowShell({
     applyViewerVirtualRowStyle(node.style, positionStyle);
   }, [positionStyle]);
 
-  return <div ref={shellRef}>{children}</div>;
+  return <div ref={shellRef} role="presentation">{children}</div>;
 });
 
 type ViewerGridShellProps = {
   ariaLabel?: string;
+  rowIndex: number;
   gridTemplateColumns: string;
   className: string;
   children: ReactNode;
@@ -37,6 +38,7 @@ type ViewerGridShellProps = {
 
 export const ViewerGridShell = memo(function ViewerGridShell({
   ariaLabel,
+  rowIndex,
   gridTemplateColumns,
   className,
   children,
@@ -51,8 +53,9 @@ export const ViewerGridShell = memo(function ViewerGridShell({
     <div
       ref={gridRef}
       aria-label={ariaLabel}
+      aria-rowindex={rowIndex}
       className={`${styles.viewerGrid} ${className}`}
-      role="group"
+      role="row"
     >
       {children}
     </div>

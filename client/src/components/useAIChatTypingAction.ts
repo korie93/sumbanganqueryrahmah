@@ -3,7 +3,8 @@ import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction 
 import type { AIChatMessageInput } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { useTimers } from "@/hooks/useTimers";
-import { canApplyAIChatUiUpdate, isActiveAIChatSession } from "@/components/ai-chat-session-guards";
+import { canApplyAIChatUiUpdate } from "@/components/ai-chat-session-guards";
+import { AI_RESPONSE_REVEAL_TICK_MS, getAIResponseRevealIndex, prefersReducedAIResponseMotion } from "@/lib/ai-response-reveal";
 
 type UseAIChatTypingActionOptions = {
   appendMessage: (message: AIChatMessageInput) => void;
@@ -59,45 +60,42 @@ export function useAIChatTypingAction({
     setStreamingText("");
 
     let index = 0;
-    typingIntervalRef.current = setManagedInterval(() => {
-      if (!isActiveAIChatSession(sessionId, sessionRef)) {
-        clearTypingInterval();
-        stopTyping();
+    const startedAt = performance.now();
+    const finish = () => {
+      if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) return;
+      clearTypingInterval();
+      stopTyping();
+      setStreamingText("");
+      appendMessage({ role: "assistant", content: text, timestamp: new Date().toISOString() });
+      setIsProcessing(false);
+      setIsThinking(false);
+      setAiStatus("IDLE");
+      setSlowNotice(false);
+      processingRef.current = false;
+      clearSlowNoticeTimer();
+    };
+    if (!text.length || prefersReducedAIResponseMotion()) {
+      finish();
+      return;
+    }
+    const timerId = setManagedInterval(() => {
+      if (typingIntervalRef.current !== timerId || !canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
+        clearManagedInterval(timerId);
+        if (typingIntervalRef.current === timerId) {
+          typingIntervalRef.current = null;
+          stopTyping();
+        }
         return;
       }
-
-      index += 1;
-      if (isMountedRef.current) {
-        setStreamingText(text.slice(0, index));
-      }
-
-      if (index >= text.length) {
-        clearTypingInterval();
-        stopTyping();
-        if (!isActiveAIChatSession(sessionId, sessionRef)) {
-          return;
-        }
-
-        if (isMountedRef.current) {
-          setStreamingText("");
-          appendMessage({
-            role: "assistant",
-            content: text,
-            timestamp: new Date().toISOString(),
-          });
-          setIsProcessing(false);
-          setIsThinking(false);
-          setAiStatus("IDLE");
-          setSlowNotice(false);
-        }
-
-        processingRef.current = false;
-        clearSlowNoticeTimer();
-      }
-    }, typingDelayMs);
+      const nextIndex = getAIResponseRevealIndex(text, performance.now() - startedAt, typingDelayMs);
+      if (prefersReducedAIResponseMotion() || nextIndex >= text.length) { finish(); return; }
+      if (nextIndex !== index) { index = nextIndex; setStreamingText(text.slice(0, index)); }
+    }, AI_RESPONSE_REVEAL_TICK_MS);
+    typingIntervalRef.current = timerId;
   }, [
     appendMessage,
     clearSlowNoticeTimer,
+    clearManagedInterval,
     clearTypingInterval,
     isMountedRef,
     processingRef,

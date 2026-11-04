@@ -23,6 +23,7 @@ export type CollectionDailyFiltersCardProps = {
   userPopoverOpen: boolean;
   onUserPopoverOpenChange: (open: boolean) => void;
   loadingUsers: boolean;
+  staffSelectionDisabled?: boolean;
   selectedUsersLabel: string;
   users: CollectionDailyUser[];
   selectedUserSet: Set<string>;
@@ -76,6 +77,7 @@ export type CollectionDailyStaffScopeFieldProps = Pick<
   | "userPopoverOpen"
   | "onUserPopoverOpenChange"
   | "loadingUsers"
+  | "staffSelectionDisabled"
   | "selectedUsersLabel"
   | "users"
   | "selectedUserSet"
@@ -91,6 +93,7 @@ export type CollectionDailyStaffScopeFieldProps = Pick<
 
 export type CollectionDailyTargetControlsSectionProps = Pick<
   CollectionDailyFiltersCardProps,
+  | "loadingOverview"
   | "monthlyTargetInput"
   | "onMonthlyTargetInputChange"
   | "canEditTarget"

@@ -12,6 +12,8 @@ interface GeneralSearchControlsProps {
   filters: FilterRow[];
   loading: boolean;
   loadingColumns: boolean;
+  columnsError?: string;
+  onRetryColumns?: () => void;
   logic: "AND" | "OR";
   query: string;
   onAddFilter: () => void;

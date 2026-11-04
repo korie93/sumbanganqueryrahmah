@@ -3,6 +3,7 @@ import { CloudUpload, RotateCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import type { CollectionRecordReceipt } from "@/lib/api";
 import { CollectionReceiptDuplicateWarning } from "@/pages/collection/CollectionReceiptDuplicateWarning";
 import { CollectionReceiptDraftCard } from "@/pages/collection/CollectionReceiptDraftCard";
@@ -214,40 +215,55 @@ export function CollectionReceiptPanel({
                     </p>
                     {existingDraft ? (
                       <div className="mt-3 grid gap-2 md:grid-cols-3">
-                        <Input
-                          id={`existing-receipt-amount-${receipt.id}`}
-                          name={`existingReceiptAmount${receipt.id}`}
-                          aria-label={`Existing receipt amount for ${existingReceiptLabel}`}
-                          value={existingDraft.receiptAmount || ""}
-                          onChange={(event) =>
-                            onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
-                          placeholder="Receipt Amount (RM)"
-                          disabled={disabled || markedForRemoval}
-                          inputMode="decimal"
-                          autoComplete="off"
-                        />
-                        <Input
-                          id={`existing-receipt-date-${receipt.id}`}
-                          name={`existingReceiptDate${receipt.id}`}
-                          type="date"
-                          aria-label={`Existing receipt date for ${existingReceiptLabel}`}
-                          value={existingDraft.receiptDate || ""}
-                          onChange={(event) =>
-                            onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
-                          disabled={disabled || markedForRemoval}
-                          autoComplete="off"
-                        />
-                        <Input
-                          id={`existing-receipt-reference-${receipt.id}`}
-                          name={`existingReceiptReference${receipt.id}`}
-                          aria-label={`Existing receipt reference for ${existingReceiptLabel}`}
-                          value={existingDraft.receiptReference || ""}
-                          onChange={(event) =>
-                            onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}
-                          placeholder="Receipt Reference"
-                          disabled={disabled || markedForRemoval}
-                          autoComplete="off"
-                        />
+                        <div className="min-w-0 space-y-1.5">
+                          <Label htmlFor={`existing-receipt-amount-${receipt.id}`} className="text-xs">
+                            Receipt amount
+                          </Label>
+                          <Input
+                            id={`existing-receipt-amount-${receipt.id}`}
+                            name={`existingReceiptAmount${receipt.id}`}
+                            aria-label={`Existing receipt amount for ${existingReceiptLabel}`}
+                            value={existingDraft.receiptAmount || ""}
+                            onChange={(event) =>
+                              onExistingDraftChange?.(receipt.id, { receiptAmount: event.target.value })}
+                            placeholder="Receipt Amount (RM)"
+                            disabled={disabled || markedForRemoval}
+                            inputMode="decimal"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-1.5">
+                          <Label htmlFor={`existing-receipt-date-${receipt.id}`} className="text-xs">
+                            Receipt date
+                          </Label>
+                          <Input
+                            id={`existing-receipt-date-${receipt.id}`}
+                            name={`existingReceiptDate${receipt.id}`}
+                            type="date"
+                            aria-label={`Existing receipt date for ${existingReceiptLabel}`}
+                            value={existingDraft.receiptDate || ""}
+                            onChange={(event) =>
+                              onExistingDraftChange?.(receipt.id, { receiptDate: event.target.value })}
+                            disabled={disabled || markedForRemoval}
+                            autoComplete="off"
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-1.5">
+                          <Label htmlFor={`existing-receipt-reference-${receipt.id}`} className="text-xs">
+                            Receipt reference
+                          </Label>
+                          <Input
+                            id={`existing-receipt-reference-${receipt.id}`}
+                            name={`existingReceiptReference${receipt.id}`}
+                            aria-label={`Existing receipt reference for ${existingReceiptLabel}`}
+                            value={existingDraft.receiptReference || ""}
+                            onChange={(event) =>
+                              onExistingDraftChange?.(receipt.id, { receiptReference: event.target.value })}
+                            placeholder="Receipt Reference"
+                            disabled={disabled || markedForRemoval}
+                            autoComplete="off"
+                          />
+                        </div>
                       </div>
                     ) : null}
                   </div>

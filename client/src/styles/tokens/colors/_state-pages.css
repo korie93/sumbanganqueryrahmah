@@ -115,9 +115,9 @@
 
   --forbidden-shell-gradient: linear-gradient(135deg, hsl(var(--background) / 1), hsl(var(--background) / 1), hsl(0 58% 18% / 0.1));
 
-  --forbidden-primary-button-bg: hsl(217 91% 54%);
+  --forbidden-primary-button-bg: hsl(217 91% 47%);
 
-  --forbidden-primary-button-bg-hover: hsl(217 91% 60%);
+  --forbidden-primary-button-bg-hover: hsl(217 91% 43%);
 
   --forbidden-primary-button-text: hsl(210 40% 98%);
 

@@ -189,9 +189,10 @@ test("tooltips stay keyboard accessible through Radix trigger/content primitives
   assert.match(tooltipSource, /const TooltipTrigger = TooltipPrimitive\.Trigger/);
   assert.match(tooltipSource, /<TooltipPrimitive\.Content/);
   assert.match(infoHintSource, /<TooltipTrigger asChild>/);
-  assert.match(infoHintSource, /<button[\s\S]*type="button"[\s\S]*aria-label="Maklumat bantuan"/);
-  assert.match(metricPanelSource, /<TooltipTrigger asChild>/);
-  assert.match(metricPanelSource, /aria-label=\{`\$\{label\} description`\}/);
+  assert.match(infoHintSource, /label = "Maklumat bantuan"/);
+  assert.match(infoHintSource, /<button[\s\S]*type="button"[\s\S]*aria-label=\{label\}/);
+  assert.match(metricPanelSource, /import \{ InfoHint \} from "@\/components\/monitor\/InfoHint"/);
+  assert.match(metricPanelSource, /<InfoHint label=\{`\$\{label\} description`\} text=\{description\}/);
   assert.match(monthlyHintSource, /<TooltipTrigger asChild>/);
   assert.match(monthlyHintSource, /aria-label=\{label\}/);
 });

@@ -1,9 +1,10 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { setCollectionDailyCalendar, setCollectionDailyTarget } from "@/lib/api";
 import { parseCollectionAmountMyrInput } from "@shared/collection-amount-types";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import { buildCollectionDailyCalendarSavedDescription } from "@/pages/collection/collection-daily-calendar-save-feedback";
 import { buildCollectionDailyCalendarPayloadDays } from "@/pages/collection/collection-daily-state-utils";
+import { createCollectionDailyMutationGuard } from "@/pages/collection/collection-daily-mutation-guard";
 import {
   emitCollectionTargetChanged,
   parseApiError,
@@ -24,6 +25,8 @@ type UseCollectionDailyMutationStateOptions = {
   selectedUsernames: string[];
   monthlyTargetInput: string;
   calendarDaysToSave: EditableCalendarDay[];
+  hasCalendarDraft: () => boolean;
+  isOverviewLoading: () => boolean;
   onRefresh: () => Promise<void>;
   onCalendarSaved: () => void;
   toast: ToastFn;
@@ -38,16 +41,30 @@ export function useCollectionDailyMutationState({
   selectedUsernames,
   monthlyTargetInput,
   calendarDaysToSave,
+  hasCalendarDraft,
+  isOverviewLoading,
   onRefresh,
   onCalendarSaved,
   toast,
 }: UseCollectionDailyMutationStateOptions) {
   const [savingTarget, setSavingTarget] = useState(false);
   const [savingCalendar, setSavingCalendar] = useState(false);
+  const guard = useRef(createCollectionDailyMutationGuard()).current;
+  const scopeKey = JSON.stringify([year, month, selectedUsernames]);
+  const currentScopeRef = useRef(scopeKey);
+  currentScopeRef.current = scopeKey;
 
   const saveMonthlyTarget = useCallback(async () => {
+    if (guard.isBusy() || isOverviewLoading()) return;
+    if (hasCalendarDraft()) {
+      toast({
+        title: "Unsaved Calendar Changes",
+        description: "Save Changed Days first, or use Refresh and confirm discarding the calendar changes before saving the target.",
+      });
+      return;
+    }
     const selectedUsername = selectedUsernames[0];
-    if (!canManage || !canEditTarget || !selectedUsername) {
+    if (!canManage || !canEditTarget || selectedUsernames.length !== 1 || !selectedUsername) {
       toast({
         title: "Select One Staff Nickname",
         description: "Please select exactly one staff nickname to update monthly target.",
@@ -66,6 +83,8 @@ export function useCollectionDailyMutationState({
       return;
     }
 
+    const release = guard.tryStart("target", hasCalendarDraft());
+    if (!release) return;
     setSavingTarget(true);
     try {
       await setCollectionDailyTarget({
@@ -79,7 +98,7 @@ export function useCollectionDailyMutationState({
         title: "Target Saved",
         description: "Monthly target has been updated.",
       });
-      await onRefresh();
+      if (currentScopeRef.current === scopeKey) await onRefresh();
     } catch (error: unknown) {
       toast({
         title: "Failed to Save Target",
@@ -87,20 +106,26 @@ export function useCollectionDailyMutationState({
         variant: "destructive",
       });
     } finally {
+      release();
       setSavingTarget(false);
     }
   }, [
     canEditTarget,
     canManage,
+    guard,
+    hasCalendarDraft,
+    isOverviewLoading,
     month,
     monthlyTargetInput,
     onRefresh,
     selectedUsernames,
+    scopeKey,
     toast,
     year,
   ]);
 
   const saveCalendar = useCallback(async () => {
+    if (guard.isBusy() || isOverviewLoading()) return;
     const selectedUsername = selectedUsernames[0];
     if (!canManage || !canEditCalendar) {
       toast({
@@ -139,6 +164,8 @@ export function useCollectionDailyMutationState({
       return;
     }
 
+    const release = guard.tryStart("calendar", hasCalendarDraft());
+    if (!release) return;
     setSavingCalendar(true);
     try {
       await setCollectionDailyCalendar({
@@ -156,8 +183,10 @@ export function useCollectionDailyMutationState({
           days: calendarDaysToSave,
         }),
       });
-      onCalendarSaved();
-      await onRefresh();
+      if (currentScopeRef.current === scopeKey) {
+        onCalendarSaved();
+        await onRefresh();
+      }
     } catch (error: unknown) {
       toast({
         title: "Failed to Save Calendar",
@@ -165,21 +194,27 @@ export function useCollectionDailyMutationState({
         variant: "destructive",
       });
     } finally {
+      release();
       setSavingCalendar(false);
     }
   }, [
     calendarDaysToSave,
     canEditCalendar,
     canManage,
+    guard,
+    hasCalendarDraft,
+    isOverviewLoading,
     month,
     onCalendarSaved,
     onRefresh,
     selectedUsernames,
+    scopeKey,
     toast,
     year,
   ]);
 
   return {
+    isSaving: guard.isBusy,
     savingTarget,
     savingCalendar,
     saveMonthlyTarget,

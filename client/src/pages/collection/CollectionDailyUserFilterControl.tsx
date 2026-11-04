@@ -14,6 +14,7 @@ export type CollectionDailyUserFilterControlProps = {
   userPopoverOpen: boolean;
   onUserPopoverOpenChange: (open: boolean) => void;
   loadingUsers: boolean;
+  disabled?: boolean;
   selectedUsersLabel: string;
   users: CollectionDailyUser[];
   selectedUserSet: Set<string>;
@@ -31,6 +32,7 @@ export function CollectionDailyUserFilterControl({
   userPopoverOpen,
   onUserPopoverOpenChange,
   loadingUsers,
+  disabled = false,
   selectedUsersLabel,
   users,
   selectedUserSet,
@@ -42,6 +44,7 @@ export function CollectionDailyUserFilterControl({
   onClearSelectedUsers,
 }: CollectionDailyUserFilterControlProps) {
   const isMobile = useIsMobile();
+  const effectiveOpen = userPopoverOpen && !disabled;
   const [searchValue, setSearchValue] = useState("");
   const triggerValueId = `${triggerId}-value`;
   const triggerLabelledBy = triggerLabelId ? `${triggerLabelId} ${triggerValueId}` : undefined;
@@ -74,15 +77,15 @@ export function CollectionDailyUserFilterControl({
   );
 
   return (
-    <Popover open={userPopoverOpen} onOpenChange={onUserPopoverOpenChange}>
+    <Popover open={effectiveOpen} onOpenChange={(open) => { if (!disabled) onUserPopoverOpenChange(open); }}>
       <PopoverTrigger asChild>
-        {userPopoverOpen ? (
+        {effectiveOpen ? (
           <Button
             id={triggerId}
             type="button"
             variant="outline"
             className="h-11 min-h-11 w-full justify-between rounded-md bg-background px-4 text-left shadow-sm sm:min-h-11"
-            disabled={loadingUsers}
+            disabled={loadingUsers || disabled}
             aria-expanded="true"
             aria-haspopup="dialog"
             {...triggerLabelledByProps}
@@ -96,7 +99,7 @@ export function CollectionDailyUserFilterControl({
             type="button"
             variant="outline"
             className="h-11 min-h-11 w-full justify-between rounded-md bg-background px-4 text-left shadow-sm sm:min-h-11"
-            disabled={loadingUsers}
+            disabled={loadingUsers || disabled}
             aria-expanded="false"
             aria-haspopup="dialog"
             {...triggerLabelledByProps}
@@ -106,7 +109,7 @@ export function CollectionDailyUserFilterControl({
           </Button>
         )}
       </PopoverTrigger>
-      {userPopoverOpen ? (
+      {effectiveOpen ? (
         <PopoverContent
           align="start"
           className={cn(

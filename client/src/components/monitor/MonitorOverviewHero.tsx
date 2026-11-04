@@ -5,6 +5,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { RollupFreshnessStatus } from "@/components/monitor/monitorData";
 import type { MetricStatus } from "@/components/monitor/MetricPanel";
 import type { MonitorSnapshot } from "@/hooks/useSystemMetrics";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 
 type MonitorOverviewHeroProps = {
   snapshot: MonitorSnapshot;
@@ -51,10 +52,10 @@ function MonitorOverviewHeroImpl({
             variant="outline"
             className={
               scoreStatus === "good"
-                ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-500"
+                ? `border-emerald-500/30 bg-emerald-500/15 ${monitorStatusTextClass.good}`
                 : scoreStatus === "warning"
-                  ? "border-amber-500/30 bg-amber-500/15 text-amber-500"
-                  : "border-red-500/30 bg-red-500/15 text-red-500"
+                  ? `border-amber-500/30 bg-amber-500/15 ${monitorStatusTextClass.warning}`
+                  : `border-red-500/30 bg-red-500/15 ${monitorStatusTextClass.critical}`
             }
           >
             {isMobile ? "Health" : "Health Status"}

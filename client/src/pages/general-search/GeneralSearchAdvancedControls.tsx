@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Plus, RotateCcw, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,12 +12,15 @@ import {
 } from "@/components/ui/select";
 import type { FilterRow } from "@/pages/general-search/types";
 import { OPERATORS } from "@/pages/general-search/utils";
+import { getAriaPressedProps } from "@/lib/aria-state-props";
 
 interface GeneralSearchAdvancedControlsProps {
   columns: string[];
   filters: FilterRow[];
   loading: boolean;
   loadingColumns: boolean;
+  columnsError?: string | undefined;
+  onRetryColumns?: (() => void) | undefined;
   logic: "AND" | "OR";
   onAddFilter: () => void;
   onLogicChange: (value: "AND" | "OR") => void;
@@ -31,6 +35,8 @@ export function GeneralSearchAdvancedControls({
   filters,
   loading,
   loadingColumns,
+  columnsError = "",
+  onRetryColumns,
   logic,
   onAddFilter,
   onLogicChange,
@@ -40,13 +46,24 @@ export function GeneralSearchAdvancedControls({
   onUpdateFilter,
 }: GeneralSearchAdvancedControlsProps) {
   const isMobile = useIsMobile();
+  const controlId = useId();
 
   return (
     <div className="space-y-4">
+      {columnsError ? (
+        <div role="alert" className="space-y-2 rounded-md border border-border p-3" data-testid="advanced-search-fields-error">
+          <p className="text-sm text-foreground">{columnsError}</p>
+          <Button type="button" variant="outline" onClick={onRetryColumns} disabled={loadingColumns}>Retry fields</Button>
+        </div>
+      ) : loadingColumns ? (
+        <p role="status" className="text-sm text-muted-foreground">Loading search fields...</p>
+      ) : null}
       <fieldset className={`m-0 min-w-0 border-0 p-0 gap-3 ${isMobile ? "space-y-2" : "flex flex-wrap items-center"}`}>
         <legend className="text-sm text-muted-foreground">Combine filters with:</legend>
         <div className={`gap-2 ${isMobile ? "grid grid-cols-2" : "flex"}`}>
           <Button
+            type="button"
+            {...getAriaPressedProps(logic === "AND")}
             variant={logic === "AND" ? "default" : "outline"}
             size={isMobile ? "default" : "sm"}
             onClick={() => onLogicChange("AND")}
@@ -56,6 +73,8 @@ export function GeneralSearchAdvancedControls({
             AND
           </Button>
           <Button
+            type="button"
+            {...getAriaPressedProps(logic === "OR")}
             variant={logic === "OR" ? "default" : "outline"}
             size={isMobile ? "default" : "sm"}
             onClick={() => onLogicChange("OR")}
@@ -97,7 +116,7 @@ export function GeneralSearchAdvancedControls({
               value={filter.field}
               onValueChange={(value) => onUpdateFilter(filter.id, { field: value })}
             >
-              <SelectTrigger className={isMobile ? "h-11 w-full" : "h-9 w-[180px]"} data-testid={`select-field-${index}`}>
+              <SelectTrigger disabled={loadingColumns || Boolean(columnsError)} id={`${controlId}-filter-field-${index}`} aria-label={`Filter ${index + 1} field`} className={isMobile ? "h-11 w-full" : "h-9 w-[180px]"} data-testid={`select-field-${index}`}>
                 <SelectValue placeholder="Select field..." />
               </SelectTrigger>
               <SelectContent>
@@ -105,6 +124,8 @@ export function GeneralSearchAdvancedControls({
                   <SelectItem value="loading" disabled>
                     Loading...
                   </SelectItem>
+                ) : columnsError ? (
+                  <SelectItem value="unavailable" disabled>Fields unavailable</SelectItem>
                 ) : columns.length === 0 ? (
                   <SelectItem value="empty" disabled>
                     No fields available
@@ -124,6 +145,8 @@ export function GeneralSearchAdvancedControls({
               onValueChange={(value) => onUpdateFilter(filter.id, { operator: value })}
             >
               <SelectTrigger
+                id={`${controlId}-filter-operator-${index}`}
+                aria-label={`Filter ${index + 1} operator`}
                 className={isMobile ? "h-11 w-full" : "h-9 w-[180px]"}
                 data-testid={`select-operator-${index}`}
               >
@@ -140,8 +163,9 @@ export function GeneralSearchAdvancedControls({
 
             {filter.operator !== "isEmpty" && filter.operator !== "isNotEmpty" ? (
               <Input
-                id={`general-search-filter-value-${index}`}
+                id={`${controlId}-filter-value-${index}`}
                 name={`generalSearchFilterValue${index + 1}`}
+                aria-label={`Filter ${index + 1} value`}
                 type="search"
                 value={filter.value}
                 onChange={(event) =>

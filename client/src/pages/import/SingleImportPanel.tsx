@@ -23,13 +23,18 @@ import { getAriaCurrentStepProps } from "@/lib/aria-state-props";
 import { getImportPreviewRowKey } from "@/pages/import/import-preview-row-key";
 import { ImportColumnMappingPanel } from "@/pages/import/ImportColumnMappingPanel";
 import { formatImportUploadSize } from "@/pages/import/upload-limits";
+import {
+  getPreviousSingleImportStep,
+  isSingleImportStepAvailable,
+  reconcileSingleImportStep,
+  resolveInitialSingleImportStep,
+  type ImportWorkflowStep,
+} from "@/pages/import/single-import-workflow";
 import type {
   ImportBackgroundJobContract,
   ImportColumnMappingEntry,
   ImportRow,
 } from "@/pages/import/types";
-
-type ImportWorkflowStep = 1 | 2 | 3 | 4;
 
 interface SingleImportPanelProps {
   error: string;
@@ -60,21 +65,6 @@ const WORKFLOW_STEPS = [
   { id: 3, label: "Review data", shortLabel: "Review", icon: TableProperties },
   { id: 4, label: "Run import", shortLabel: "Import", icon: Save },
 ] as const;
-
-function resolveInitialWorkflowStep(params: {
-  file: File | null;
-  parsedData: ImportRow[];
-  previewDeferred: boolean;
-  backgroundJob: ImportBackgroundJobContract | null;
-}): ImportWorkflowStep {
-  if (params.backgroundJob) {
-    return 4;
-  }
-  if (params.file && (params.parsedData.length > 0 || params.previewDeferred)) {
-    return 3;
-  }
-  return 1;
-}
 
 function getJobStatusLabel(status: ImportBackgroundJobContract["status"]): string {
   switch (status) {
@@ -116,7 +106,7 @@ export function SingleImportPanel({
   onResumeBackgroundJob,
 }: SingleImportPanelProps) {
   const [activeStep, setActiveStep] = useState<ImportWorkflowStep>(() =>
-    resolveInitialWorkflowStep({ file, parsedData, previewDeferred, backgroundJob }),
+    resolveInitialSingleImportStep({ hasFile: Boolean(file), hasReviewData: parsedData.length > 0 || previewDeferred, hasColumnMapping: columnMapping.length > 0, hasBackgroundJob: Boolean(backgroundJob), loading }),
   );
   const hasReviewData = parsedData.length > 0 || previewDeferred;
   const hasColumnMapping = columnMapping.length > 0;
@@ -130,33 +120,15 @@ export function SingleImportPanel({
     : {};
 
   useEffect(() => {
-    if (!file) {
-      setActiveStep(1);
-      return;
-    }
-    if (backgroundJob || loading) {
-      setActiveStep(4);
-      return;
-    }
-    setActiveStep((currentStep) => {
-      if (currentStep !== 1) {
-        return currentStep;
-      }
-      if (hasColumnMapping) {
-        return 2;
-      }
-      return hasReviewData ? 3 : currentStep;
-    });
+    setActiveStep((currentStep) => reconcileSingleImportStep(currentStep, {
+      hasFile: Boolean(file), hasReviewData, hasColumnMapping, hasBackgroundJob: Boolean(backgroundJob), loading,
+    }));
   }, [backgroundJob, file, hasColumnMapping, hasReviewData, loading]);
 
   const isStepAvailable = (step: ImportWorkflowStep) => {
-    if (step === 1) {
-      return true;
-    }
-    if (step === 2) {
-      return Boolean(file && hasColumnMapping);
-    }
-    return Boolean(file && hasReviewData);
+    return isSingleImportStepAvailable(step, {
+      hasFile: Boolean(file), hasReviewData, hasColumnMapping, hasBackgroundJob: Boolean(backgroundJob), loading,
+    });
   };
 
   const clearWorkflow = () => {
@@ -177,15 +149,9 @@ export function SingleImportPanel({
   };
 
   const goToPreviousStep = () => {
-    if (activeStep === 4) {
-      setActiveStep(3);
-      return;
-    }
-    if (activeStep === 3) {
-      setActiveStep(hasColumnMapping ? 2 : 1);
-      return;
-    }
-    setActiveStep(1);
+    setActiveStep(getPreviousSingleImportStep(activeStep, {
+      hasFile: Boolean(file), hasReviewData, hasColumnMapping, hasBackgroundJob: Boolean(backgroundJob), loading,
+    }));
   };
 
   return (
@@ -468,7 +434,7 @@ export function SingleImportPanel({
                       </Button>
                     ) : null}
                     {backgroundJob.canResume ? (
-                      <Button type="button" variant="outline" size="sm" onClick={onResumeBackgroundJob}>
+                      <Button type="button" variant="outline" size="sm" onClick={onResumeBackgroundJob} disabled={loading}>
                         <Play className="h-4 w-4" aria-hidden="true" />
                         Resume
                       </Button>
@@ -559,7 +525,7 @@ export function SingleImportPanel({
           <div className="border-b border-border p-4">
             <p className="text-xs font-semibold uppercase text-muted-foreground">Import summary</p>
             <p className="mt-1 truncate text-sm font-semibold text-foreground">
-              {importName || "New import"}
+              {backgroundJob?.name || importName || "New import"}
             </p>
           </div>
           {file ? (
@@ -601,6 +567,12 @@ export function SingleImportPanel({
                   <Badge variant="outline">{headers.length} columns</Badge>
                 </div>
               ) : null}
+            </div>
+          ) : backgroundJob ? (
+            <div className="space-y-2 p-4 text-sm">
+              <p className="break-words font-medium text-foreground">{backgroundJob.filename}</p>
+              <p className="text-muted-foreground">{getJobStatusLabel(backgroundJob.status)}</p>
+              {backgroundJob.rowCount !== null ? <p className="text-muted-foreground">{backgroundJob.rowCount.toLocaleString()} rows</p> : null}
             </div>
           ) : (
             <div className="p-4 text-sm text-muted-foreground">

@@ -91,12 +91,12 @@
 
 .sqr-landing-next .nav-links{gap:1rem}}
 /* Interactive side telemetry rail (desktop) */
-.sqr-landing-next .rail{position:fixed;right:1.1rem;top:50%;transform:translateY(-50%);z-index:15;display:none;flex-direction:column;gap:.55rem}
+.sqr-landing-next .rail{position:fixed;right:1.1rem;top:50%;transform:translateY(-50%);z-index:15;display:none;flex-direction:column;gap:0}
 @media (min-width:1320px){
 
 .sqr-landing-next .rail{display:flex}}
 
-.sqr-landing-next .rail a{position:relative;display:flex;align-items:center;justify-content:flex-end;width:22px;height:14px;text-decoration:none}
+.sqr-landing-next .rail a{position:relative;display:flex;align-items:center;justify-content:flex-end;width:24px;height:24px;text-decoration:none}
 
 .sqr-landing-next .rail a::after{content:"";width:8px;height:2px;background:rgba(166,169,177,.4);transition:width .3s var(--spring),background .25s,box-shadow .25s}
 

@@ -15,6 +15,7 @@ export function CollectionDailyStaffScopeField({
   userPopoverOpen,
   onUserPopoverOpenChange,
   loadingUsers,
+  staffSelectionDisabled = false,
   selectedUsersLabel,
   users,
   selectedUserSet,
@@ -53,6 +54,7 @@ export function CollectionDailyStaffScopeField({
               userPopoverOpen={userPopoverOpen}
               onUserPopoverOpenChange={onUserPopoverOpenChange}
               loadingUsers={loadingUsers}
+              disabled={staffSelectionDisabled}
               selectedUsersLabel={selectedUsersLabel}
               users={users}
               selectedUserSet={selectedUserSet}

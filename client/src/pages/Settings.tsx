@@ -15,6 +15,7 @@ import { SettingsSaveBar } from "@/pages/settings/SettingsSaveBar";
 import { SettingsSidebar } from "@/pages/settings/SettingsSidebar";
 import { SettingsCriticalSaveDialog } from "@/pages/settings/SettingsCriticalSaveDialog";
 import { MaintenanceSettingsNotice } from "@/pages/settings/MaintenanceSettingsNotice";
+import "@/pages/settings/MaintenanceSettingsNotice.css";
 import { useSettingsController } from "@/pages/settings/useSettingsController";
 import { getSettingsCategoryLabel } from "@/pages/settings/settings-controller-utils";
 
@@ -176,6 +177,7 @@ export default function SettingsPage({
                     ) : controller.isRolePermissionCategory ? (
                       <Suspense fallback={<SettingsSectionFallback label="Loading permission settings..." />}>
                         <SettingsRoleSections
+                          getEffectiveValue={controller.getEffectiveValue}
                           renderSettingCard={controller.renderSettingCard}
                           rolePermissionImpacts={controller.rolePermissionImpacts}
                           roleSections={controller.roleSections}

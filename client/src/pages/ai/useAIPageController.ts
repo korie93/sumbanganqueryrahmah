@@ -46,7 +46,7 @@ export function useAIPageController({
     typingIntervalMs,
   });
 
-  useAIPageLifecycleEffects({
+  const messageFollow = useAIPageLifecycleEffects({
     cancelAI: actions.cancelAI,
     isMountedRef: runtimeRefs.isMountedRef,
     isThinking,
@@ -62,6 +62,7 @@ export function useAIPageController({
   }, [pageState.aiStatus]);
 
   return {
+    ...messageFollow,
     messages,
     isThinking,
     query: pageState.query,

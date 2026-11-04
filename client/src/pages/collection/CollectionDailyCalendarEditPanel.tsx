@@ -168,6 +168,7 @@ export function CollectionDailyCalendarEditPanel({
           day={editableDay}
           label="Status untuk nickname dipilih"
           onChange={onChange}
+          disabled={savingCalendar}
         />
 
         <CollectionDailyCalendarConflictNotice day={day} editableDay={editableDay} />

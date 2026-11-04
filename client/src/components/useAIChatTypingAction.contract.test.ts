@@ -10,18 +10,19 @@ const source = readFileSync(path.resolve(__dirname, "useAIChatTypingAction.ts"),
 test("AI chat typing action clears any previous interval before starting a new one", () => {
   assert.match(
     source,
-    /clearTypingInterval\(\);\s*stopTyping\(\);\s*setIsTyping\(true\);[\s\S]*typingIntervalRef\.current = setManagedInterval/,
+    /clearTypingInterval\(\);\s*stopTyping\(\);\s*setIsTyping\(true\);[\s\S]*const timerId = setManagedInterval/,
   );
   assert.doesNotMatch(source, /window\.setInterval/);
 });
 
-test("AI chat typing action clears the interval on inactive and completion paths", () => {
+test("AI chat typing action clears its own inactive interval and guards completion against stale sessions", () => {
   assert.match(
     source,
-    /if \(!isActiveAIChatSession\([\s\S]*?\)\) \{\s*clearTypingInterval\(\);\s*stopTyping\(\);\s*return;/,
+    /if \(typingIntervalRef\.current !== timerId \|\| !canApplyAIChatUiUpdate\([\s\S]*?\)\) \{\s*clearManagedInterval\(timerId\);/,
   );
   assert.match(
     source,
-    /if \(index >= text\.length\) \{\s*clearTypingInterval\(\);\s*stopTyping\(\);/,
+    /const finish = \(\) => \{\s*if \(!canApplyAIChatUiUpdate\([\s\S]*?\)\) return;\s*clearTypingInterval\(\);\s*stopTyping\(\);/,
   );
+  assert.match(source, /prefersReducedAIResponseMotion\(\) \|\| nextIndex >= text\.length/);
 });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CollectionDailyDayDetailsResponse } from "@/lib/api";
 import type { EditableCalendarDay } from "@/pages/collection/CollectionDailyShared";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +54,8 @@ export function useCollectionDailyData({
   const [dirtyCalendarDayNumbers, setDirtyCalendarDayNumbers] = useState<Set<number>>(
     () => new Set(),
   );
+  const hasCalendarDraftRef = useRef(false);
+  const hasCalendarDraft = useCallback(() => hasCalendarDraftRef.current, []);
   const {
     loadingReceiptKey,
     openReceiptViewer,
@@ -79,6 +81,7 @@ export function useCollectionDailyData({
   const {
     overview,
     loadingOverview,
+    isOverviewLoading,
     monthlyTargetInput,
     setMonthlyTargetInput,
     calendarDays,
@@ -105,6 +108,7 @@ export function useCollectionDailyData({
   const selectedUsernamesKey = useMemo(() => selectedUsernames.join("\u001f"), [selectedUsernames]);
 
   const clearDirtyCalendarDays = useCallback(() => {
+    hasCalendarDraftRef.current = false;
     setDirtyCalendarDayNumbers((previous) => (previous.size > 0 ? new Set() : previous));
   }, []);
 
@@ -162,6 +166,8 @@ export function useCollectionDailyData({
     selectedUsernames,
     monthlyTargetInput,
     calendarDaysToSave: dirtyCalendarDays,
+    hasCalendarDraft,
+    isOverviewLoading,
     onRefresh: refreshCurrentView,
     onCalendarSaved: clearDirtyCalendarDays,
     toast,
@@ -172,6 +178,8 @@ export function useCollectionDailyData({
 
     const handleCollectionDataChanged = () => {
       clearCachedDailyViews();
+      // Background changes must never discard this tab's unsaved calendar.
+      if (hasCalendarDraft() || mutationState.isSaving() || isOverviewLoading()) return;
       if (!shouldLoadCollectionDailyOverview({ canManage, currentUsername, selectedUsernames })) {
         return;
       }
@@ -187,11 +195,16 @@ export function useCollectionDailyData({
     canManage,
     clearCachedDailyViews,
     currentUsername,
+    hasCalendarDraft,
+    isOverviewLoading,
+    mutationState.isSaving,
     refreshCurrentView,
     selectedUsernames,
   ]);
 
   const updateEditableDay = useCallback((dayNumber: number, patch: Partial<EditableCalendarDay>) => {
+    if (mutationState.isSaving() || isOverviewLoading()) return;
+    hasCalendarDraftRef.current = true;
     setCalendarDays((previous) =>
       updateCollectionDailyEditableCalendarDay(previous, dayNumber, patch),
     );
@@ -203,10 +216,12 @@ export function useCollectionDailyData({
       next.add(dayNumber);
       return next;
     });
-  }, [setCalendarDays]);
+  }, [isOverviewLoading, mutationState.isSaving, setCalendarDays]);
 
   const updateEditableDays = useCallback((dayNumbers: readonly number[], patch: Partial<EditableCalendarDay>) => {
     if (dayNumbers.length === 0) return;
+    if (mutationState.isSaving() || isOverviewLoading()) return;
+    hasCalendarDraftRef.current = true;
     setCalendarDays((previous) =>
       updateCollectionDailyEditableCalendarDays(previous, dayNumbers, patch),
     );
@@ -217,7 +232,7 @@ export function useCollectionDailyData({
       }
       return next.size === previous.size ? previous : next;
     });
-  }, [setCalendarDays]);
+  }, [isOverviewLoading, mutationState.isSaving, setCalendarDays]);
 
   const closeDayDetails = useCallback(() => {
     clearSelection();

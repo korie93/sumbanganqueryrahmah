@@ -43,6 +43,9 @@ export default {
         "48": "var(--spacing-48)",
       },
       colors: {
+        "monitor-status-good": "hsl(var(--monitor-status-good-text) / <alpha-value>)",
+        "monitor-status-warning": "hsl(var(--monitor-status-warning-text) / <alpha-value>)",
+        "monitor-status-critical": "hsl(var(--monitor-status-critical-text) / <alpha-value>)",
         // Flat / base colors (regular buttons)
         background: "hsl(var(--background) / <alpha-value>)",
         foreground: "hsl(var(--foreground) / <alpha-value>)",

@@ -623,3 +623,54 @@ test("Report controls Daily ignores a late response after closing and choosing a
     staleGate.release();
   }
 });
+
+test("Report controls Daily preserves calendar drafts across target and background refresh attempts", async ({ page, baseURL }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  const fixture = await installFixture(page, baseURL, { role: "superuser" });
+  const targetGate = createRequestGate();
+  let targetRequests = 0;
+  await page.context().route(`${new URL(baseURL!).origin}/api/collection/daily/target`, async (route) => {
+    expect(route.request().method()).toBe("PUT");
+    targetRequests += 1;
+    await targetGate.wait;
+    await route.fulfill({ json: { ok: true, target: {
+      id: "synthetic-target", username: nickname, year: 2026, month: 10, monthlyTarget: 31000,
+    } } });
+  });
+  try {
+    await page.goto("/collection/daily");
+    await page.getByTestId("collection-daily-management-toggle").click();
+    await page.getByRole("button", { name: "Edit calendar status for 11/10/2026", exact: true }).click();
+    await page.getByRole("radio", { name: "Holiday / Leave", exact: true }).click();
+    await page.getByTestId("collection-daily-edit-panel").getByLabel("Leave type", { exact: true }).selectOption("OFF");
+    await page.keyboard.press("Escape");
+    const review = page.getByRole("region", { name: "Semakan perubahan status harian belum disimpan", exact: true });
+    await expect(review).toBeVisible();
+    await page.locator("summary").filter({ hasText: "Target and calendar management" }).click();
+    const target = page.getByRole("button", { name: "Save Target", exact: true });
+    await expect(target).toBeDisabled();
+    await expect(target).toHaveAccessibleDescription(/Save Changed Days dahulu/);
+    const overviewCount = fixture.overviewRequests.length;
+    await page.evaluate(() => window.dispatchEvent(new Event("collection:data-changed")));
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(fixture.overviewRequests).toHaveLength(overviewCount);
+    expect(targetRequests).toBe(0);
+    await expect(review).toBeVisible();
+    await page.getByTestId("collection-daily-refresh").click();
+    await page.getByRole("button", { name: "Kekalkan perubahan", exact: true }).click();
+    await expect(review).toBeVisible();
+    await page.getByTestId("collection-daily-refresh").click();
+    await page.getByRole("button", { name: "Refresh dan buang perubahan", exact: true }).click();
+    await expect(review).toHaveCount(0);
+    await expect(target).toBeEnabled();
+    await target.click();
+    await expect.poll(() => targetRequests).toBe(1);
+    await expect(target).toBeDisabled();
+    await expect(page.locator("#collection-daily-monthly-target")).toBeDisabled();
+    await expect(page.getByTestId("collection-daily-user-trigger")).toBeDisabled();
+    targetGate.release();
+    await expect(target).toBeEnabled();
+    expect(targetRequests).toBe(1);
+    await checkFixture(page, fixture);
+  } finally { targetGate.release(); }
+});

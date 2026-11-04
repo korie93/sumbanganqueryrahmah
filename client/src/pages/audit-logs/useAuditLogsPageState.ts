@@ -18,7 +18,7 @@ export function useAuditLogsPageState() {
   const dataState = useAuditLogsDataState();
   const actionState = useAuditLogsActionState({
     currentRole,
-    logs: dataState.logs,
+    getExportLogs: dataState.getExportLogs,
     stats: dataState.stats,
     onRefresh: dataState.refreshNow,
     onFetchStats: dataState.fetchStats,

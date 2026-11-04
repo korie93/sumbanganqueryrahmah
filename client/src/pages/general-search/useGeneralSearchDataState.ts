@@ -67,6 +67,7 @@ export function useGeneralSearchDataState({
   const [resultsPerPage, setResultsPerPage] = useState(defaultResultsPerPage);
   const [columns, setColumns] = useState<string[]>([]);
   const [loadingColumns, setLoadingColumns] = useState(false);
+  const [columnsError, setColumnsError] = useState("");
   const currentInputKey = useMemo(
     () => buildGeneralSearchInputKey(advancedMode
       ? { mode: "advanced", filters, logic }
@@ -127,6 +128,7 @@ export function useGeneralSearchDataState({
     const controller = new AbortController();
     columnsAbortControllerRef.current = controller;
     setLoadingColumns(true);
+    setColumnsError("");
 
     try {
       const response = await getSearchColumns({ signal: controller.signal });
@@ -138,6 +140,7 @@ export function useGeneralSearchDataState({
       }
       if (!isMountedRef.current || requestId !== columnsRequestIdRef.current) return;
       logClientError("Failed to load general-search columns:", loadError);
+      setColumnsError("Search fields could not be loaded. Please try again.");
     } finally {
       if (columnsAbortControllerRef.current === controller) {
         columnsAbortControllerRef.current = null;
@@ -368,6 +371,7 @@ export function useGeneralSearchDataState({
       hasCurrentSuccessfulSearch,
       loading,
       loadingColumns,
+      columnsError,
       pageSizeOptions,
       query,
       results,
@@ -384,6 +388,7 @@ export function useGeneralSearchDataState({
       handleSearch,
       resetSearchState,
       setError,
+      retryColumns: loadColumns,
     },
   };
 }

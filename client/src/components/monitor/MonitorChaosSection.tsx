@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, FlaskConical } from "lucide-react";
 import { MonitorChaosControls } from "@/components/monitor/MonitorChaosControls";
 import { MonitorChaosRestrictedCard } from "@/components/monitor/MonitorChaosRestrictedCard";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import type { ChaosOption } from "@/components/monitor/monitorData";
 import { Badge } from "@/components/ui/badge";
 import type { ChaosType } from "@/lib/api";
@@ -131,7 +132,7 @@ function MonitorChaosSectionImpl({
           ) : null}
 
           {!controlsOpen && lastChaosMessage ? (
-            <p className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-600 dark:text-emerald-400">
+            <p className={`rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs ${monitorStatusTextClass.good}`}>
               {lastChaosMessage}
             </p>
           ) : null}

@@ -11,6 +11,7 @@ import type { AuditLogRecord } from "@/pages/audit-logs/types";
 interface AuditLogsRecordsListProps {
   filteredLogs: AuditLogRecord[];
   loading: boolean;
+  unavailable?: boolean;
   totalLogs: number;
   onClearFilters: () => void;
   onRecordsOpenChange: (open: boolean) => void;
@@ -21,6 +22,7 @@ interface AuditLogsRecordsListProps {
 export function AuditLogsRecordsList({
   filteredLogs,
   loading,
+  unavailable = false,
   totalLogs,
   onClearFilters,
   onRecordsOpenChange,
@@ -38,12 +40,12 @@ export function AuditLogsRecordsList({
   return (
     <>
       <Collapsible open={recordsOpen} onOpenChange={onRecordsOpenChange}>
-        <Card data-floating-ai-avoid="true">
+        <Card data-floating-ai-avoid="true" aria-busy={loading}>
           <CardHeader className="pb-3">
             <CollapsibleTrigger asChild>
               <Button
                 variant="ghost"
-                className="h-auto w-full justify-between gap-3 rounded-xl px-0 py-0 text-left"
+                className="h-auto min-w-0 w-full justify-between gap-3 whitespace-normal rounded-xl px-0 py-0 text-left"
                 data-testid="button-toggle-records"
               >
                 <div className="min-w-0 space-y-1">
@@ -52,20 +54,21 @@ export function AuditLogsRecordsList({
                     <span>Activity Records</span>
                   </CardTitle>
                   <p className="text-left text-sm text-muted-foreground">
-                    {isMobile
+                    {loading ? "Loading audit records..." : unavailable ? "Audit records are unavailable for the current filters." : isMobile
                       ? `${filteredLogs.length} of ${totalLogs} entries`
                       : `Showing ${filteredLogs.length} of ${totalLogs} audit entries`}
                   </p>
                 </div>
-                <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${recordsOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${recordsOpen ? "rotate-180" : ""}`} />
               </Button>
             </CollapsibleTrigger>
           </CardHeader>
           <CollapsibleContent>
             <CardContent>
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+              {unavailable && !loading ? null : loading ? (
+                <div role="status" className="flex items-center justify-center gap-3 py-12 text-sm text-muted-foreground">
+                  <RefreshCw className="h-8 w-8 animate-spin" aria-hidden="true" />
+                  Loading audit records...
                 </div>
               ) : filteredLogs.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">

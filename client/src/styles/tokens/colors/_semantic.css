@@ -3,6 +3,11 @@
 :root {
   color-scheme: light;
 
+  /* Monitor status copy must remain readable over nested tinted badges. */
+  --monitor-status-good-text: 160 84% 16%;
+  --monitor-status-warning-text: 28 80% 23%;
+  --monitor-status-critical-text: 0 70% 35%;
+
   --button-outline: rgba(0, 0, 0, 0.1);
 
   --badge-outline: rgba(0, 0, 0, 0.05);
@@ -127,6 +132,9 @@
 }
 
 .dark {
+  --monitor-status-good-text: 152 76% 80%;
+  --monitor-status-warning-text: 45 93% 76%;
+  --monitor-status-critical-text: 0 94% 82%;
   color-scheme: dark;
 
   --dm-bg: #0e0e0e;

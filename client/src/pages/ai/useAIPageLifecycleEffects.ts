@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useAIMessageFollow } from "@/hooks/useAIMessageFollow";
 
 import type { AIChatMessage } from "@/context/AIContext";
 import { AI_CANCEL_EVENT, AI_RESET_EVENT } from "@/lib/ai-chat";
@@ -28,6 +29,9 @@ export function useAIPageLifecycleEffects({
   resetChat,
   streamingText,
 }: UseAIPageLifecycleEffectsOptions) {
+  const messageFollow = useAIMessageFollow({
+    containerRef: messagesContainerRef, messages, streamingText, activityKey: String(isThinking) + String(isTyping),
+  });
   useEffect(() => {
     isMountedRef.current = true;
 
@@ -54,9 +58,5 @@ export function useAIPageLifecycleEffects({
     };
   }, [cancelAI, resetChat]);
 
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-    container.scrollTop = container.scrollHeight;
-  }, [messages, isThinking, isTyping, messagesContainerRef, streamingText]);
+  return messageFollow;
 }

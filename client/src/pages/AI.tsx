@@ -46,6 +46,8 @@ export default function AI({
       isTyping={controller.isTyping}
       statusContent={controller.statusContent}
       messagesContainerRef={controller.messagesContainerRef}
+      showJumpToLatest={controller.showJumpToLatest}
+      onJumpToLatest={controller.jumpToLatest}
       onQueryChange={controller.setQuery}
       onSend={() => {
         void controller.handleSend();

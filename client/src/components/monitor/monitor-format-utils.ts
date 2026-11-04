@@ -1,4 +1,5 @@
 import type { MetricStatus, MetricTrend } from "@/components/monitor/MetricPanel";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import type {
   MonitorRollupSnapshot,
   MonitorRollupSummarySnapshot,
@@ -63,9 +64,9 @@ export const getScoreStatus = (score: number): MetricStatus => {
 };
 
 export const getModeBadgeClass = (mode: string) => {
-  if (mode === "NORMAL") return "border-emerald-500/30 bg-emerald-500/15 text-emerald-500";
-  if (mode === "DEGRADED") return "border-amber-500/30 bg-amber-500/15 text-amber-500";
-  return "border-red-500/30 bg-red-500/15 text-red-500";
+  if (mode === "NORMAL") return `border-emerald-500/30 bg-emerald-500/15 ${monitorStatusTextClass.good}`;
+  if (mode === "DEGRADED") return `border-amber-500/30 bg-amber-500/15 ${monitorStatusTextClass.warning}`;
+  return `border-red-500/30 bg-red-500/15 ${monitorStatusTextClass.critical}`;
 };
 
 export const getRollupFreshnessStatus = (
@@ -78,7 +79,10 @@ export const getRollupFreshnessStatus = (
   });
 
 export const getRollupFreshnessBadgeClass = (status: RollupFreshnessStatus) =>
-  getSharedCollectionRollupFreshnessBadgeClass(status);
+  getSharedCollectionRollupFreshnessBadgeClass(status).replace(
+    /\btext-(?:success|warning|destructive)\b/,
+    monitorStatusTextClass[status === "fresh" ? "good" : status === "warming" ? "warning" : "critical"],
+  );
 
 export const formatMonitorDurationCompact = (durationMs: number) => {
   const safeMs = Math.max(0, Math.round(Number(durationMs || 0)));
@@ -118,10 +122,10 @@ export const buildRollupFreshnessSummary = (snapshot: MonitorRollupSummarySnapsh
 
 export const getGovernanceClass = (governanceState: string) => {
   if (governanceState === "LOCKDOWN" || governanceState === "FAIL_SAFE") {
-    return "border-red-500/35 bg-red-500/15 text-red-500";
+    return `border-red-500/35 bg-red-500/15 ${monitorStatusTextClass.critical}`;
   }
   if (governanceState === "COOLDOWN" || governanceState === "CONSENSUS_PENDING") {
-    return "border-amber-500/35 bg-amber-500/15 text-amber-500";
+    return `border-amber-500/35 bg-amber-500/15 ${monitorStatusTextClass.warning}`;
   }
-  return "border-emerald-500/35 bg-emerald-500/15 text-emerald-500";
+  return `border-emerald-500/35 bg-emerald-500/15 ${monitorStatusTextClass.good}`;
 };

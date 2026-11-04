@@ -60,11 +60,11 @@ function AppPageRendererImpl({
   const pageEnabled = isPageEnabled(user.role, currentPage, tabVisibility, tabVisibilityLoaded);
 
   if (!pageEnabled) {
-    return <ForbiddenPage />;
+    return <ForbiddenPage embedded />;
   }
 
   if (["monitor", "activity", "analysis", "audit", "audit-logs", "dashboard"].includes(currentPage)
-    && !monitorVisibility[monitorSection]) return <ForbiddenPage />;
+    && !monitorVisibility[monitorSection]) return <ForbiddenPage embedded />;
 
   switch (currentPage) {
     case "account":
@@ -147,9 +147,9 @@ function AppPageRendererImpl({
         />
       );
     case "forbidden":
-      return <ForbiddenPage />;
+      return <ForbiddenPage embedded />;
     default:
-      return <ForbiddenPage />;
+      return <ForbiddenPage embedded />;
   }
 }
 

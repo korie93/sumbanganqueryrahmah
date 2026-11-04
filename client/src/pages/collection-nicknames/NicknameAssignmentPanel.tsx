@@ -18,6 +18,7 @@ export interface NicknameAssignmentPanelProps {
   nicknameSearch: string;
   loadingNicknames: boolean;
   filteredNicknames: CollectionStaffNickname[];
+  totalNicknameCount?: number;
   assignedIds: string[];
   savingAssignment: boolean;
   statusBusyId: string | null;
@@ -48,6 +49,7 @@ export function NicknameAssignmentPanel({
   nicknameSearch,
   loadingNicknames,
   filteredNicknames,
+  totalNicknameCount,
   assignedIds,
   savingAssignment,
   statusBusyId,
@@ -92,6 +94,9 @@ export function NicknameAssignmentPanel({
     selectedGroupId,
     loadingNicknames,
     filteredNicknames,
+    totalNicknameCount,
+    nicknameSearch,
+    onClearSearch: () => onNicknameSearchChange(""),
     assignedIds,
     statusBusyId,
     resettingNicknameId,

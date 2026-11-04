@@ -949,6 +949,8 @@ async function installMockAuthenticatedSession(page: Page, theme: VisualTheme, r
   await installTheme(page, theme);
   await installMockAuthenticatedApi(page, role);
   await page.addInitScript(({ nextTheme, user, keepFloatingAi }) => {
+    // This fixture models a connected server even in an isolated network namespace.
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
     const now = Date.now();
     const expiresAt = now + 60 * 60 * 1000;
     localStorage.setItem("activeTab", "home");
@@ -1101,18 +1103,17 @@ for (const theme of visualThemes) {
 
 test.describe("authenticated key page baselines", () => {
   for (const theme of visualThemes) {
-    test(`authenticated pages match ${theme} baselines`, async ({ page }) => {
-      await installMockAuthenticatedSession(page, theme);
-
-      try {
-        for (const route of authenticatedRoutes) {
+    for (const route of authenticatedRoutes) {
+      test(`authenticated pages match ${theme} baselines: ${route.id}`, async ({ page }) => {
+        await installMockAuthenticatedSession(page, theme);
+        try {
           await navigateForSnapshot(page, route);
           await expectVisualBaseline(page, route.id, theme);
+        } finally {
+          await logoutVisualSession(page);
         }
-      } finally {
-        await logoutVisualSession(page);
-      }
-    });
+      });
+    }
   }
 });
 
@@ -2168,4 +2169,192 @@ for (const theme of visualThemes) {
       }
     });
   }
+}
+
+test("Impeccable recovery resumes an asynchronously restored import without the original File", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  await installMockAuthenticatedSession(page, "light");
+  const jobId = "synthetic-restored-import";
+  let releaseRestore!: () => void;
+  let releaseResume!: () => void;
+  const restoreGate = new Promise<void>((resolve) => { releaseRestore = resolve; });
+  const resumeGate = new Promise<void>((resolve) => { releaseResume = resolve; });
+  let reads = 0;
+  let resumes = 0;
+  const job = { id: jobId, status: "cancelled", name: "Synthetic recovery dataset", filename: "synthetic-recovery.csv",
+    progress: 41, rowCount: 23, importId: null, duplicateImportName: null, error: null, canCancel: false, canResume: true };
+  await page.addInitScript((id) => sessionStorage.setItem("sqr-active-import-job-id", id), jobId);
+  await page.route((url) => url.pathname === `/api/import-jobs/${jobId}`, async (route) => {
+    reads += 1;
+    await restoreGate;
+    await route.fulfill({ json: resumes ? { ...job, status: "completed", progress: 100, importId: "visual-import-1", canResume: false } : job });
+  });
+  await page.route((url) => url.pathname === `/api/import-jobs/${jobId}/resume`, async (route) => {
+    expect(route.request().method()).toBe("POST");
+    resumes += 1;
+    await resumeGate;
+    await route.fulfill({ json: { ...job, status: "running", progress: 55, canResume: false, canCancel: true } });
+  });
+  try {
+    await page.goto("/import");
+    await expect.poll(() => reads).toBeGreaterThan(0);
+    await expect(page.getByTestId("button-import-next")).toBeDisabled();
+    releaseRestore();
+    const resume = page.getByRole("button", { name: "Resume", exact: true });
+    await expect(resume).toBeVisible();
+    await expect(page.getByRole("button", { name: "Step 4: Run import", exact: true })).toHaveAttribute("aria-current", "step");
+    await expect(page.getByLabel("Background import progress", { exact: true })).toBeVisible();
+    await expect(page.getByText("synthetic-recovery.csv", { exact: true })).toBeVisible();
+    await resume.click();
+    await expect.poll(() => resumes).toBe(1);
+    await expect(resume).toBeDisabled();
+    releaseResume();
+    await expect(page.getByTestId("button-view-visual-import-1")).toBeVisible();
+    expect(resumes).toBe(1);
+  } finally {
+    releaseRestore(); releaseResume();
+    await logoutVisualSession(page);
+  }
+});
+
+test("Impeccable audit recovery distinguishes HTTP failure, retry success and a later failed filter", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  await installMockAuthenticatedSession(page, "light");
+  let available = false;
+  const record = { id: "synthetic-audit", action: "LOGIN", performedBy: "synthetic.audit.user", timestamp: "2026-11-04T01:00:00.000Z" };
+  await page.route((url) => url.pathname === "/api/audit-logs", (route) => {
+    const failed = !available || Boolean(new URL(route.request().url()).searchParams.get("search"));
+    return route.fulfill(failed
+      ? { status: 503, json: { message: "Synthetic unavailable" } }
+      : { json: { logs: [record], pagination: { mode: "offset", page: 1, pageSize: 20, limit: 20, offset: 0, total: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false } } });
+  });
+  try {
+    await page.goto("/audit");
+    await expect(page.getByTestId("audit-logs-load-error")).toBeVisible();
+    await expect(page.getByText("No audit records found.", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("button-export-logs")).toBeDisabled();
+    available = true;
+    await page.getByTestId("button-retry-audit-logs").click();
+    await expect(page.getByTestId("audit-logs-load-error")).toBeHidden();
+    await expect(page.getByText("synthetic.audit.user", { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId("button-export-logs")).toBeEnabled();
+    await page.getByRole("button", { name: /^Search & Filters/ }).click();
+    await page.getByTestId("input-search-text").fill("unavailable query");
+    await expect(page.getByTestId("button-export-logs")).toBeDisabled();
+    await expect(page.getByTestId("audit-logs-load-error")).toBeVisible();
+    await expect(page.getByText("synthetic.audit.user", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("No audit records found.", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("input-search-text")).toHaveValue("unavailable query");
+  } finally { await logoutVisualSession(page); }
+});
+
+test("Impeccable fields recovery preserves advanced filters across a failed columns request and retry", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  await installMockAuthenticatedSession(page, "light");
+  let reads = 0;
+  let available = false;
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => { release = resolve; });
+  await page.route((url) => url.pathname === "/api/search/columns", async (route) => {
+    reads += 1;
+    if (!available) return route.fulfill({ status: 503, json: { message: "Synthetic unavailable" } });
+    await gate;
+    return route.fulfill({ json: ["Customer Name", "Account Number"] });
+  });
+  try {
+    await page.setViewportSize({ width: 1366, height: 900 });
+    await page.goto("/general-search");
+    await page.getByTestId("button-advanced-search").click();
+    await expect(page.getByTestId("advanced-search-fields-error")).toBeVisible();
+    await page.getByLabel("Filter 1 value", { exact: true }).fill("Synthetic retained filter");
+    await page.getByTestId("button-logic-or").click();
+    await page.getByTestId("button-add-filter").click();
+    await page.getByLabel("Filter 2 value", { exact: true }).fill("Second retained filter");
+    const failedReads = reads;
+    available = true;
+    await page.getByRole("button", { name: "Retry fields", exact: true }).click();
+    await expect(page.getByText("Loading search fields...", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Filter 1 field", { exact: true })).toBeDisabled();
+    release();
+    await expect(page.getByLabel("Filter 1 field", { exact: true })).toBeEnabled();
+    await expect(page.getByTestId("advanced-search-fields-error")).toBeHidden();
+    await expect(page.getByLabel("Filter 1 value", { exact: true })).toHaveValue("Synthetic retained filter");
+    await expect(page.getByLabel("Filter 2 value", { exact: true })).toHaveValue("Second retained filter");
+    await expect(page.getByTestId("button-logic-or")).toHaveAttribute("aria-pressed", "true");
+    expect(reads).toBe(failedReads + 1);
+  } finally { release(); await logoutVisualSession(page); }
+});
+
+test("Impeccable role preview follows unsaved switches without persisting access changes", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+  await installMockAuthenticatedSession(page, "light");
+  const writes: string[] = [];
+  const settings = ["manager", "admin", "user"].map((role) => ({
+    key: `tab_${role}_viewer_enabled`, label: `${role[0]!.toUpperCase()}${role.slice(1)} Tab: Viewer`,
+    description: "Synthetic permission for unsaved preview testing.", type: "boolean", value: "false", defaultValue: "false",
+    isCritical: false, updatedAt: null, options: [], permission: { canView: true, canEdit: true },
+  }));
+  await page.route((url) => url.pathname === "/api/settings" || url.pathname === "/api/settings/role-permissions", (route) => {
+    if (route.request().method() !== "GET") {
+      writes.push(route.request().method());
+      return route.fulfill({ status: 503, json: { message: "No write expected" } });
+    }
+    return route.fulfill({ json: { categories: [{ id: "roles", name: "Roles & Permissions", description: "Synthetic roles", settings }] } });
+  });
+  try {
+    await page.goto("/settings?section=roles");
+    const workspace = page.getByRole("region", { name: "Role and permission manager", exact: true });
+    const counts = workspace.getByRole("group", { name: "Permission counts", exact: true });
+    await expect(counts).toContainText("0 enabled");
+    const permission = page.getByRole("switch", { name: "Manager Tab: Viewer", exact: true });
+    await permission.click();
+    await expect(counts).toContainText("1 enabled");
+    await expect(workspace.getByRole("tab", { name: /Manager/ })).toContainText("1/1");
+    await workspace.locator("summary").filter({ hasText: "Role Comparison" }).click();
+    const row = workspace.getByRole("row").filter({ hasText: "Viewer" });
+    await expect(row.getByRole("cell").first()).toHaveText("Allowed");
+    await permission.click();
+    await expect(counts).toContainText("0 enabled");
+    await expect(row.getByRole("cell").first()).toHaveText("Blocked");
+    expect(writes).toEqual([]);
+  } finally { await logoutVisualSession(page); }
+});
+
+for (const theme of visualThemes) {
+  test(`Impeccable maintenance prose reflows without clipping in ${theme}`, async ({ page }) => {
+    await page.addInitScript(() => Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }));
+    await installMockAuthenticatedSession(page, theme);
+    const values = { maintenance_mode: "true", maintenance_type: "soft", maintenance_start_time: "2035-11-20T12:00:00.000Z", maintenance_end_time: "2035-11-21T12:00:00.000Z" };
+    await page.route((url) => url.pathname === "/api/settings", (route) => route.fulfill({ json: { categories: [{
+      id: "maintenance", name: "Maintenance", description: "Synthetic maintenance settings",
+      settings: Object.entries(values).map(([key, value]) => ({ key, label: key, description: "Synthetic layout fixture", value,
+        type: key === "maintenance_mode" ? "boolean" : "text", defaultValue: "", isCritical: false, updatedAt: null,
+        options: [], permission: { canView: true, canEdit: true } })),
+    }] } }));
+    try {
+      await page.goto("/settings?section=maintenance");
+      const summary = page.locator(".maintenance-settings-summary");
+      await expect(summary).toBeVisible();
+      for (const width of [320, 375, 640, 768, 1024, 1366, 1920]) {
+        await page.setViewportSize({ width, height: 900 });
+        await expect(summary.locator(".ops-metric-value").first()).toHaveText("Maintenance is scheduled for a future window");
+        const layout = await summary.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return { columns: style.gridTemplateColumns.split(" ").length,
+            documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1,
+            values: [...element.querySelectorAll(".ops-metric-value")].map((value) => ({
+              fits: value.scrollWidth <= value.clientWidth + 1, wrap: getComputedStyle(value).overflowWrap,
+              wordBreak: getComputedStyle(value).wordBreak, fontSize: getComputedStyle(value).fontSize,
+            })) };
+        });
+        expect(layout.columns).toBe(width < 640 ? 1 : 2);
+        expect(layout.documentFits).toBe(true);
+        expect(layout.values.every((value) => value.fits && value.wrap === "normal" && value.wordBreak === "normal")).toBe(true);
+      }
+      await page.setViewportSize({ width: 1366, height: 900 });
+      await page.evaluate(() => { document.documentElement.style.zoom = "2"; });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+      await page.evaluate(() => { document.documentElement.style.zoom = ""; });
+    } finally { await logoutVisualSession(page); }
+  });
 }

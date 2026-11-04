@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { InfoHint } from "@/components/monitor/InfoHint";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import type { AnomalyRow, CorrelationRow, SlopeRow } from "@/components/monitor/monitorData";
 
 type MonitorInsightsMetricsProps = {
@@ -74,7 +75,7 @@ function MonitorInsightsMetricsImpl({
                       <span className="text-sm font-semibold text-foreground">{row.value.toFixed(3)}</span>
                     </div>
                     {boosted ? (
-                      <Badge variant="outline" className="mt-2 border-amber-500/35 bg-amber-500/10 text-amber-500">
+                      <Badge variant="outline" className={`mt-2 border-amber-500/35 bg-amber-500/10 ${monitorStatusTextClass.warning}`}>
                         Boosted +15%
                       </Badge>
                     ) : null}

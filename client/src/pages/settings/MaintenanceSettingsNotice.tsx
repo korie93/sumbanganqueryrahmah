@@ -43,7 +43,7 @@ export function MaintenanceSettingsNotice({
       }
       contentClassName="space-y-4"
     >
-      <OperationalSummaryStrip>
+      <OperationalSummaryStrip className="maintenance-settings-summary">
         <OperationalMetric
           label="Status"
           value={summary.title}

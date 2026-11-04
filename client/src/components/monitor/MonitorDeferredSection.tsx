@@ -4,6 +4,7 @@ import {
   OperationalSectionCard,
 } from "@/components/layout/OperationalPage";
 import { Badge } from "@/components/ui/badge";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 
 const MONITOR_CHART_FALLBACK_KEYS = ["cpu", "memory", "latency", "throughput"] as const;
 const MONITOR_INSIGHT_FALLBACK_KEYS = ["signals", "anomalies", "recommendations"] as const;
@@ -18,7 +19,7 @@ export function getMonitorSummaryToneClass(tone: "stable" | "watch" | "attention
   }
 
   if (tone === "watch") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    return `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`;
   }
 
   return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";

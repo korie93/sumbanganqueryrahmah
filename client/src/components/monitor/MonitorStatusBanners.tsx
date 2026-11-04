@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { RollupFreshnessStatus } from "@/components/monitor/monitorData";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 
 type MonitorStatusBannersProps = {
   mode: string;
@@ -52,8 +53,8 @@ function MonitorStatusBannersImpl({
     ? "border-red-500/30 bg-red-500/10"
     : "border-amber-500/30 bg-amber-500/10";
   const textClass = hasCriticalNotice
-    ? "text-red-600 dark:text-red-400"
-    : "text-amber-700 dark:text-amber-400";
+    ? monitorStatusTextClass.critical
+    : monitorStatusTextClass.warning;
 
   return (
     <Card className={shellClass}>
@@ -78,8 +79,8 @@ function MonitorStatusBannersImpl({
                     variant="outline"
                     className={`rounded-full px-3 py-1 text-xs ${
                       fact.severity === "critical"
-                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        ? `border-red-500/30 bg-red-500/10 ${monitorStatusTextClass.critical}`
+                        : `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`
                     }`}
                   >
                     {fact.label} {fact.value}
@@ -91,8 +92,8 @@ function MonitorStatusBannersImpl({
                     variant="outline"
                     className={`rounded-full px-3 py-1 text-xs ${
                       notice.severity === "critical"
-                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        ? `border-red-500/30 bg-red-500/10 ${monitorStatusTextClass.critical}`
+                        : `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`
                     }`}
                   >
                     {notice.badge}
@@ -124,8 +125,8 @@ function MonitorStatusBannersImpl({
                     variant="outline"
                     className={`rounded-full px-3 py-1 text-xs ${
                       fact.severity === "critical"
-                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        ? `border-red-500/30 bg-red-500/10 ${monitorStatusTextClass.critical}`
+                        : `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`
                     }`}
                   >
                     {fact.label} {fact.value}
@@ -137,8 +138,8 @@ function MonitorStatusBannersImpl({
                     variant="outline"
                     className={`rounded-full px-3 py-1 text-xs ${
                       notice.severity === "critical"
-                        ? "border-red-500/30 bg-red-500/10 text-red-600 dark:text-red-400"
-                        : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        ? `border-red-500/30 bg-red-500/10 ${monitorStatusTextClass.critical}`
+                        : `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`
                     }`}
                   >
                     {notice.badge}
@@ -159,8 +160,8 @@ function MonitorStatusBannersImpl({
                 key={notice.id}
                 className={`rounded-2xl border p-3 text-sm ${
                   notice.severity === "critical"
-                    ? "border-red-500/25 bg-red-500/5 text-red-600 dark:text-red-400"
-                    : "border-amber-500/25 bg-amber-500/5 text-amber-700 dark:text-amber-400"
+                    ? `border-red-500/25 bg-red-500/5 ${monitorStatusTextClass.critical}`
+                    : `border-amber-500/25 bg-amber-500/5 ${monitorStatusTextClass.warning}`
                 }`}
               >
                 <p className="font-semibold">{notice.title}</p>

@@ -7,6 +7,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { monitorStatusTextClass } from "@/components/monitor/monitor-status-colors";
 import type { WebVitalMetricSummary, WebVitalOverviewPayload, WebVitalPageSummary } from "@shared/web-vitals";
 
 const PRIMARY_METRICS = ["LCP", "INP", "CLS"] as const;
@@ -34,7 +35,7 @@ function getRatingBadgeClass(rating: WebVitalMetricSummary["p75Rating"] | WebVit
   }
 
   if (rating === "needs-improvement") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+    return `border-amber-500/30 bg-amber-500/10 ${monitorStatusTextClass.warning}`;
   }
 
   if (rating === "poor") {

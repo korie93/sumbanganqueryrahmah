@@ -4,6 +4,7 @@ import { getAriaInvalidProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 
 import { normalizeCollectionMonthInputValue } from "./collection-monthly-comparison-utils";
+import { resolveCollectionMonthFieldCommitValue } from "./collection-month-field-utils";
 
 type CollectionMonthFieldProps = {
   id: string;
@@ -28,8 +29,8 @@ export function CollectionMonthField({
     setDraftValue(value);
   }, [value]);
 
-  const commitDraftValue = (nextValue: string) => {
-    const normalized = normalizeCollectionMonthInputValue(nextValue);
+  const commitDraftValue = (nextValue: string, finalize = true) => {
+    const normalized = resolveCollectionMonthFieldCommitValue(nextValue, finalize);
     if (normalized) {
       setDraftValue(normalized);
       onChange(normalized);
@@ -53,7 +54,7 @@ export function CollectionMonthField({
         onChange={(event) => {
           const nextValue = event.target.value;
           setDraftValue(nextValue);
-          commitDraftValue(nextValue);
+          commitDraftValue(nextValue, false);
         }}
         onBlur={() => {
           if (!commitDraftValue(draftValue)) {

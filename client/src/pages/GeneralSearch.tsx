@@ -69,6 +69,8 @@ export default function GeneralSearch({
           filters={state.filters}
           loading={state.loading}
           loadingColumns={state.loadingColumns}
+          columnsError={state.columnsError}
+          onRetryColumns={() => void actions.retryColumns()}
           logic={state.logic}
           query={state.query}
           onAddFilter={actions.addFilter}

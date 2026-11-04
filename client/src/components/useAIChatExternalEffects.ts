@@ -1,4 +1,5 @@
 import { useEffect, type RefObject } from "react";
+import { useAIMessageFollow } from "@/hooks/useAIMessageFollow";
 
 import {
   AI_CANCEL_EVENT,
@@ -27,6 +28,7 @@ export function useAIChatExternalEffects({
   resetSession,
   streamingText,
 }: UseAIChatExternalEffectsOptions) {
+  const messageFollow = useAIMessageFollow({ containerRef: messagesRef, messages, streamingText, activityKey: aiStatus });
   useEffect(() => {
     onCancelAISearchReady?.(() => cancelAISearch(true));
     return () => {
@@ -37,14 +39,6 @@ export function useAIChatExternalEffects({
   useEffect(() => {
     onStatusChange?.(aiStatus);
   }, [aiStatus, onStatusChange]);
-
-  useEffect(() => {
-    const current = messagesRef.current;
-    if (!current) {
-      return;
-    }
-    current.scrollTop = current.scrollHeight;
-  }, [messages, messagesRef, streamingText, aiStatus]);
 
   useEffect(() => {
     const onReset = () => {
@@ -63,4 +57,5 @@ export function useAIChatExternalEffects({
       cancelAISearch(true);
     };
   }, [cancelAISearch, resetSession]);
+  return messageFollow;
 }

@@ -39,6 +39,7 @@ type RolePermissionGroup = {
 };
 
 interface SettingsRoleSectionsProps {
+  getEffectiveValue?: ((setting: SettingItem) => string | number | boolean | null | undefined) | undefined;
   renderSettingCard: (setting: SettingItem) => JSX.Element;
   rolePermissionImpacts: RolePermissionImpact[];
   roleSections: {
@@ -89,8 +90,14 @@ const permissionGroupMeta: Record<
   },
 };
 
-function isEnabledSetting(setting: SettingItem): boolean {
-  return String(setting.value).trim().toLowerCase() === "true";
+function getSavedSettingValue(setting: SettingItem) {
+  return setting.value;
+}
+
+type EffectiveValueReader = NonNullable<SettingsRoleSectionsProps["getEffectiveValue"]>;
+
+function isEnabledSetting(setting: SettingItem, getEffectiveValue: EffectiveValueReader): boolean {
+  return String(getEffectiveValue(setting)).trim().toLowerCase() === "true";
 }
 
 function parseRoleSettingKey(key: string): { role: RolePermissionId; suffix: string } | null {
@@ -184,13 +191,14 @@ function buildRoleSections(roleSections: NonNullable<SettingsRoleSectionsProps["
   return roleOrder.map((roleId) => sections[roleId]);
 }
 
-function getEnabledCount(settings: SettingItem[]) {
-  return settings.filter(isEnabledSetting).length;
+function getEnabledCount(settings: SettingItem[], getEffectiveValue: EffectiveValueReader) {
+  return settings.filter((setting) => isEnabledSetting(setting, getEffectiveValue)).length;
 }
 
 function buildRoleComparisonRows(
   sections: RolePermissionSection[],
   rawQuery: string,
+  getEffectiveValue: EffectiveValueReader,
 ): RoleComparisonRow[] {
   const rows = new Map<string, RoleComparisonRow>();
 
@@ -210,7 +218,7 @@ function buildRoleComparisonRows(
         },
       };
 
-      existing.states[parsed.role] = isEnabledSetting(setting);
+      existing.states[parsed.role] = isEnabledSetting(setting, getEffectiveValue);
       rows.set(parsed.suffix, existing);
     }
   }
@@ -248,6 +256,7 @@ function getEmptyPermissionMessage(section: RolePermissionSection, rawQuery: str
 }
 
 export function SettingsRoleSections({
+  getEffectiveValue = getSavedSettingValue,
   renderSettingCard,
   rolePermissionImpacts,
   roleSections,
@@ -272,8 +281,8 @@ export function SettingsRoleSections({
     + (roleSections?.other.length ?? 0);
   const visiblePermissions = filteredSettings.length + otherSettings.length;
   const comparisonRows = useMemo(
-    () => buildRoleComparisonRows(sections, searchQuery),
-    [searchQuery, sections],
+    () => buildRoleComparisonRows(sections, searchQuery, getEffectiveValue),
+    [searchQuery, sections, getEffectiveValue],
   );
   const visibleImpacts = rolePermissionImpacts.slice(0, 4);
   const grantImpactCount = rolePermissionImpacts.filter((impact) => impact.action === "grant").length;
@@ -284,7 +293,7 @@ export function SettingsRoleSections({
     return null;
   }
 
-  const enabledCount = getEnabledCount(activeSection.settings);
+  const enabledCount = getEnabledCount(activeSection.settings, getEffectiveValue);
   const blockedCount = activeSection.settings.length - enabledCount;
 
   return (
@@ -295,6 +304,9 @@ export function SettingsRoleSections({
             <h2 className="text-sm font-medium text-foreground">Role permission workspace</h2>
             <p className="text-xs leading-5 text-muted-foreground">
               Select a role, search a module, then save changes using the fixed save bar below.
+            </p>
+            <p className="text-xs leading-5 text-muted-foreground">
+              Counts and comparison include unsaved changes. Access changes only after saving.
             </p>
           </div>
           <label htmlFor="role-permission-search" className="relative block w-full lg:max-w-sm">
@@ -382,7 +394,7 @@ export function SettingsRoleSections({
         <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-md p-1" aria-label="Permission roles">
           {sections.map((section) => {
             const RoleIcon = section.icon;
-            const sectionEnabledCount = getEnabledCount(section.settings);
+            const sectionEnabledCount = getEnabledCount(section.settings, getEffectiveValue);
             return (
               <TabsTrigger
                 key={section.id}
@@ -406,7 +418,7 @@ export function SettingsRoleSections({
           </summary>
           <div className="space-y-3 border-t border-border px-3 py-3">
             <p className="text-xs leading-5 text-muted-foreground">
-              Compare module access across Manager, Admin, and User before changing any toggle.
+              Preview module access across Manager, Admin, and User, including unsaved changes.
             </p>
             {comparisonRows.length > 0 ? (
               <div className="min-w-0 overflow-x-auto">
@@ -488,10 +500,10 @@ export function SettingsRoleSections({
                     </div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>
-                        {getEnabledCount(section.settings)} enabled
+                        {getEnabledCount(section.settings, getEffectiveValue)} enabled
                       </span>
                       <span>
-                        {section.settings.length - getEnabledCount(section.settings)} blocked
+                        {section.settings.length - getEnabledCount(section.settings, getEffectiveValue)} blocked
                       </span>
                     </div>
                   </div>
@@ -516,7 +528,7 @@ export function SettingsRoleSections({
                               {group.settings.length} item{group.settings.length === 1 ? "" : "s"}
                             </span>
                             <span>
-                              {getEnabledCount(group.settings)} enabled
+                              {getEnabledCount(group.settings, getEffectiveValue)} enabled
                             </span>
                           </div>
                         </div>

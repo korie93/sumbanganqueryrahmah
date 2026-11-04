@@ -113,9 +113,14 @@ test("both presentations retain existing receipt actions, metadata identifiers a
     id: "synthetic-receipt-1", originalFileName: "existing.pdf", originalMimeType: "application/pdf", fileSize: 100,
   } as CollectionRecordReceipt;
   for (const presentation of ["default", "workspace"] as const) {
-    for (const removed of [false, true]) {
+    for (const { removed, disabled } of [
+      { removed: false, disabled: false },
+      { removed: true, disabled: false },
+      { removed: false, disabled: true },
+    ]) {
       const markup = renderPanel({
         presentation,
+        disabled,
         existingReceipts: [receipt],
         existingReceiptDrafts: [{ draftLocalId: receipt.id, receiptId: receipt.id, receiptAmount: "12.50", receiptDate: "2026-10-15", receiptReference: "SYNTHETIC" }],
         removedReceiptIds: removed ? [receipt.id] : [],
@@ -125,9 +130,15 @@ test("both presentations retain existing receipt actions, metadata identifiers a
       });
       assert.ok(buttonTag(markup, "View"));
       assert.ok(buttonTag(markup, removed ? "Undo Remove" : "Remove"));
-      for (const field of ["amount", "date", "reference"]) {
+      for (const [field, label] of [["amount", "Receipt amount"], ["date", "Receipt date"], ["reference", "Receipt reference"]] as const) {
         assert.ok(markup.includes(`id="existing-receipt-${field}-${receipt.id}"`));
         assert.ok(markup.includes(`aria-label="Existing receipt ${field} for existing.pdf"`));
+        const visibleLabel = markup.match(new RegExp(`<label\\b[^>]*for="existing-receipt-${field}-${receipt.id}"[^>]*>${label}</label>`))?.[0];
+        assert.ok(visibleLabel, `${field} has a persistent label for populated metadata`);
+        assert.doesNotMatch(visibleLabel, /sr-only/);
+        const input = markup.match(new RegExp(`<input\\b[^>]*id="existing-receipt-${field}-${receipt.id}"[^>]*>`))?.[0];
+        assert.ok(input);
+        assert.equal(input.includes('disabled=""'), removed || disabled, `${field} retains removal and busy gates`);
       }
       assert.match(markup, /value="12\.50"/);
       assert.match(markup, /value="2026-10-15"/);

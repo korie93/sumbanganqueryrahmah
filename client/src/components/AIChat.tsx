@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AIMessage from "@/components/AIMessage";
+import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
 import { type AIChatStatus as SharedAIChatStatus } from "@/lib/ai-chat";
 import "@/styles/ai.css";
 import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
@@ -42,6 +43,7 @@ export default function AIChat({
   const isMobile = useIsMobile();
   const queryInputId = useId();
   const queryLimitId = useId();
+  const messagesId = useId();
   const {
     aiStatus,
     cancelAISearch,
@@ -58,6 +60,8 @@ export default function AIChat({
     statusMeta,
     streamingText,
     textareaRef,
+    jumpToLatest,
+    showJumpToLatest,
   } = useAIChatState({
     aiEnabled,
     isMobile,
@@ -97,6 +101,7 @@ export default function AIChat({
 
       <div
         ref={messagesRef}
+        id={messagesId}
         className="ai-messages"
         role="log"
         aria-live="polite"
@@ -127,6 +132,7 @@ export default function AIChat({
         ) : null}
       </div>
 
+      <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={jumpToLatest} className="px-3 pb-2" />
       <div className="ai-input-container">
         <label htmlFor={queryInputId} className="sr-only">
           Taip soalan kepada {assistantLabel}

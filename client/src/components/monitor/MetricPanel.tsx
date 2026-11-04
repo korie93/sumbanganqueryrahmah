@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { CircleHelp } from "lucide-react";
+import { InfoHint } from "@/components/monitor/InfoHint";
 import {
   buildSparklinePath,
   formatMetricValue,
@@ -10,7 +10,6 @@ import {
 } from "@/components/monitor/metric-panel-utils";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type MetricPanelProps = {
   label: string;
@@ -46,20 +45,7 @@ function MetricPanelImpl({
             <div className="flex items-center gap-1.5">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
               {description ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      className="inline-flex rounded-sm text-muted-foreground transition hover:text-foreground"
-                      aria-label={`${label} description`}
-                    >
-                      <CircleHelp className="h-3.5 w-3.5" />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p className="max-w-xs text-xs">{description}</p>
-                  </TooltipContent>
-                </Tooltip>
+                <InfoHint label={`${label} description`} text={description} />
               ) : null}
             </div>
             <div className="mt-2 flex items-end gap-1">
