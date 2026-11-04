@@ -170,7 +170,9 @@ jobs:
     needs:
       - build-and-test
       - coverage-gate
-    runs-on: ubuntu-latest
+    # Playwright's locked Chromium shell does not support Ubuntu 26.04 yet.
+    # Keep this browser job on its supported image when ubuntu-latest advances.
+    runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
       NODE_ENV: development

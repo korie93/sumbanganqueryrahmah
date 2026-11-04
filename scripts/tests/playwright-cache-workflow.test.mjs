@@ -26,6 +26,18 @@ test("application smoke and release workflows retain system Chrome", () => {
   assertPlaywrightUsesSystemChrome(".github/workflows/release-verification.yml");
 });
 
+test("sanitizer smoke job pins Ubuntu 24.04 supported by the locked Chromium shell", () => {
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const job = workflow.match(/^  smoke-ui:\r?\n(?:(?!^  [A-Za-z0-9_-]+:)[\s\S])*/m)?.[0];
+  assert.ok(job, "CI must define the smoke-ui job");
+  assert.match(job, /^    runs-on: ubuntu-24\.04\r?$/m,
+    "Pin the smoke job to the Ubuntu version supported by the lockfile-paired Chromium shell");
+  assert.doesNotMatch(job, /^    runs-on: ubuntu-latest\r?$/m,
+    "A floating runner can advance beyond the paired browser's supported platforms");
+  assert.match(job, /name: Install locked Chromium for sanitizer regression/);
+  assert.match(job, /run: npx --no-install playwright install --only-shell chromium/);
+});
+
 test("only the sanitizer regression uses the lockfile-paired Chromium", () => {
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
   const steps = workflow.split(/(?=^      - name: )/m);
