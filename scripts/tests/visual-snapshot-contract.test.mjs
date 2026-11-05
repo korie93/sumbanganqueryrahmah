@@ -87,11 +87,13 @@ test("visual masks do not hide live content or whole classes of counters and dat
   }
 });
 
-test("light and dark snapshot tests execute independently after a failure", () => {
+test("light and dark snapshots register independently for every authenticated route", () => {
   assert.match(source, /visualThemes\s*:[^=]+?=\s*\[\s*["']light["']\s*,\s*["']dark["']\s*\]/);
   const cases = section(/for\s*\(\s*const\s+theme\s+of\s+visualThemes\s*\)/, /test\s*\(\s*["']dashboard scaling/);
-  assert.equal([...cases.matchAll(/for\s*\(\s*const\s+theme\s+of\s+visualThemes\s*\)\s*\{\s*test\(/g)].length, 2,
-    "Public and authenticated themes must each register independent test cases");
+  assert.match(cases, /for\s*\(\s*const\s+theme\s+of\s+visualThemes\s*\)\s*\{\s*test\(\s*`public login page matches \$\{theme\} baseline`/,
+    "Public themes must each register an independent login snapshot");
+  assert.match(cases, /for\s*\(\s*const\s+theme\s+of\s+visualThemes\s*\)\s*\{\s*for\s*\(\s*const\s+route\s+of\s+authenticatedRoutes\s*\)\s*\{\s*test\(\s*`authenticated pages match \$\{theme\} baselines: \$\{route\.id\}`/,
+    "Every authenticated route and theme must register a separate snapshot test");
   assert.doesNotMatch(source, /test\.describe\.serial\b|mode\s*:\s*["']serial["']/);
 });
 
