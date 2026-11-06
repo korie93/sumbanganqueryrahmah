@@ -135,7 +135,7 @@ export function OperationalSectionCard({
       {hasHeader ? (
         <CardHeader
           className={cn(
-            "gap-4 pb-3 xl:flex-row xl:items-start xl:justify-between",
+            "space-y-0 gap-4 pb-3 xl:flex-row xl:items-start xl:justify-between",
             headerClassName,
           )}
         >
@@ -148,7 +148,7 @@ export function OperationalSectionCard({
             {description ? <p className="text-sm leading-6 text-muted-foreground">{description}</p> : null}
           </div>
           {(badge || actions) ? (
-            <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
+            <div className="flex w-full flex-col items-stretch gap-2 empty:hidden sm:flex-row sm:flex-wrap sm:items-center xl:w-auto xl:justify-end">
               {badge}
               {actions}
             </div>

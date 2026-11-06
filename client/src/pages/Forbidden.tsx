@@ -1,5 +1,6 @@
 import { ArrowLeft, Home, ShieldAlert } from "lucide-react";
 import { useLocation } from "wouter";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import "./Forbidden.css";
 
 export default function Forbidden({ embedded = false }: { embedded?: boolean }) {
@@ -8,7 +9,7 @@ export default function Forbidden({ embedded = false }: { embedded?: boolean }) 
   const landmarkProps = embedded ? {} : { id: "main-content", tabIndex: -1 };
 
   return (
-    <Container {...landmarkProps} className="forbidden-page app-shell-min-height px-4 py-8 sm:px-6">
+    <Container {...landmarkProps} className="forbidden-page app-shell-min-height px-4 py-8 sm:px-6" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       <div className="mx-auto max-w-3xl">
         <section className="forbidden-page__card glass-wrapper rounded-3xl p-8 text-center sm:p-10">
             <div className="forbidden-page__icon-shell mx-auto flex h-16 w-16 items-center justify-center rounded-full">
@@ -45,7 +46,7 @@ export default function Forbidden({ embedded = false }: { embedded?: boolean }) 
               </div>
             </div>
 
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center" data-floating-ai-avoid="true">
               <button
                 type="button"
                 className="forbidden-page__secondary-button inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-medium transition-colors"

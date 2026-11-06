@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useSearch } from "wouter";
 import { useMobileViewportState } from "@/hooks/use-mobile-viewport-state";
 import {
   areFloatingAiLayoutsEqual,
@@ -6,9 +7,10 @@ import {
   type FloatingAiLayout,
 } from "@/components/floating-ai-layout";
 import { applyFloatingAiScrollLock } from "@/components/floating-ai-scroll-lock";
-import { isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute, shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
+import { isFloatingAiGuardedWorkspaceRoute, isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute, shouldTrackFloatingAiDom } from "@/components/floating-ai-visibility";
 import {
   collectFloatingAiDomSnapshot,
+  FLOATING_AI_LAYOUT_READY_EVENT,
   isEditableElement,
   queryFloatingAiObstacleElements,
   resolveFloatingAiHasDensePage,
@@ -68,12 +70,15 @@ export function useFloatingAILayoutState({
   const layoutListenerCleanupRef = useRef<(() => void) | null>(null);
   const saveCollectionRoute = isFloatingAiSaveCollectionRoute(activePage, location);
   const savedMobileRoute = isFloatingAiSavedMobileRoute(activePage, location, isMobile);
+  const search = useSearch();
+  const guardedWorkspaceRoute = isFloatingAiGuardedWorkspaceRoute(activePage, location, search);
   const shouldTrackObstacleLayout = shouldTrackFloatingAiDom({
     isOpen,
     isThinking,
     aiStatus,
     saveCollectionRoute,
     savedMobileRoute,
+    guardedWorkspaceRoute,
   });
   const hasDensePage = useMemo(
     () => resolveFloatingAiHasDensePage(activePage, location),
@@ -92,6 +97,7 @@ export function useFloatingAILayoutState({
     shouldTrackObstacleLayout,
     saveCollectionRoute,
     savedMobileRoute,
+    guardedWorkspaceRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -107,6 +113,7 @@ export function useFloatingAILayoutState({
     shouldTrackObstacleLayout,
     saveCollectionRoute,
     savedMobileRoute,
+    guardedWorkspaceRoute,
     keyboardOpen,
     mobileViewportHeight,
     hasFocusedAiEditable,
@@ -178,7 +185,7 @@ export function useFloatingAILayoutState({
         ? state.mobileViewportHeight
         : window.innerHeight;
     const domSnapshot = state.shouldTrackObstacleLayout
-      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute, state.savedMobileRoute))
+      ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute, state.savedMobileRoute, state.guardedWorkspaceRoute))
       : {
           avoidRects: [],
           hasBlockingDialog: false,
@@ -196,7 +203,7 @@ export function useFloatingAILayoutState({
       hasDensePage: state.hasDensePage,
       preferCompactPanel: state.preferCompactPanel,
       avoidRects: domSnapshot.avoidRects,
-      allowAdaptiveTriggerOffsets: state.saveCollectionRoute || state.savedMobileRoute,
+      allowAdaptiveTriggerOffsets: state.saveCollectionRoute || state.savedMobileRoute || state.guardedWorkspaceRoute,
     });
 
     setLayoutState((previous) => (areFloatingAiLayoutsEqual(previous, nextLayout) ? previous : nextLayout));
@@ -217,6 +224,7 @@ export function useFloatingAILayoutState({
     shouldTrackObstacleLayout,
     saveCollectionRoute,
     savedMobileRoute,
+    guardedWorkspaceRoute,
     syncLayout,
     viewportBottomInset,
   ]);
@@ -279,7 +287,7 @@ export function useFloatingAILayoutState({
         frame = null;
         scheduled = false;
         if (!mounted || !observedRoot.isConnected) return;
-        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements(document, saveCollectionRoute, savedMobileRoute) : null;
+        const obstacleQuery = shouldTrackObstacleLayout ? queryFloatingAiObstacleElements(document, saveCollectionRoute, savedMobileRoute, guardedWorkspaceRoute) : null;
         syncObservedElements(obstacleQuery);
         syncLayout(obstacleQuery);
       });
@@ -319,7 +327,7 @@ export function useFloatingAILayoutState({
 
     window.addEventListener("resize", scheduleResizeSync, { passive: true });
     if (shouldTrackObstacleLayout) {
-      window.addEventListener("scroll", scheduleSync, { passive: true });
+      window.addEventListener("scroll", scheduleSync, { passive: true, capture: guardedWorkspaceRoute });
     }
     if (saveCollectionRoute) {
       document.addEventListener("toggle", scheduleSaveCollectionToggleSync, true);
@@ -331,6 +339,12 @@ export function useFloatingAILayoutState({
       document.addEventListener("focusout", scheduleSync);
       document.addEventListener("sqr:saved-workspace-ready", scheduleSync);
     }
+    if (guardedWorkspaceRoute) {
+      document.addEventListener(FLOATING_AI_LAYOUT_READY_EVENT, scheduleSync);
+      // Portalled dialogs can appear without resizing their former workspace.
+      document.addEventListener("focusin", scheduleSync);
+      document.addEventListener("focusout", scheduleSync);
+    }
 
     const cleanupLayoutListeners = () => {
       mounted = false;
@@ -339,7 +353,7 @@ export function useFloatingAILayoutState({
       resizeObserver?.disconnect();
       window.removeEventListener("resize", scheduleResizeSync);
       if (shouldTrackObstacleLayout) {
-        window.removeEventListener("scroll", scheduleSync);
+        window.removeEventListener("scroll", scheduleSync, guardedWorkspaceRoute);
       }
       if (saveCollectionRoute) {
         document.removeEventListener("toggle", scheduleSaveCollectionToggleSync, true);
@@ -348,6 +362,11 @@ export function useFloatingAILayoutState({
         document.removeEventListener("focusin", scheduleSync);
         document.removeEventListener("focusout", scheduleSync);
         document.removeEventListener("sqr:saved-workspace-ready", scheduleSync);
+      }
+      if (guardedWorkspaceRoute) {
+        document.removeEventListener(FLOATING_AI_LAYOUT_READY_EVENT, scheduleSync);
+        document.removeEventListener("focusin", scheduleSync);
+        document.removeEventListener("focusout", scheduleSync);
       }
       if (resizeDebounceHandle !== null) {
         window.clearTimeout(resizeDebounceHandle);
@@ -366,7 +385,7 @@ export function useFloatingAILayoutState({
         layoutListenerCleanupRef.current = null;
       }
     };
-  }, [hiddenForAiPage, saveCollectionRoute, savedMobileRoute, shouldTrackObstacleLayout, syncLayout]);
+  }, [hiddenForAiPage, saveCollectionRoute, savedMobileRoute, guardedWorkspaceRoute, shouldTrackObstacleLayout, syncLayout]);
 
   return {
     floatingRootRef,

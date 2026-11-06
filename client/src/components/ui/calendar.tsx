@@ -4,6 +4,7 @@ import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
+import "./calendar.css"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -22,7 +23,7 @@ function Calendar({
       className={cn("rounded-xl border border-border/70 bg-popover p-3 text-popover-foreground shadow-md", className)}
       classNames={{
         months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
+        month: "sqr-calendar-month space-y-4",
         caption: "relative flex items-center justify-center pt-1",
         caption_label: "text-sm font-semibold text-foreground",
         nav: "space-x-1 flex items-center",
@@ -33,14 +34,14 @@ function Calendar({
         nav_button_previous: "absolute left-1",
         nav_button_next: "absolute right-1",
         table: "w-full border-collapse space-y-1",
-        head_row: "flex",
+        head_row: "sqr-calendar-week flex",
         head_cell:
-          "w-9 rounded-md text-xs font-medium uppercase tracking-label-md text-muted-foreground",
-        row: "flex w-full mt-2",
-        cell: "relative h-11 w-11 p-0 text-center text-sm focus-within:relative focus-within:z-[var(--z-sticky-content)] sm:h-9 sm:w-9 [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:rounded-md [&:has([aria-selected])]:bg-accent/80",
+          "sqr-calendar-weekday w-11 rounded-md text-xs font-medium uppercase tracking-label-md text-muted-foreground sm:w-9",
+        row: "sqr-calendar-week flex w-full mt-2",
+        cell: "sqr-calendar-cell relative h-11 w-11 p-0 text-center text-sm focus-within:relative focus-within:z-[var(--z-sticky-content)] sm:h-9 sm:w-9 [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:rounded-md [&:has([aria-selected])]:bg-accent/80",
         day: cn(
           buttonVariants({ variant: "ghost" }),
-          "h-11 w-11 rounded-md p-0 font-normal text-foreground transition-colors aria-selected:opacity-100 sm:h-9 sm:w-9"
+          "sqr-calendar-day h-11 w-11 rounded-md p-0 font-normal text-foreground transition-colors aria-selected:opacity-100 sm:h-9 sm:w-9"
         ),
         day_range_end: "day-range-end",
         day_selected:

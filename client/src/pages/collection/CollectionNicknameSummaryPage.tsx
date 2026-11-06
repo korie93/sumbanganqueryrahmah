@@ -17,6 +17,7 @@ import {
   getCollectionNicknameSummaryPreview,
 } from "@/pages/collection/collection-nickname-summary-page-utils";
 import { canViewCollectionNicknameSummary } from "@shared/user-roles";
+import "./CollectionNicknameSummaryPage.css";
 
 const CollectionNicknameBatchSections = lazy(() =>
   import("@/pages/collection-nickname-summary/CollectionNicknameBatchSections").then((module) => ({

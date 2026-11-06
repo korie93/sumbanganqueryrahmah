@@ -36,8 +36,8 @@ test("useFloatingAILayoutState prevents focus listener accumulation across condi
 });
 
 test("useFloatingAILayoutState keeps obstacle scroll tracking opt-in and removable", () => {
-  assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.addEventListener\("scroll", scheduleSync, \{ passive: true \}\);/);
-  assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.removeEventListener\("scroll", scheduleSync\);/);
+  assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.addEventListener\("scroll", scheduleSync, \{ passive: true, capture: guardedWorkspaceRoute \}\);/);
+  assert.match(source, /if \(shouldTrackObstacleLayout\) \{\s*window\.removeEventListener\("scroll", scheduleSync, guardedWorkspaceRoute\);/);
 });
 
 test("save form disclosure toggles resync moved obstacles without observing the entire document", () => {
@@ -49,7 +49,21 @@ test("save form disclosure toggles resync moved obstacles without observing the 
 test("Saved mobile portal focus resyncs the idle launcher with balanced scoped listeners", () => {
   assert.match(source, /if \(savedMobileRoute\) \{\s*\/\/[\s\S]*?document\.addEventListener\("focusin", scheduleSync\);\s*document\.addEventListener\("focusout", scheduleSync\);/);
   assert.match(source, /if \(savedMobileRoute\) \{\s*document\.removeEventListener\("focusin", scheduleSync\);\s*document\.removeEventListener\("focusout", scheduleSync\);/);
-  assert.match(source, /\[hiddenForAiPage, saveCollectionRoute, savedMobileRoute, shouldTrackObstacleLayout, syncLayout\]/);
+  assert.match(source, /\[hiddenForAiPage, saveCollectionRoute, savedMobileRoute, guardedWorkspaceRoute, shouldTrackObstacleLayout, syncLayout\]/);
+});
+
+test("guarded workspaces reuse the existing resize observer and clean up lazy-ready and portal listeners", () => {
+  assert.match(source, /queryFloatingAiObstacleElements\(document, saveCollectionRoute, savedMobileRoute, guardedWorkspaceRoute\)/);
+  assert.match(source, /resizeObserver = new ResizeObserver\(\(\) => \{\s*scheduleSync\(\);/);
+  assert.match(source, /resizeObserver\.observe\(element\)/);
+  assert.match(source, /resizeObserver\.unobserve\(element\)/);
+  assert.match(source, /if \(guardedWorkspaceRoute\) \{\s*document\.addEventListener\(FLOATING_AI_LAYOUT_READY_EVENT, scheduleSync\)/);
+  assert.match(source, /if \(guardedWorkspaceRoute\) \{\s*document\.removeEventListener\(FLOATING_AI_LAYOUT_READY_EVENT, scheduleSync\)/);
+  assert.match(source, /document\.removeEventListener\("focusin", scheduleSync\)/);
+  assert.match(source, /document\.removeEventListener\("focusout", scheduleSync\)/);
+  assert.equal((source.match(/new ResizeObserver\(/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /\.observe\(document\.(?:body|documentElement)/);
+  assert.doesNotMatch(source, /setInterval|requestIdleCallback/);
 });
 
 test("Saved lazy route announces its mounted workspace to a removable mobile-only listener", () => {

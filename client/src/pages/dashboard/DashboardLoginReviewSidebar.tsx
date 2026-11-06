@@ -146,17 +146,17 @@ function DashboardLoginReviewSidebarImpl({
               <div className="dashboard-review-focus">
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs leading-5 text-muted-foreground">Health score</span>
-                  <Badge variant="outline" className={`rounded-full ${SIDEBAR_TONE_CLASS_BY_TONE[healthScore.tone]}`}>
+                  <Badge variant="outline" data-floating-ai-avoid="true" className={`rounded-full ${SIDEBAR_TONE_CLASS_BY_TONE[healthScore.tone]}`}>
                     {healthScore.score}/100
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs leading-5 text-muted-foreground">Active sessions</span>
-                  <span className="text-sm font-semibold text-foreground">{activeSessions.toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-foreground" data-floating-ai-avoid="true">{activeSessions.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs leading-5 text-muted-foreground">Stale sessions</span>
-                  <span className="text-sm font-semibold text-foreground">{staleSessions.toLocaleString()}</span>
+                  <span className="text-sm font-semibold text-foreground" data-floating-ai-avoid="true">{staleSessions.toLocaleString()}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-xs leading-5 text-muted-foreground">Pattern</span>
@@ -190,6 +190,7 @@ function DashboardLoginReviewSidebarImpl({
                       <p className="mt-2 text-xs font-semibold leading-5 text-foreground">{item.title}</p>
                       <a
                         href={item.targetHref}
+                        data-floating-ai-avoid="true"
                         className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary underline-offset-4 hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {item.actionLabel}
@@ -220,6 +221,7 @@ function DashboardLoginReviewSidebarImpl({
                     <a
                       key={shortcut.href}
                       href={shortcut.href}
+                      data-floating-ai-avoid="true"
                       className="inline-flex min-h-11 items-center gap-3 rounded-md px-2 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring sm:min-h-9"
                     >
                       <span className="inline-flex min-w-0 items-center gap-2">

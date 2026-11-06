@@ -85,17 +85,17 @@ function ComparisonIdentityDetails({
               {formatValue(side.customerName)}
             </dd>
           </div>
-          <div>
+          <div className="min-w-0">
             <dt className="text-muted-foreground">IC</dt>
-            <dd className="break-all text-foreground">{formatValue(side.icNumber)}</dd>
+            <dd className="break-words text-foreground">{formatValue(side.icNumber)}</dd>
           </div>
-          <div>
+          <div className="min-w-0">
             <dt className="text-muted-foreground">Phone</dt>
-            <dd className="break-all text-foreground">{formatValue(side.customerPhone)}</dd>
+            <dd className="break-words text-foreground">{formatValue(side.customerPhone)}</dd>
           </div>
-          <div className="col-span-2">
+          <div className="col-span-2 min-w-0">
             <dt className="text-muted-foreground">Account</dt>
-            <dd className="break-all text-foreground">{formatAccounts(side)}</dd>
+            <dd className="break-words text-foreground">{formatAccounts(side)}</dd>
           </div>
         </dl>
       ) : (
@@ -147,6 +147,7 @@ export function SavedCustomerComparisonResults({
         className="hidden rounded-md border border-border md:block"
         ariaLabel="Customer and account comparison table"
         hint="Scroll comparison table"
+        hintPlacement="above"
         showNavigationControls
       >
         <table className="w-full min-w-[1080px] text-sm">
@@ -181,19 +182,19 @@ export function SavedCustomerComparisonResults({
                   <th scope="row" className="max-w-56 break-words p-3 text-left font-medium text-foreground">
                     {formatValue(preferred?.customerName)}
                   </th>
-                  <td className="max-w-44 break-all p-3 text-muted-foreground">
+                  <td className="max-w-44 break-words p-3 text-muted-foreground">
                     {item.baseline?.icNumber && item.current?.icNumber
                       && item.baseline.icNumber !== item.current.icNumber
                       ? `${item.baseline.icNumber} / ${item.current.icNumber}`
                       : formatValue(preferred?.icNumber)}
                   </td>
-                  <td className="max-w-44 break-all p-3 text-muted-foreground">
+                  <td className="max-w-44 break-words p-3 text-muted-foreground">
                     {formatValue(preferred?.customerPhone)}
                   </td>
-                  <td className="max-w-52 break-all p-3 text-muted-foreground">
+                  <td className="max-w-52 break-words p-3 text-muted-foreground">
                     {formatAccounts(item.baseline)}
                   </td>
-                  <td className="max-w-52 break-all p-3 text-muted-foreground">
+                  <td className="max-w-52 break-words p-3 text-muted-foreground">
                     {formatAccounts(item.current)}
                   </td>
                   <td className="p-3 text-right tabular-nums text-muted-foreground">

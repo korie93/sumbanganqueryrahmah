@@ -10,6 +10,7 @@ import {
 import type {
   FloatingAiLayout,
   FloatingAiLayoutInput,
+  RectLike,
 } from "@/components/floating-ai-layout-types";
 
 export type {
@@ -46,18 +47,39 @@ type TriggerCandidate = {
   score: number;
 };
 
+function resolveInteriorTriggerLefts(
+  avoidRects: readonly RectLike[],
+  viewportWidth: number,
+  viewportHeight: number,
+  gutter: number,
+  size: number,
+  existingLefts: readonly number[],
+  limit: number,
+) {
+  const maxLeft = Math.max(gutter, viewportWidth - gutter - size);
+  const existing = new Set(existingLefts);
+  // Keep a bounded, DOM-order-independent set of gaps between content columns.
+  return Array.from(new Set(
+    avoidRects.filter((rect) => rect.bottom > 0 && rect.top < viewportHeight)
+      .flatMap((rect) => [rect.left - size - 8, rect.right + 8])
+      .map((left) => clamp(left, gutter, maxLeft)),
+  )).filter((left) => left > gutter && left < maxLeft && !existing.has(left))
+    .sort((left, right) => right - left)
+    .slice(0, limit);
+}
+
 function resolveDesktopPanelWidth(viewportWidth: number) {
-  if (viewportWidth >= 1536) return 420;
-  if (viewportWidth >= 1280) return 408;
-  if (viewportWidth >= 1100) return 396;
-  if (viewportWidth >= 960) return 380;
-  return Math.min(360, Math.max(320, viewportWidth - 40));
+  if (viewportWidth >= 1536) return 452;
+  if (viewportWidth >= 1280) return 440;
+  if (viewportWidth >= 1100) return 428;
+  if (viewportWidth >= 960) return 412;
+  return Math.min(392, Math.max(320, viewportWidth - 40));
 }
 
 function resolveDesktopPanelPreferredHeight(viewportHeight: number, hasDensePage: boolean) {
-  const target = hasDensePage ? 492 : 536;
+  const target = hasDensePage ? 532 : 576;
   const minimum = viewportHeight >= 820 ? 452 : 420;
-  const scaled = Math.round(viewportHeight * (hasDensePage ? 0.57 : 0.62));
+  const scaled = Math.round(viewportHeight * (hasDensePage ? 0.62 : 0.67));
   return clamp(scaled, minimum, target);
 }
 
@@ -113,6 +135,31 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
     }),
   );
 
+  if (input.isMobile && input.allowAdaptiveTriggerOffsets) {
+    const maxLeft = Math.max(gutterX, viewportWidth - gutterX - triggerSize);
+    // Keep both familiar corners first, then at most ten interior positions.
+    // Value/label columns can leave a usable gap that neither corner reaches.
+    const interiorLefts = resolveInteriorTriggerLefts(
+      avoidRects, viewportWidth, triggerViewportHeight, gutterX, triggerSize,
+      [gutterX, maxLeft], 10,
+    );
+    for (const left of interiorLefts) {
+      for (const bottom of triggerBottomOffsets) {
+        const rect = buildRect(left, triggerViewportHeight - bottom - triggerSize, triggerSize, triggerSize);
+        mobileTriggerCandidates.push({
+          anchor: "right",
+          bottom,
+          left: null,
+          right: viewportWidth - left - triggerSize,
+          score: overlapScore(rect, avoidRects, triggerViewportHeight)
+            + (bottom - gutterY) * 2.1
+            + (maxLeft - left) * 0.7
+            + 80,
+        });
+      }
+    }
+  }
+
   const desktopTriggerRightOffsets = buildOffsetCandidates(
     gutterX,
     Math.max(gutterX, viewportWidth - triggerSize - 16),
@@ -136,6 +183,30 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
       };
     }),
   );
+  if (!input.isMobile && input.allowAdaptiveTriggerOffsets) {
+    // Preserve the four legacy positions and add no more than eight gap edges.
+    const interiorLefts = resolveInteriorTriggerLefts(
+      avoidRects, viewportWidth, triggerViewportHeight, gutterX, triggerSize,
+      desktopTriggerRightOffsets.map((right) => viewportWidth - right - triggerSize), 8,
+    );
+    for (const left of interiorLefts) {
+      const right = viewportWidth - left - triggerSize;
+      for (const bottom of triggerBottomOffsets) {
+        const rect = buildRect(left, triggerViewportHeight - bottom - triggerSize, triggerSize, triggerSize);
+        desktopTriggerCandidates.push({
+          anchor: "right",
+          bottom,
+          left: null,
+          right,
+          score: overlapScore(rect, avoidRects, triggerViewportHeight)
+            + (right - gutterX) * 2.4
+            + (bottom - gutterY) * 2.9
+            - 120
+            + 80,
+        });
+      }
+    }
+  }
   const triggerCandidate = chooseBestCandidate(input.isMobile ? mobileTriggerCandidates : desktopTriggerCandidates);
 
   if (input.isMobile && input.isOpen) {
@@ -160,7 +231,9 @@ export function resolveFloatingAiLayout(input: FloatingAiLayoutInput): FloatingA
           left: 0,
           right: 0,
           width: viewportWidth,
-          height: Math.max(320, viewportHeight - viewportBottomInset),
+          // Trigger scoring has a 480px floor; the visible panel must use the
+          // actual viewport so landscape headers remain reachable.
+          height: Math.max(1, input.viewportHeight - viewportBottomInset),
           mode: "fullscreen",
           alignment: "center",
         },

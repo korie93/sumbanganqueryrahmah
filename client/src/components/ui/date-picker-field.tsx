@@ -115,9 +115,11 @@ export function DatePickerField({
           contentClassName,
         )}
         align="start"
+        collisionPadding={8}
         data-floating-ai-avoid="true"
       >
         <Calendar
+          className="sqr-date-field-calendar"
           mode="single"
           selected={selectedDate}
           disabled={disabledDates}

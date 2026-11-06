@@ -17,11 +17,10 @@ export function AIJumpToLatestButton({ controlsId, visible, onJump, className }:
   if (!visible && !focused) return null;
   return (
     <div className={cn("flex justify-end", className)}>
-      <Button type="button" variant="outline" size="sm" className="min-h-11 gap-2 md:min-h-9"
-        aria-controls={controlsId} onClick={onJump}
+      <Button type="button" variant="outline" size="sm" className="h-11 w-11 min-h-11 p-0 md:h-9 md:w-9 md:min-h-9"
+        aria-label="Ke mesej terkini" title="Ke mesej terkini" aria-controls={controlsId} onClick={onJump}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}>
         <ArrowDown className="h-4 w-4" aria-hidden="true" />
-        Ke mesej terkini
       </Button>
     </div>
   );

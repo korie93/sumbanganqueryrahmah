@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import {
   OperationalMetric,
   OperationalSectionCard,
@@ -54,7 +55,7 @@ export function CollectionNicknameBatchSections({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-floating-ai-layout="true" ref={notifyFloatingAiLayoutReady}>
       <OperationalSectionCard
         title="Aggregate by Nickname"
         description={
@@ -63,23 +64,23 @@ export function CollectionNicknameBatchSections({
             : "Julat tarikh dipilih"
         }
       >
-        <OperationalSummaryStrip className="grid gap-3 md:grid-cols-2">
+        <OperationalSummaryStrip className="collection-nickname-summary-metrics">
           <OperationalMetric
             label="Grand Total Collection"
-            value={formatAmountRM(totalAmount)}
+            value={<span data-floating-ai-avoid="true">{formatAmountRM(totalAmount)}</span>}
             supporting={`${totalRecords} record(s)`}
             tone="success"
           />
           <OperationalMetric
             label="Selected Nicknames"
-            value={selectedNicknames.length}
+            value={<span data-floating-ai-avoid="true">{selectedNicknames.length}</span>}
             supporting={selectedNicknames.length === 1 ? "1 nickname" : `${selectedNicknames.length} nicknames`}
           />
         </OperationalSummaryStrip>
 
         <div className="mt-4 flex flex-wrap gap-2">
           {selectedNicknames.map((nickname) => (
-            <Badge key={nickname} variant="secondary">
+            <Badge key={nickname} variant="secondary" className="max-w-full whitespace-normal [overflow-wrap:anywhere]">
               {nickname}
             </Badge>
           ))}
@@ -87,7 +88,7 @@ export function CollectionNicknameBatchSections({
       </OperationalSectionCard>
 
       {isMobile ? (
-        <div className="space-y-3" data-floating-ai-avoid="true">
+        <div className="space-y-3">
           {nicknameTotals.length === 0 ? (
             <div className="rounded-xl border border-border/60 bg-background/70 px-4 py-6 text-center text-sm text-muted-foreground">
               Tiada rekod kutipan untuk kombinasi nickname dan julat tarikh yang dipilih.
@@ -108,16 +109,16 @@ export function CollectionNicknameBatchSections({
                   <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                     Nickname {index + 1}
                   </p>
-                  <p className="break-words font-medium text-foreground">{item.nickname}</p>
+                  <p className="break-words font-medium text-foreground"><span data-floating-ai-avoid="true">{item.nickname}</span></p>
                 </div>
                 <dl className="grid gap-2 rounded-lg border border-border/60 bg-muted/15 p-3 text-sm">
                   <div className="space-y-1">
                     <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Total Records</dt>
-                    <dd>{item.totalRecords}</dd>
+                    <dd><span data-floating-ai-avoid="true">{item.totalRecords}</span></dd>
                   </div>
                   <div className="space-y-1">
                     <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Total Collection</dt>
-                    <dd className="font-medium">{formatAmountRM(item.totalAmount)}</dd>
+                    <dd className="font-medium"><span data-floating-ai-avoid="true">{formatAmountRM(item.totalAmount)}</span></dd>
                   </div>
                 </dl>
               </article>
@@ -129,7 +130,7 @@ export function CollectionNicknameBatchSections({
               <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
                 Total
               </p>
-              <p className="mt-1 text-lg font-semibold text-foreground">{formatAmountRM(totalAmount)}</p>
+              <p className="mt-1 text-lg font-semibold text-foreground"><span data-floating-ai-avoid="true">{formatAmountRM(totalAmount)}</span></p>
             </div>
           ) : null}
         </div>
@@ -137,7 +138,7 @@ export function CollectionNicknameBatchSections({
         <div className="ops-table-shell overflow-hidden">
           <div className="overflow-auto">
             <Table className="ops-data-table min-w-[760px] text-sm">
-              <TableHeader>
+              <TableHeader data-floating-ai-avoid="true">
                 <TableRow>
                   <TableHead className="w-[72px]">No.</TableHead>
                   <TableHead>NAME</TableHead>
@@ -162,21 +163,21 @@ export function CollectionNicknameBatchSections({
                         item,
                       })}
                     >
-                      <TableCell>{index + 1}</TableCell>
-                      <TableCell className="font-medium">{item.nickname}</TableCell>
-                      <TableCell className="text-right">{item.totalRecords}</TableCell>
+                      <TableCell><span data-floating-ai-avoid="true">{index + 1}</span></TableCell>
+                      <TableCell className="font-medium"><span data-floating-ai-avoid="true">{item.nickname}</span></TableCell>
+                      <TableCell className="text-right"><span data-floating-ai-avoid="true">{item.totalRecords}</span></TableCell>
                       <TableCell className="text-right font-medium">
-                        {formatAmountRM(item.totalAmount)}
+                        <span data-floating-ai-avoid="true">{formatAmountRM(item.totalAmount)}</span>
                       </TableCell>
                     </TableRow>
                   ))
                 )}
                 <TableRow className="border-t-2 border-border bg-amber-50/80 hover:bg-amber-50/80 dark:bg-amber-950/35 dark:hover:bg-amber-950/35">
                   <TableCell colSpan={3} className="font-semibold uppercase">
-                    Total
+                    <span data-floating-ai-avoid="true">Total</span>
                   </TableCell>
                   <TableCell className="text-right font-semibold">
-                    {formatAmountRM(totalAmount)}
+                    <span data-floating-ai-avoid="true">{formatAmountRM(totalAmount)}</span>
                   </TableCell>
                 </TableRow>
               </TableBody>

@@ -1,0 +1,12 @@
+/* Currency and nickname counts need their own row in the narrow report card. */
+.ops-summary-strip.collection-nickname-summary-metrics {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--spacing-3);
+}
+
+@media (min-width: 640px) {
+  .ops-summary-strip.collection-nickname-summary-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

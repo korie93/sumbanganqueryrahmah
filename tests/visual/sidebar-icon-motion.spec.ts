@@ -35,7 +35,12 @@ async function installFixture(page: Page, baseURL: string | undefined, role: Rol
   const fixture = await installSaveFixture(page, baseURL, { role, theme });
   // Exercise both real production branches deterministically, independent of
   // the test runner's core count. This storage is isolated to each test context.
-  await page.addInitScript((low) => localStorage.setItem("perf_mode", low ? "low" : "high"), lowSpec);
+  await page.addInitScript((low) => {
+    // HTTP is fulfilled locally; an isolated loopback-only browser may otherwise
+    // report offline and reject the synthetic Collection session before fetch.
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    localStorage.setItem("perf_mode", low ? "low" : "high");
+  }, lowSpec);
   page.on("console", (message) => {
     if (message.type() === "error") fixture.errors.push(`console: ${message.text()}`);
   });

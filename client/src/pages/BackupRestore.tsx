@@ -110,11 +110,13 @@ function BackupRestoreContent({ userRole, embedded = false }: BackupRestoreProps
         />
         <OperationalMetric
           label="Sandaran terkini"
+          className="[&_.ops-metric-value]:text-base [&_.ops-metric-value]:leading-normal"
           value={backupOverview.latestLabel}
           supporting="Masa ciptaan rekod pertama yang dipaparkan"
         />
         <OperationalMetric
           label="Status kerja"
+          className="[&_.ops-metric-value]:text-base [&_.ops-metric-value]:leading-normal"
           value={backupOverview.jobLabel}
           supporting={mutationState.backupJobState === "unknown"
             ? "Status belum dapat disahkan untuk sesi ini"

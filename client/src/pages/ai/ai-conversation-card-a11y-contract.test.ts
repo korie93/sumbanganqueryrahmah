@@ -19,7 +19,9 @@ test("AI conversation card uses Malay labels and exposes a formal textarea label
   assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
   assert.match(source, /Hentikan AI/);
   assert.match(source, /Sembang Baharu/);
-  assert.match(source, /\? "Memproses\.\.\." : "Hantar"/);
+  assert.match(source, /aria-label=\{canStop \? `Hentikan \$\{assistantLabel\}` : "Hantar"\}/);
+  assert.match(source, /<Square className="h-4 w-4 fill-current" aria-hidden="true"/);
+  assert.match(source, /Boolean\(query\.trim\(\)\)/);
   assert.doesNotMatch(source, /AI assistant is disabled by system settings\./);
   assert.doesNotMatch(source, />Stop AI</);
   assert.doesNotMatch(source, />New Chat</);

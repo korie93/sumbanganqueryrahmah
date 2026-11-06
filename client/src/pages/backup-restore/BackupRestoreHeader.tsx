@@ -65,7 +65,7 @@ export function BackupRestoreHeader({
         <Popover>
           <PopoverTrigger asChild>
             <Button
-              className="w-full rounded-xl"
+              className="w-full rounded-xl sm:w-auto"
               variant="outline"
               disabled={loading || visibleBackupsLength === 0 || exportingPdf}
               data-testid="button-export-backups"
@@ -100,7 +100,7 @@ export function BackupRestoreHeader({
           </PopoverContent>
         </Popover>
         <Button
-          className="w-full rounded-xl"
+          className="w-full rounded-xl sm:w-auto"
           variant="outline"
           onClick={onRefresh}
           disabled={loading || activeBackupJobBusy}

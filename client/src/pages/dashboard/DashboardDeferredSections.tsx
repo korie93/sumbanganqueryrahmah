@@ -2,6 +2,7 @@ import { Suspense, lazy, startTransition, useEffect, useRef, useState } from "re
 import type { ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { OperationalSectionCard } from "@/components/layout/OperationalPage";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
@@ -395,6 +396,8 @@ export function DashboardDeferredSections({
     <section
       className="dashboard-review-workspace grid grid-cols-1 gap-4"
       aria-label="Dashboard login review workspace"
+      ref={notifyFloatingAiLayoutReady}
+      data-floating-ai-layout="true"
     >
       <aside
         className="min-w-0"

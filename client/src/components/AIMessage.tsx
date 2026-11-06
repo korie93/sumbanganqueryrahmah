@@ -33,7 +33,9 @@ function createAIMessageContentKeyFactory() {
 
 function getAIMessageBlockSeed(block: AIMessageMarkdownBlock) {
   if (block.type === "code") {
-    return `${block.language ?? ""}\n${block.content}`;
+    // An open fence grows during reveal. Keep its DOM identity (and keyboard
+    // focus/scroll); the key factory distinguishes repeated fences of a language.
+    return block.language ?? "";
   }
   if (block.type === "list") {
     return `${block.ordered ? "ordered" : "unordered"}\n${block.items.join("\n")}`;
@@ -164,7 +166,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
 
     if (block.type === "code") {
       return (
-        <pre key={blockKey} className="ai-markdown-code">
+        <pre key={blockKey} className="ai-markdown-code" tabIndex={0} role="region" aria-label="Kod dalam jawapan AI">
           <code data-language={block.language || undefined}>{block.content}</code>
         </pre>
       );

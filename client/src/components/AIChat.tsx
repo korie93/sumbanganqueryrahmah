@@ -1,5 +1,6 @@
 import { useId } from "react";
-import { StopCircle, SendHorizonal, TriangleAlert } from "lucide-react";
+import { Square, SendHorizonal, TriangleAlert } from "lucide-react";
+import { handleAIQueryKeyDown } from "@/components/ai-query-keyboard";
 import {
   AI_PROCESSING_INDICATOR_DELAY_MS,
   AILoadingSkeleton,
@@ -55,7 +56,6 @@ export default function AIChat({
     messagesRef,
     query,
     setQuery,
-    showActions,
     slowNotice,
     statusMeta,
     streamingText,
@@ -71,6 +71,8 @@ export default function AIChat({
   });
   const remainingCharacters = getAIChatRemainingCharacterCount(query);
   const showCharacterLimit = remainingCharacters <= 200;
+  const canStop = isProcessing || isTyping;
+  const canSend = aiEnabled && !canStop && Boolean(query.trim());
   const awaitingFirstToken =
     (aiStatus === "SEARCHING" || aiStatus === "PROCESSING") && streamingText.length === 0;
   const showProcessingIndicator = useDelayedVisibleFlag(
@@ -80,17 +82,17 @@ export default function AIChat({
 
   return (
     <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
-      <div className="ai-status-bar">
-        <statusMeta.icon className="ai-status-icon" />
+      {aiStatus !== "IDLE" ? <div className="ai-status-bar">
+        <statusMeta.icon className="ai-status-icon" aria-hidden="true" />
         <span role="status" aria-live="polite" aria-atomic="true">
           {statusMeta.text}
         </span>
-      </div>
+      </div> : null}
 
       {slowNotice ? (
         <div className="ai-notice" role="status" aria-live="polite" aria-atomic="true">
           <p className="ai-notice-title">Sistem sedang memproses data.</p>
-          <p>Ini mungkin mengambil masa sedikit pada komputer spesifikasi rendah.</p>
+          <p>Jawapan mengambil masa lebih lama daripada biasa.</p>
         </div>
       ) : null}
       {gateNotice ? (
@@ -104,6 +106,7 @@ export default function AIChat({
         id={messagesId}
         className="ai-messages"
         role="log"
+        tabIndex={0}
         aria-live="polite"
         aria-relevant="additions text"
         aria-atomic="false"
@@ -111,7 +114,7 @@ export default function AIChat({
       >
         {messages.length === 0 ? (
           <div className="ai-empty-hint">
-            Taip soalan seperti IC, nombor akaun, atau nama untuk bantuan pantas.
+            Taip nama, nombor IC atau nombor akaun untuk bermula.
           </div>
         ) : null}
 
@@ -144,6 +147,8 @@ export default function AIChat({
           data-floating-ai-query-input="true"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => handleAIQueryKeyDown(event, canSend, handleSend)}
+          aria-keyshortcuts="Control+Enter Meta+Enter"
           placeholder={compactMode ? "Taip soalan ringkas..." : "Taip soalan anda..."}
           className="ai-input"
           rows={compactMode ? 1 : 2}
@@ -154,12 +159,13 @@ export default function AIChat({
         />
         <Button
           type="button"
-          onClick={handleSend}
+          onClick={canStop ? () => cancelAISearch(true) : handleSend}
           className="ai-send-btn"
-          disabled={!aiEnabled || isProcessing || !query.trim()}
-          aria-label="Hantar soalan AI"
+          disabled={!canStop && !canSend}
+          aria-label={canStop ? `Hentikan ${assistantLabel}` : "Hantar soalan AI"}
+          title={canStop ? "Hentikan AI" : "Hantar soalan AI (Ctrl/Cmd+Enter)"}
         >
-          <SendHorizonal className="h-4 w-4" aria-hidden="true" />
+          {canStop ? <Square className="h-4 w-4 fill-current" aria-hidden="true" /> : <SendHorizonal className="h-4 w-4" aria-hidden="true" />}
         </Button>
       </div>
       <p
@@ -170,23 +176,6 @@ export default function AIChat({
       >
         Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
       </p>
-
-      {showActions ? (
-        <div className="ai-actions">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="ai-stop-btn"
-            onClick={() => cancelAISearch(true)}
-            disabled={!isProcessing && !isTyping}
-            aria-label={`Hentikan ${assistantLabel}`}
-          >
-            <StopCircle className="h-4 w-4" aria-hidden="true" />
-            <span>Hentikan AI</span>
-          </Button>
-        </div>
-      ) : null}
 
       {!aiEnabled ? (
         <div className="ai-notice ai-notice-error" role="alert">

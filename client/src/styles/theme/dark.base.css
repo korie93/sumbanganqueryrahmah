@@ -30,7 +30,7 @@ body,
   color: var(--dm-text-primary);
 }
 
-.dark :where(.viewport-min-height, .app-shell-min-height, .public-auth-layout, .login-page) {
+.dark :where(.viewport-min-height, .public-auth-layout, .login-page) {
   min-height: 100vh;
   min-height: 100dvh;
 }

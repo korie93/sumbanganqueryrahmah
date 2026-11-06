@@ -62,12 +62,12 @@ export default function AI({
   }
 
   return (
-    <div className="app-shell-min-height bg-linear-to-br/srgb from-slate-100 via-blue-50 to-slate-100 p-6 dark:bg-background dark:bg-none">
-      <div className="mx-auto max-w-5xl space-y-4">
+    <div className="app-shell-min-height bg-background p-4 md:p-6">
+      <div className="mx-auto max-w-4xl space-y-4">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold text-foreground">AI Chat</h1>
+          <h1 className="ops-page-title">AI Chat</h1>
           <p className="text-muted-foreground">
-            Tanya biasa je tak power macam ChatGPT. Jangan tanya yang bukan-bukan.
+            Tanya soalan tentang koleksi dan rekod SQR.
           </p>
         </div>
         {chatPanel}

@@ -36,6 +36,7 @@ import {
 import { BillingPrincipalInsights } from "./BillingPrincipalInsights";
 import { clampBillingPrincipalDate, defaultBillingPrincipalAsOf, getBillingPrincipalReportingWindow, isBillingPrincipalDateInRange } from "@/lib/billing-principal-date-domain";
 import { getStoredAuthenticatedUser } from "@/lib/auth-session";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { assertBillingPrincipalWorkspaceOwner, BillingPrincipalOwnerChangedError } from "@/lib/billing-principal-owner";
 
 function isAbortError(error: unknown) {
@@ -60,7 +61,7 @@ export function BillingPrincipalSystemResultTable({
           className: "billing-osp-table-scroll border-t border-border/60",
         }}
       >
-        <TableHeader>
+        <TableHeader data-floating-ai-avoid="true">
           <TableRow className="bg-muted/30">
             <TableHead className="billing-osp-table-aging">Aging</TableHead>
             <TableHead className="text-right">TT OSP</TableHead>
@@ -75,14 +76,14 @@ export function BillingPrincipalSystemResultTable({
         <TableBody>
           {rendered.map((row) => (
             <TableRow key={row.aging} className={row.aging === "ALL" ? "billing-osp-table-total bg-muted/30 font-semibold" : undefined}>
-              <th scope="row" className={`billing-osp-table-aging h-11 px-4 py-3 text-left align-middle ${row.aging === "ALL" ? "font-semibold" : "font-medium"}`}>{row.aging}</th>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.totalOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspPercentage(row.targetPercentage)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.targetOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspPercentage(row.resultPercentage)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.ospClosed)}</TableCell>
-              <TableCell className="text-right tabular-nums">{row.closedAccountCount.toLocaleString("en-MY")}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(row.balanceOsp)}</TableCell>
+              <th scope="row" className={`billing-osp-table-aging h-11 px-4 py-3 text-left align-middle ${row.aging === "ALL" ? "font-semibold" : "font-medium"}`}><span data-floating-ai-avoid="true">{row.aging}</span></th>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(row.totalOsp)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspPercentage(row.targetPercentage)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(row.targetOsp)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspPercentage(row.resultPercentage)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(row.ospClosed)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{row.closedAccountCount.toLocaleString("en-MY")}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(row.balanceOsp)}</span></TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -231,7 +232,7 @@ export function BillingPrincipalClientResultTable({
             className: "billing-osp-table-scroll border-t border-border/60",
           }}
         >
-          <TableHeader>
+          <TableHeader data-floating-ai-avoid="true">
             <TableRow className="bg-muted/30">
               <TableHead className="billing-osp-table-aging">Aging</TableHead>
               <TableHead className="text-right">TT OSP</TableHead>
@@ -245,13 +246,14 @@ export function BillingPrincipalClientResultTable({
           <TableBody>
             {rows.map(({ aging, persisted, calculated }) => (
               <TableRow key={aging}>
-                <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-semibold">{aging}</th>
-                <TableCell className="text-right tabular-nums">{formatOspCurrency(persisted?.totalOsp)}</TableCell>
-                <TableCell>{editable ? <Input aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 border-border text-right tabular-nums shadow-none md:h-9" /> : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.targetOsp)}</TableCell>
+                <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-semibold"><span data-floating-ai-avoid="true">{aging}</span></th>
+                <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(persisted?.totalOsp)}</span></TableCell>
+                <TableCell>{editable ? <Input data-floating-ai-avoid="true" aria-label={`${aging} private target percentage`} inputMode="decimal" value={draft[aging].targetPercentage} maxLength={8} onChange={(event) => update(aging, "targetPercentage", event.target.value)} disabled={busy} className="ml-auto h-11 w-28 border-border text-right tabular-nums shadow-none md:h-9" /> : <span data-floating-ai-avoid="true" className="block text-right tabular-nums">{formatOspPercentage(persisted?.targetPercentage)}</span>}</TableCell>
+                <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(calculated?.targetOsp)}</span></TableCell>
                 <TableCell>
                   {editable ? (
                     <Input
+                      data-floating-ai-avoid="true"
                       aria-label={`${aging} client result percentage`}
                       inputMode="decimal"
                       maxLength={8}
@@ -260,22 +262,22 @@ export function BillingPrincipalClientResultTable({
                       disabled={busy}
                       className="h-11 border-border text-right tabular-nums shadow-none md:h-9"
                     />
-                  ) : <span className="block text-right tabular-nums">{formatOspPercentage(persisted?.resultPercentage)}</span>}
+                  ) : <span data-floating-ai-avoid="true" className="block text-right tabular-nums">{formatOspPercentage(persisted?.resultPercentage)}</span>}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.ospClosed)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatOspCurrency(calculated?.balanceOsp)}</TableCell>
+                <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(calculated?.ospClosed)}</span></TableCell>
+                <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(calculated?.balanceOsp)}</span></TableCell>
               </TableRow>
             ))}
           </TableBody>
           <TableFooter>
             <TableRow>
-              <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-medium">ALL<span className="block text-xs font-normal text-muted-foreground">Calculated</span></th>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.totalOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.targetPercentage)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.targetOsp)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspPercentage(preview?.all.resultPercentage)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.ospClosed)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatOspCurrency(preview?.all.balanceOsp)}</TableCell>
+              <th scope="row" className="billing-osp-table-aging h-11 px-4 py-3 text-left align-middle font-medium"><span data-floating-ai-avoid="true">ALL</span><span data-floating-ai-avoid="true" className="block text-xs font-normal text-muted-foreground">Calculated</span></th>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(preview?.all.totalOsp)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspPercentage(preview?.all.targetPercentage)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(preview?.all.targetOsp)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspPercentage(preview?.all.resultPercentage)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(preview?.all.ospClosed)}</span></TableCell>
+              <TableCell className="text-right tabular-nums"><span data-floating-ai-avoid="true">{formatOspCurrency(preview?.all.balanceOsp)}</span></TableCell>
             </TableRow>
           </TableFooter>
         </Table>
@@ -426,7 +428,7 @@ export function BillingPrincipalSavedTargetWorkspace({
 
   const comparison = overview?.latestComparison;
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       <section className="min-w-0 space-y-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">

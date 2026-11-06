@@ -1,10 +1,10 @@
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { FloatingAIIdleView, type FloatingAIIdleProps } from "@/components/FloatingAIIdleView";
 import { LazySuspenseFallback } from "@/components/LazySuspenseFallback";
 import { isEditableElement } from "@/components/floating-ai-dom-utils";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
-import { isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute } from "@/components/floating-ai-visibility";
+import { isFloatingAiGuardedWorkspaceRoute, isFloatingAiSaveCollectionRoute, isFloatingAiSavedMobileRoute } from "@/components/floating-ai-visibility";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const importRetryPlacement = async () => {
@@ -101,9 +101,11 @@ function PlainIdleLauncher(props: FloatingAIIdleProps & { isMobile: boolean }) {
 /** Renders the idle AI trigger, deferring collision placement on sensitive routes. */
 export default function FloatingAIIdleLauncher(props: FloatingAIIdleProps) {
   const [location] = useLocation();
+  const search = useSearch();
   const isMobile = useIsMobile();
   const needsPlacement = isFloatingAiSaveCollectionRoute(props.activePage, location)
-    || isFloatingAiSavedMobileRoute(props.activePage, location, isMobile);
+    || isFloatingAiSavedMobileRoute(props.activePage, location, isMobile)
+    || isFloatingAiGuardedWorkspaceRoute(props.activePage, location, search);
 
   if (needsPlacement) {
     // Never paint a default-position launcher over a live form while its small

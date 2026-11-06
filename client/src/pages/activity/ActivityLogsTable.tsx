@@ -1,5 +1,6 @@
 import { Suspense, lazy } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { ActivityLogsTableHeader } from "@/pages/activity/ActivityLogsTableHeader";
@@ -57,7 +58,7 @@ export function ActivityLogsTable({
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
-      <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true">
+      <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
         <ActivityLogsTableHeader
           totalItems={totalItems}
           logsOpen={logsOpen}

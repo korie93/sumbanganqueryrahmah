@@ -25,6 +25,7 @@ type FloatingAiDomTrackingInput = {
   aiStatus: AIChatStatus;
   saveCollectionRoute?: boolean;
   savedMobileRoute?: boolean;
+  guardedWorkspaceRoute?: boolean;
 };
 
 export function isFloatingAiSaveCollectionRoute(activePage: string, location: string) {
@@ -39,14 +40,34 @@ export function isFloatingAiSavedMobileRoute(activePage: string, location: strin
   return pathname === "/saved";
 }
 
+/** Keep idle observation limited to workspaces with confirmed obscured controls. */
+export function isFloatingAiGuardedWorkspaceRoute(activePage: string, location: string, search = "") {
+  const pathname = location.split(/[?#]/, 1)[0]?.replace(/\/+$/, "").toLowerCase() || "/";
+  if (activePage === "home") return pathname === "/";
+  if (activePage === "import") return pathname === "/import";
+  if (activePage === "forbidden") return pathname === "/403";
+  if (activePage === "collection-report") {
+    return pathname === "/collection/summary"
+      || pathname === "/collection/billing-principal"
+      || pathname === "/collection/nickname-summary";
+  }
+  if (!["monitor", "dashboard", "activity"].includes(activePage)) return false;
+  if (pathname === "/dashboard" || pathname === "/activity") return true;
+  if (pathname !== "/monitor") return false;
+  const query = location.includes("?") ? location.split("?")[1]?.split("#")[0] : search;
+  const section = new URLSearchParams(query).get("section");
+  return section === "dashboard" || section === "activity";
+}
+
 export function shouldTrackFloatingAiDom({
   isOpen,
   isThinking,
   aiStatus,
   saveCollectionRoute = false,
   savedMobileRoute = false,
+  guardedWorkspaceRoute = false,
 }: FloatingAiDomTrackingInput) {
-  if (saveCollectionRoute || savedMobileRoute) return true;
+  if (saveCollectionRoute || savedMobileRoute || guardedWorkspaceRoute) return true;
   if (isOpen) return true;
   if (isThinking) return true;
   return aiStatus !== "IDLE";

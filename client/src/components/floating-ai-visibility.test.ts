@@ -6,6 +6,7 @@ import {
   shouldTrackFloatingAiDom,
   isFloatingAiSaveCollectionRoute,
   isFloatingAiSavedMobileRoute,
+  isFloatingAiGuardedWorkspaceRoute,
 } from "@/components/floating-ai-visibility";
 
 test("shouldKeepFloatingAiPanelMounted stays mounted while the panel is open", () => {
@@ -18,6 +19,47 @@ test("shouldKeepFloatingAiPanelMounted stays mounted while the panel is open", (
     }),
     true,
   );
+});
+
+test("idle workspace guards match confirmed routes and normalized monitor aliases only", () => {
+  const idle = { isOpen: false, isThinking: false, aiStatus: "IDLE" as const };
+  for (const [activePage, location, search] of [
+    ["home", "/", ""],
+    ["home", "/?month=2026-11", ""],
+    ["import", "/IMPORT/", ""],
+    ["collection-report", "/collection/summary?year=2026", ""],
+    ["collection-report", "/collection/billing-principal/", ""],
+    ["collection-report", "/collection/nickname-summary", ""],
+    ["monitor", "/dashboard", ""],
+    ["monitor", "/activity", ""],
+    ["monitor", "/monitor", "section=dashboard"],
+    ["monitor", "/monitor", "section=activity"],
+    ["monitor", "/monitor?section=activity#list", ""],
+    ["forbidden", "/403", ""],
+  ]) {
+    const guardedWorkspaceRoute = isFloatingAiGuardedWorkspaceRoute(activePage!, location!, search);
+    assert.equal(guardedWorkspaceRoute, true, activePage + ":" + location + "?" + search);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, guardedWorkspaceRoute }), true);
+  }
+  for (const [activePage, location, search] of [
+    ["home", "/home", ""],
+    ["settings", "/", ""],
+    ["import", "/imported", ""],
+    ["collection-report", "/collection/summary-other", ""],
+    ["collection-report", "/collection/nickname-summary-other", ""],
+    ["collection-report", "/collection/records", ""],
+    ["viewer", "/viewer", ""],
+    ["monitor", "/monitor", ""],
+    ["monitor", "/monitor", "section=monitor"],
+    ["monitor", "/monitor", "section=analysis"],
+    ["monitor", "/monitor", "section=audit"],
+    ["settings", "/monitor", "section=dashboard"],
+    ["forbidden", "/404", ""],
+  ]) {
+    const guardedWorkspaceRoute = isFloatingAiGuardedWorkspaceRoute(activePage!, location!, search);
+    assert.equal(guardedWorkspaceRoute, false, activePage + ":" + location + "?" + search);
+    assert.equal(shouldTrackFloatingAiDom({ ...idle, guardedWorkspaceRoute }), false);
+  }
 });
 
 test("shouldKeepFloatingAiPanelMounted stays mounted while AI is still processing in the background", () => {

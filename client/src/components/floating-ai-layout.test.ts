@@ -3,6 +3,22 @@ import assert from "node:assert/strict";
 
 import { areFloatingAiLayoutsEqual, resolveFloatingAiLayout } from "@/components/floating-ai-layout";
 
+for (const width of [320, 740]) {
+  for (const inset of [0, 120]) {
+    test(`fullscreen AI uses the actual 360px landscape height at ${width}px, inset ${inset}`, () => {
+      const { panel } = resolveFloatingAiLayout({
+        viewportWidth: width, viewportHeight: 360, viewportBottomInset: inset,
+        isMobile: true, isOpen: true, hasBlockingDialog: false,
+        keyboardOpen: inset > 0, hasFocusedEditable: false,
+        hasDensePage: false, preferCompactPanel: false, avoidRects: [],
+      });
+      assert.equal(panel.mode, "fullscreen");
+      assert.equal(panel.height, 360 - inset);
+      assert.equal(panel.bottom, inset);
+    });
+  }
+}
+
 test("resolveFloatingAiLayout moves the trigger away from bottom-right avoid zones", () => {
   const layout = resolveFloatingAiLayout({
     viewportWidth: 390,
@@ -398,4 +414,154 @@ test("adaptive Save launcher scores landscape obstacles against the real short v
     && Math.min(top + layout.trigger.size, rect.bottom) > Math.max(top, rect.top)), false);
   const legacy = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: false });
   assert.deepEqual(layout.panel, legacy.panel);
+});
+
+test("adaptive mobile placement can use a 64px gap between full-height value columns", () => {
+  const input = {
+    viewportWidth: 375, viewportHeight: 900, viewportBottomInset: 0,
+    isMobile: true, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    avoidRects: [
+      { left: 0, right: 150, top: 72, bottom: 900 },
+      { left: 214, right: 375, top: 72, bottom: 900 },
+    ],
+  };
+  const intersects = (layout: ReturnType<typeof resolveFloatingAiLayout>) => {
+    const { trigger } = layout;
+    const left = trigger.left ?? input.viewportWidth - (trigger.right ?? 0) - trigger.size;
+    const top = input.viewportHeight - trigger.bottom - trigger.size;
+    return input.avoidRects.some((rect) =>
+      Math.min(left + trigger.size, rect.right) > Math.max(left, rect.left)
+      && Math.min(top + trigger.size, rect.bottom) > Math.max(top, rect.top));
+  };
+  const legacy = resolveFloatingAiLayout(input);
+  assert.deepEqual(resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: false }), legacy);
+  assert.equal(intersects(legacy), true, "Neither corner can clear both full-height columns");
+  const adapted = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: true });
+  assert.equal(intersects(adapted), false);
+  assert.equal(adapted.trigger.anchor, "right");
+  assert.equal(adapted.trigger.size, 48);
+  assert.equal(input.viewportWidth - adapted.trigger.right! - adapted.trigger.size, 158);
+  assert.equal(adapted.rootHidden, false);
+  assert.equal(adapted.triggerHidden, false);
+  assert.deepEqual(adapted.panel, legacy.panel, "Only trigger candidates change");
+});
+
+test("adaptive mobile candidates keep the original corners when their bottom positions are clear", () => {
+  const input = {
+    viewportWidth: 375, viewportHeight: 900, viewportBottomInset: 0,
+    isMobile: true, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    allowAdaptiveTriggerOffsets: true,
+    avoidRects: [{ left: 100, right: 260, top: 200, bottom: 500 }],
+  };
+  const original = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: false });
+  assert.deepEqual(resolveFloatingAiLayout(input), original);
+  const rightBlocked = {
+    ...input, avoidRects: [{ left: 300, right: 375, top: 72, bottom: 900 }],
+  };
+  assert.deepEqual(
+    resolveFloatingAiLayout(rightBlocked).trigger,
+    resolveFloatingAiLayout({ ...rightBlocked, allowAdaptiveTriggerOffsets: false }).trigger,
+  );
+  assert.equal(resolveFloatingAiLayout(rightBlocked).trigger.anchor, "left");
+});
+
+test("adaptive desktop placement uses the 72px content gap without covering a sidebar", () => {
+  const input = {
+    viewportWidth: 768, viewportHeight: 900, viewportBottomInset: 0,
+    isMobile: false, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    avoidRects: [
+      { left: 0, right: 240, top: 0, bottom: 900 },
+      { left: 240, right: 570, top: 92, bottom: 900 },
+      { left: 642, right: 768, top: 92, bottom: 900 },
+    ],
+  };
+  const intersectsWithClearance = (layout: ReturnType<typeof resolveFloatingAiLayout>) => {
+    const { trigger } = layout;
+    const left = input.viewportWidth - trigger.right! - trigger.size;
+    const top = input.viewportHeight - trigger.bottom - trigger.size;
+    return input.avoidRects.some((rect) =>
+      Math.min(left + trigger.size + 8, rect.right) > Math.max(left - 8, rect.left)
+      && Math.min(top + trigger.size + 8, rect.bottom) > Math.max(top - 8, rect.top));
+  };
+  const legacy = resolveFloatingAiLayout(input);
+  assert.deepEqual(resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: false }), legacy);
+  assert.ok([24, 96, 168, 240].includes(legacy.trigger.right!));
+  assert.equal(intersectsWithClearance(legacy), true, "All four legacy positions intersect content");
+  const adapted = resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: true });
+  assert.equal(intersectsWithClearance(adapted), false);
+  assert.equal(adapted.trigger.anchor, "right");
+  assert.equal(adapted.trigger.left, null);
+  assert.equal(adapted.trigger.size, 56);
+  assert.equal(input.viewportWidth - adapted.trigger.right! - adapted.trigger.size, 578);
+  assert.ok(adapted.trigger.right! >= 24);
+  const top = input.viewportHeight - adapted.trigger.bottom - adapted.trigger.size;
+  assert.ok(top >= 92 && top + adapted.trigger.size <= input.viewportHeight - 24);
+  assert.equal(adapted.rootHidden, false);
+  assert.equal(adapted.triggerHidden, false);
+  assert.deepEqual(adapted.panel, legacy.panel, "Gap candidates only affect the launcher");
+  assert.deepEqual(resolveFloatingAiLayout({
+    ...input, allowAdaptiveTriggerOffsets: true, avoidRects: [...input.avoidRects].reverse(),
+  }), adapted);
+});
+
+test("adaptive desktop candidates retain an unobstructed legacy corner", () => {
+  const input = {
+    viewportWidth: 768, viewportHeight: 900, viewportBottomInset: 0,
+    isMobile: false, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    avoidRects: [
+      { left: 0, right: 240, top: 0, bottom: 900 },
+      { left: 300, right: 500, top: 200, bottom: 500 },
+    ],
+  };
+  assert.deepEqual(
+    resolveFloatingAiLayout({ ...input, allowAdaptiveTriggerOffsets: true }),
+    resolveFloatingAiLayout(input),
+  );
+});
+
+test("adaptive mobile placement remains deterministic and bounded with 200 obstacle rectangles", () => {
+  const avoidRects = Array.from({ length: 200 }, (_, index) => ({
+    left: 10 + (index * 17) % 300,
+    right: 20 + (index * 17) % 300,
+    top: 80 + (index * 23) % 740,
+    bottom: 92 + (index * 23) % 740,
+  }));
+  const input = {
+    viewportWidth: 375, viewportHeight: 900, viewportBottomInset: 0,
+    isMobile: true, isOpen: false, hasBlockingDialog: false, keyboardOpen: false,
+    hasFocusedEditable: false, hasDensePage: true, preferCompactPanel: true,
+    allowAdaptiveTriggerOffsets: true, avoidRects,
+  };
+  const resolved = resolveFloatingAiLayout(input);
+  assert.deepEqual(resolveFloatingAiLayout(input), resolved);
+  assert.deepEqual(resolveFloatingAiLayout({ ...input, avoidRects: [...avoidRects].reverse() }), resolved);
+  const { trigger } = resolved;
+  const left = trigger.left ?? input.viewportWidth - (trigger.right ?? 0) - trigger.size;
+  const top = input.viewportHeight - trigger.bottom - trigger.size;
+  assert.ok(Number.isFinite(left) && Number.isFinite(top));
+  assert.ok(left >= 12 && left + trigger.size <= input.viewportWidth - 12);
+  assert.ok(top >= 72 && top + trigger.size <= input.viewportHeight - 16);
+  assert.equal(trigger.size, 48);
+  assert.equal(resolved.rootHidden, false);
+  assert.equal(resolved.triggerHidden, false);
+  const desktopInput = { ...input, viewportWidth: 768, isMobile: false };
+  const desktop = resolveFloatingAiLayout(desktopInput);
+  const legacyDesktop = resolveFloatingAiLayout({ ...desktopInput, allowAdaptiveTriggerOffsets: false });
+  assert.ok([24, 96, 168, 240].includes(legacyDesktop.trigger.right!));
+  assert.deepEqual(resolveFloatingAiLayout(desktopInput), desktop);
+  assert.equal(desktop.trigger.anchor, "right");
+  assert.equal(desktop.trigger.left, null);
+  const desktopLeft = desktopInput.viewportWidth - desktop.trigger.right! - desktop.trigger.size;
+  const desktopTop = desktopInput.viewportHeight - desktop.trigger.bottom - desktop.trigger.size;
+  assert.ok(Number.isFinite(desktopLeft) && Number.isFinite(desktopTop));
+  assert.ok(desktopLeft >= 24 && desktopLeft + desktop.trigger.size <= desktopInput.viewportWidth - 24);
+  assert.ok(desktopTop >= 92 && desktopTop + desktop.trigger.size <= desktopInput.viewportHeight - 24);
+  assert.equal(desktop.trigger.size, 56);
+  assert.equal(desktop.rootHidden, false);
+  assert.equal(desktop.triggerHidden, false);
+  assert.deepEqual(desktop.panel, legacyDesktop.panel);
 });

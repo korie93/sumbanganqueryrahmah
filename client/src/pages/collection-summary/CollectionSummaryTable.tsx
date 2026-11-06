@@ -38,7 +38,7 @@ export function CollectionSummaryTable({
       <p className="text-xs text-muted-foreground">Select a month to view its collection records.</p>
       <div className="overflow-hidden rounded-xl border border-border bg-card">
       <Table aria-label="Monthly collection totals">
-        <TableHeader className="bg-muted">
+        <TableHeader className="bg-muted" data-floating-ai-avoid="true">
           <TableRow>
             <TableHead className="px-3">Month</TableHead>
             <TableHead className="px-3 text-right">Records</TableHead>
@@ -54,12 +54,12 @@ export function CollectionSummaryTable({
               <TableCell className="p-0">
                 <Button type="button" variant="ghost" className="h-11 w-full justify-start rounded-none px-3 font-medium"
                   aria-haspopup="dialog" onClick={() => onSelectMonth(row.month)}>
-                  {row.monthName}
-                  {currentMonth === row.month ? <span className="ml-2 text-xs font-normal text-muted-foreground">Current month</span> : null}
+                  <span data-floating-ai-avoid="true">{row.monthName}</span>
+                  {currentMonth === row.month ? <span className="ml-2 text-xs font-normal text-muted-foreground" data-floating-ai-avoid="true">Current month</span> : null}
                 </Button>
               </TableCell>
-              <TableCell className="px-3 py-2 text-right tabular-nums">{row.totalRecords}</TableCell>
-              <TableCell className="px-3 py-2 text-right font-medium tabular-nums">{formatAmountRM(row.totalAmount)}</TableCell>
+              <TableCell className="px-3 py-2 text-right tabular-nums"><span data-floating-ai-avoid="true">{row.totalRecords}</span></TableCell>
+              <TableCell className="px-3 py-2 text-right font-medium tabular-nums" data-floating-ai-avoid="true">{formatAmountRM(row.totalAmount)}</TableCell>
             </TableRow>
           );
         })}

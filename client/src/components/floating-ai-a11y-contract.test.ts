@@ -25,15 +25,16 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /data-floating-ai-query-input="true"/);
   assert.match(source, /maxLength=\{AI_REQUEST_MAX_CHARACTERS\}/);
   assert.match(source, /aria-describedby=\{queryLimitId\}/);
-  assert.match(source, /aria-label="Hantar soalan AI"/);
+  assert.match(source, /aria-label=\{canStop \? `Hentikan \$\{assistantLabel\}` : "Hantar soalan AI"\}/);
   assert.match(source, /role="log"/);
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-relevant="additions text"/);
   assert.match(source, /aria-atomic="false"/);
   assert.match(source, /aria-atomic="true"/);
-  assert.match(source, /disabled=\{!isProcessing && !isTyping\}/);
+  assert.match(source, /disabled=\{!canStop && !canSend\}/);
   assert.doesNotMatch(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
-  assert.match(source, /<span>Hentikan AI<\/span>/);
+  assert.match(source, /<Square className="h-4 w-4 fill-current" aria-hidden="true"/);
+  assert.doesNotMatch(source, /<span>Hentikan AI<\/span>/);
   assert.match(source, /className="ai-notice ai-notice-error" role="alert"/);
   assert.match(source, /Pembantu AI dinyahaktifkan oleh tetapan sistem\./);
   assert.doesNotMatch(source, /aria-label="Send AI query"/);
@@ -55,7 +56,7 @@ test("AI messages render markdown through React nodes instead of raw HTML", () =
   assert.match(sanitizerSource, /removeUnsafeAIControlCharacters/);
   assert.match(source, /function parseAIMessageMarkdownBlocks/);
   assert.match(source, /function createAIMessageContentKeyFactory/);
-  assert.match(source, /<pre key=\{blockKey\} className="ai-markdown-code">/);
+  assert.match(source, /<pre key=\{blockKey\} className="ai-markdown-code" tabIndex=\{0\} role="region" aria-label="Kod dalam jawapan AI">/);
   assert.match(source, /const ListTag = block\.ordered \? "ol" : "ul"/);
   assert.match(source, /key=\{getContentKey\(`\$\{blockKey\}:item`, item\)\}/);
   assert.match(source, /key=\{getContentKey\(`\$\{blockKey\}:line`, line\)\}/);
@@ -85,7 +86,7 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(triggerSource, /role="status"/);
   assert.match(triggerSource, /aria-live="polite"/);
   assert.match(triggerSource, /aria-describedby=\{showMinimizedStatus \? minimizedStatusId : undefined\}/);
-  assert.match(panelSource, /Panel bantuan AI untuk pertanyaan berkaitan koleksi dan rekod/);
+  assert.match(panelSource, /Bantuan untuk koleksi dan rekod SQR\./);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(focusSource, /onEscapeKeyDown: handleMinimize/);
   assert.match(panelSource, /<h2\s+id=\{panelTitleId\}/);
@@ -163,7 +164,9 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
   assert.match(floatingCss, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(floatingCss, /\.floatingRoot\s*\{[\s\S]*overflow:\s*hidden;/);
   assert.match(floatingCss, /@supports \(overflow: clip\) \{[\s\S]*\.floatingRoot\s*\{[\s\S]*overflow:\s*clip;/);
-  assert.match(floatingCss, /max-height:\s*calc\(100vh - 5rem\);[\s\S]*max-height:\s*calc\(100svh - 5rem\);[\s\S]*max-height:\s*calc\(100dvh - 5rem\);/);
+  for (const unit of ["vh", "svh", "dvh"]) {
+    assert.ok(floatingCss.includes(`max-height: min(var(--floating-ai-panel-height, 460px), calc(100${unit} - 5rem));`));
+  }
   assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100svh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
   assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);
 });

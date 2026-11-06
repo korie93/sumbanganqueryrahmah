@@ -1,5 +1,6 @@
 import { memo, useMemo } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import type { SummaryCardItem } from "@/pages/dashboard/types";
 
 interface DashboardSummaryCardsProps {
@@ -13,7 +14,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
   const supportingItems = useMemo(() => items.slice(4), [items]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       <div className="dashboard-core-metrics">
         {primaryItems.map((card) => {
           const Icon = card.icon;
@@ -36,7 +37,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
                       </div>
                     ) : (
                       <>
-                        <p className="break-words text-2xl font-semibold leading-none text-foreground sm:text-dashboard-metric">
+                        <p className="break-words text-2xl font-semibold leading-none text-foreground sm:text-dashboard-metric" data-floating-ai-avoid="true">
                           {card.value.toLocaleString()}
                         </p>
                         <p className="text-xs leading-5 text-muted-foreground">
@@ -71,7 +72,7 @@ function DashboardSummaryCardsImpl({ items, summaryLoading }: DashboardSummaryCa
                       ? "Stale Conflicts (24h)"
                       : card.title}
                   </dt>
-                  <dd aria-live="polite" className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
+                  <dd aria-live="polite" className="shrink-0 text-sm font-semibold tabular-nums text-foreground" data-floating-ai-avoid="true">
                     {summaryLoading ? (
                       <div className="h-5 w-8 rounded bg-muted/50 animate-pulse" aria-hidden="true" />
                     ) : card.value.toLocaleString()}

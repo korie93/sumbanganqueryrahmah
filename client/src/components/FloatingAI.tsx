@@ -1,5 +1,5 @@
 import { memo, useCallback, useId, useRef, type KeyboardEvent, type MouseEvent } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import {
   FloatingRootContainer,
 } from "@/components/FloatingAIShell";
@@ -11,6 +11,7 @@ import {
   shouldKeepFloatingAiPanelMounted,
   isFloatingAiSaveCollectionRoute,
   isFloatingAiSavedMobileRoute,
+  isFloatingAiGuardedWorkspaceRoute,
 } from "@/components/floating-ai-visibility";
 import { useFloatingAIBehaviorState } from "@/components/useFloatingAIBehaviorState";
 import { useFloatingAIFocusManagement } from "@/components/useFloatingAIFocusManagement";
@@ -35,6 +36,7 @@ function resolveFloatingAiSystemName(systemName: string | undefined) {
 function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpen = false }: FloatingAIProps) {
   const isMobile = useIsMobile();
   const [location] = useLocation();
+  const search = useSearch();
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
   const resolvedSystemName = resolveFloatingAiSystemName(systemName);
   const assistantLabel = `AI ${resolvedSystemName}`;
@@ -179,7 +181,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpe
         timeoutMs={timeoutMs}
       />
       <FloatingAITrigger
-        applyLayoutPlacement={isFloatingAiSaveCollectionRoute(activePage, location) || isFloatingAiSavedMobileRoute(activePage, location, isMobile)}
+        applyLayoutPlacement={isFloatingAiSaveCollectionRoute(activePage, location) || isFloatingAiSavedMobileRoute(activePage, location, isMobile) || isFloatingAiGuardedWorkspaceRoute(activePage, location, search)}
         assistantLabel={assistantLabel}
         handleTriggerToggleClick={handleTriggerToggleClick}
         hideForFocusedEditable={hideForFocusedEditable}

@@ -1,0 +1,717 @@
+{
+  "date": "2026-11-06",
+  "scope": "AI compact controls and layout: full/floating, synthetic loopback in SQR-Audit",
+  "build": "receipt-adaptive-build-9f129b8119be",
+  "renderBuild": "receipt-adaptive-build-9f129b8119be",
+  "identicalPublicAssetManifest": "863a921b9f50a8d52c053139173ba21212c7b50bff17759a719e1cab5b10f39b",
+  "sourceFiles": [
+    {
+      "name": "client/src/components/AIChat.tsx",
+      "sha256": "441c5ca1e025179e618d5e718debea944db969ea21ea7b6e5199dc15486e0ae9"
+    },
+    {
+      "name": "client/src/components/AIJumpToLatestButton.tsx",
+      "sha256": "2129d4cf777a76fdacc0923b3b9598af5acb21f8d0b7a281259af5c9f361ab9c"
+    },
+    {
+      "name": "client/src/components/AIMessage.tsx",
+      "sha256": "33ec0edc082ef20308d7dea7df763bf4fe00db5e7df5d90b846edd7f070145af"
+    },
+    {
+      "name": "client/src/components/AIMessageCopyButton.tsx",
+      "sha256": "40339bbad4b896226b9fc2ab999a5903e8634f14b1578114fadd9060d6bff0d1"
+    },
+    {
+      "name": "client/src/components/FloatingAI.module.css",
+      "sha256": "c6e0a6c3996649fe6a53fcb121e33b40c1a18254b3b751574b0ccb495c5cb658"
+    },
+    {
+      "name": "client/src/components/FloatingAIPanel.tsx",
+      "sha256": "18f3404600a13e6167991b8d351784513408f8241a25de6ab983d09b64f4eebe"
+    },
+    {
+      "name": "client/src/components/ai-query-keyboard.test.ts",
+      "sha256": "2c053290d0f5d5d89498b4f55b8b81b27a05b6e13885614dbd4e176c904f9187"
+    },
+    {
+      "name": "client/src/components/ai-query-keyboard.ts",
+      "sha256": "8396e022a7d4f185208ffed17714d13b95e046f8f54f372b484b20810d433c34"
+    },
+    {
+      "name": "client/src/components/floating-ai-a11y-contract.test.ts",
+      "sha256": "8d54998e3302613627b533236252152588f534b4cd0b8dadb52625ac30c104a3"
+    },
+    {
+      "name": "client/src/pages/ai/AIConversationCard.tsx",
+      "sha256": "6d560dc0a1bab028d6fabb0b2d9dba20572925926dcfe165053c6f53f4692af7"
+    },
+    {
+      "name": "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts",
+      "sha256": "1e8747273debbeb671dc2165e417c345996ecb4d26c47aeccf0ead1d55414051"
+    },
+    {
+      "name": "client/src/styles/ai.css",
+      "sha256": "0d8df40f7bc0458a67f22137437ee5ff508837a14af69d7f24d4e62d38691413"
+    },
+    {
+      "name": "scripts/tests/ai-css-accessibility.test.mjs",
+      "sha256": "f7792c9d33fd6287eede6e30fa64167b25b064388c5405b56996e3c703693284"
+    },
+    {
+      "name": "tests/visual/ai-compact-layout.spec.ts",
+      "sha256": "3f026c92591f6ce8e3e14a034bfbf3eb48befd53203e9491adc9a837cc6d1cea"
+    }
+  ],
+  "currentSourcesMatchBuild": true,
+  "layoutCases": 48,
+  "extraStressCases": 24,
+  "matchedContentCases": 24,
+  "axeScans": 16,
+  "axeViolations": 0,
+  "cspViolations": 0,
+  "runtimeErrors": 0,
+  "minContrast": 5.748,
+  "contrastSamples": 430,
+  "unitTests": 91,
+  "scriptTests": 3,
+  "browserRegressions": 29,
+  "groups": {
+    "checks": {
+      "file": "ai-compact-checks-1793968371254.json",
+      "sha256": "7103a36b5522e41db9dbcf80f7fb4ec33037c553f560e69ed6db83673e8f80fc",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "tests",
+            "client/src/components/ai-query-keyboard.test.ts",
+            "client/src/components/floating-ai-shell-placement.test.tsx",
+            "client/src/components/floating-ai-layout.test.ts",
+            "client/src/components/floating-ai-trigger-placement.test.ts",
+            "client/src/components/floating-ai-a11y-contract.test.ts",
+            "client/src/components/floating-ai-accessibility.test.ts",
+            "client/src/components/ai-loading-skeleton-contract.test.tsx",
+            "client/src/components/ai-message-sanitizer.test.ts",
+            "client/src/components/ai-chat-utils.test.ts",
+            "client/src/components/ai-chat-session-guards.test.ts",
+            "client/src/components/floating-ai-runtime-loader.test.ts",
+            "client/src/hooks/ai-message-follow.test.ts",
+            "client/src/lib/ai-response-reveal.test.ts",
+            "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts"
+          ],
+          "runId": "receipt-adaptive-tests-a0c8ab3d2f24",
+          "exitCode": 0,
+          "counts": {
+            "cancelled": 0,
+            "fail": 0,
+            "pass": 91,
+            "skipped": 0,
+            "suites": 0,
+            "tests": 91,
+            "todo": 0
+          },
+          "budgetFailure": null,
+          "seconds": 12.445,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-a0c8ab3d2f24"
+        },
+        {
+          "args": [
+            "lint",
+            "client/src/components/AIJumpToLatestButton.tsx",
+            "client/src/components/AIMessageCopyButton.tsx",
+            "client/src/components/ai-query-keyboard.ts",
+            "client/src/components/AIChat.tsx",
+            "client/src/components/AIMessage.tsx",
+            "client/src/components/FloatingAIPanel.tsx",
+            "client/src/components/FloatingAIShell.tsx",
+            "client/src/components/floating-ai-layout.ts",
+            "client/src/pages/AI.tsx",
+            "client/src/pages/ai/AIConversationCard.tsx",
+            "client/src/components/floating-ai-shell-placement.test.tsx",
+            "client/src/components/floating-ai-layout.test.ts",
+            "client/src/components/floating-ai-a11y-contract.test.ts",
+            "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts",
+            "tests/visual/impeccable-ai-feedback.spec.ts",
+            "tests/visual/ai-compact-layout.spec.ts",
+            "client/src/components/ai-query-keyboard.test.ts"
+          ],
+          "runId": "receipt-adaptive-tests-c2cf9e1e5774",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 6.463,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-c2cf9e1e5774"
+        },
+        {
+          "args": [
+            "types-focused",
+            "client/src/components/AIJumpToLatestButton.tsx",
+            "client/src/components/AIMessageCopyButton.tsx",
+            "client/src/components/ai-query-keyboard.ts",
+            "client/src/components/AIChat.tsx",
+            "client/src/components/AIMessage.tsx",
+            "client/src/components/FloatingAIPanel.tsx",
+            "client/src/components/FloatingAIShell.tsx",
+            "client/src/components/floating-ai-layout.ts",
+            "client/src/pages/AI.tsx",
+            "client/src/pages/ai/AIConversationCard.tsx",
+            "client/src/components/floating-ai-shell-placement.test.tsx",
+            "tests/visual/impeccable-ai-feedback.spec.ts",
+            "tests/visual/ai-compact-layout.spec.ts",
+            "client/src/components/ai-query-keyboard.test.ts"
+          ],
+          "runId": "receipt-adaptive-tests-7ff6847c7626",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 9.019,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-7ff6847c7626"
+        }
+      ]
+    },
+    "scripts": {
+      "file": "ai-compact-scripts-1793968436581.json",
+      "sha256": "d7326530b84e0fad4ba1c18691aae1afc0b855b3fe72add61bf8a8a4657fed29",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "tests",
+            "scripts/tests/ai-css-accessibility.test.mjs",
+            "scripts/tests/client-error-boundary-coverage.test.mjs"
+          ],
+          "runId": "receipt-adaptive-tests-e2083dcf7258",
+          "exitCode": 0,
+          "counts": {
+            "cancelled": 0,
+            "fail": 0,
+            "pass": 3,
+            "skipped": 0,
+            "suites": 0,
+            "tests": 3,
+            "todo": 0
+          },
+          "budgetFailure": null,
+          "seconds": 1.47,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-e2083dcf7258"
+        },
+        {
+          "args": [
+            "lint",
+            "scripts/tests/ai-css-accessibility.test.mjs",
+            "tests/visual/ai-compact-layout.spec.ts"
+          ],
+          "runId": "receipt-adaptive-tests-111ad08d40e6",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 2.91,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-111ad08d40e6"
+        },
+        {
+          "args": [
+            "types-focused",
+            "tests/visual/ai-compact-layout.spec.ts"
+          ],
+          "runId": "receipt-adaptive-tests-044c59796d85",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 4.521,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-044c59796d85"
+        }
+      ]
+    },
+    "compact": {
+      "file": "ai-compact-compact-1793968568680.json",
+      "sha256": "6beb203d2ec0be31dd5554c6835dc1c878f2997936f3d5c8f551a191415c42f9",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "e2e",
+            "ai-compact",
+            "full"
+          ],
+          "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 52.965,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-a2c3bfd3e3ac"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-compact",
+            "floating"
+          ],
+          "runId": "receipt-adaptive-tests-4c3270f46fa3",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 55.887,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-4c3270f46fa3"
+        }
+      ]
+    },
+    "readable": {
+      "file": "ai-compact-readable-1793968689112.json",
+      "sha256": "ec132366d58c428d159637bdd6a55169b8b4e2f3fcf1376db5b7fed4eb86aa6b",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "e2e",
+            "ai-readable",
+            "floating"
+          ],
+          "runId": "receipt-adaptive-tests-e494304eff7e",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 42.458,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-e494304eff7e"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-readable",
+            "full"
+          ],
+          "runId": "receipt-adaptive-tests-dec9cbf25a48",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 32.342,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-dec9cbf25a48"
+        }
+      ]
+    },
+    "feedback": {
+      "file": "ai-compact-feedback-1793968774302.json",
+      "sha256": "65779bc35986f5b3d5d77c4c282a2ba33484e7efd8047a5689be4be75d565d3e",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "e2e",
+            "ai-full"
+          ],
+          "runId": "receipt-adaptive-tests-45e73176538d",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 41.702,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-45e73176538d"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-floating"
+          ],
+          "runId": "receipt-adaptive-tests-335e84a4da27",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 42.601,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-335e84a4da27"
+        }
+      ]
+    },
+    "perf": {
+      "file": "ai-compact-perf-1793968868071.json",
+      "sha256": "48be984b64a6147fc49b37b723df2ab6a4d92e10ad44db4338bca4ebc602b3c1",
+      "build": "receipt-adaptive-build-9f129b8119be",
+      "runs": [
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "full",
+            "4k",
+            "1"
+          ],
+          "runId": "receipt-adaptive-tests-9b78482f55c9",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 9.957,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-9b78482f55c9"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "full",
+            "4k",
+            "4"
+          ],
+          "runId": "receipt-adaptive-tests-9ce708c94eca",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 10.535,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-9ce708c94eca"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "full",
+            "4k",
+            "6"
+          ],
+          "runId": "receipt-adaptive-tests-952c7c4b0e15",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 11.596,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-952c7c4b0e15"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "floating",
+            "4k",
+            "1"
+          ],
+          "runId": "receipt-adaptive-tests-cffa721a25a0",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 11.452,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-cffa721a25a0"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "floating",
+            "4k",
+            "4"
+          ],
+          "runId": "receipt-adaptive-tests-24d8c85824db",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 12.34,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-24d8c85824db"
+        },
+        {
+          "args": [
+            "e2e",
+            "ai-perf",
+            "floating",
+            "4k",
+            "6"
+          ],
+          "runId": "receipt-adaptive-tests-55145294e017",
+          "exitCode": 0,
+          "counts": {},
+          "budgetFailure": null,
+          "seconds": 12.696,
+          "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-55145294e017"
+        }
+      ]
+    }
+  },
+  "perf": [
+    {
+      "runId": "receipt-adaptive-tests-9b78482f55c9",
+      "surface": "full",
+      "cpuRate": 1,
+      "elapsedMs": 2619,
+      "longTasks": 0,
+      "maxTaskMs": 0
+    },
+    {
+      "runId": "receipt-adaptive-tests-9ce708c94eca",
+      "surface": "full",
+      "cpuRate": 4,
+      "elapsedMs": 3271,
+      "longTasks": 10,
+      "maxTaskMs": 143
+    },
+    {
+      "runId": "receipt-adaptive-tests-952c7c4b0e15",
+      "surface": "full",
+      "cpuRate": 6,
+      "elapsedMs": 3611,
+      "longTasks": 15,
+      "maxTaskMs": 314
+    },
+    {
+      "runId": "receipt-adaptive-tests-cffa721a25a0",
+      "surface": "floating",
+      "cpuRate": 1,
+      "elapsedMs": 2734,
+      "longTasks": 4,
+      "maxTaskMs": 68
+    },
+    {
+      "runId": "receipt-adaptive-tests-24d8c85824db",
+      "surface": "floating",
+      "cpuRate": 4,
+      "elapsedMs": 3453,
+      "longTasks": 15,
+      "maxTaskMs": 451
+    },
+    {
+      "runId": "receipt-adaptive-tests-55145294e017",
+      "surface": "floating",
+      "cpuRate": 6,
+      "elapsedMs": 3887,
+      "longTasks": 16,
+      "maxTaskMs": 408
+    }
+  ],
+  "detector": {
+    "findings": 0,
+    "sha256": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f"
+  },
+  "artifacts": {
+    "beforeEmpty": {
+      "id": "receipt-adaptive-tests-e07247cba648",
+      "sha256": "0b3d8b573c88ca56f99de838fcf1c901868e3f4396ecacac351cb4710424a23f",
+      "screenshots": [
+        {
+          "name": "data-ai-full-empty-light-375.jpg",
+          "sha256": "60b5ce054d5f43378d936f18da96a8b3e759202c6362ab2e5ed3cf1a7b9303be"
+        },
+        {
+          "name": "data-ai-full-empty-light-1366.jpg",
+          "sha256": "b28754e2172e715e48719dddc82ed6c6e5075c92fd90d60400321f9e6f21ae50"
+        },
+        {
+          "name": "data-ai-full-empty-dark-375.jpg",
+          "sha256": "fdd4323f0db838c6e5c246cd07df9d16da8621d7256eb203b8e024554838f881"
+        },
+        {
+          "name": "data-ai-full-empty-dark-1366.jpg",
+          "sha256": "4bdb5b1ae5596e49f8fcf7c2b048b56212680b94a52d32c91f801876f8e9b53c"
+        },
+        {
+          "name": "data-ai-float-empty-light-375.jpg",
+          "sha256": "c8b37ae4d0f5a05a57d9f013b8ef3859a0c28e6c553d5006f250d6bc335c8fc6"
+        },
+        {
+          "name": "data-ai-float-empty-light-1366.jpg",
+          "sha256": "af92e0a6aed60406566ad0af14f727bad720c0f6659adf69380107f6ec569e96"
+        },
+        {
+          "name": "data-ai-float-empty-dark-375.jpg",
+          "sha256": "0d6eee1a4a2a1c35286502ae33a549fe5089ce1c4e32149e87c07d79d340063d"
+        },
+        {
+          "name": "data-ai-float-empty-dark-1366.jpg",
+          "sha256": "ad14de746461b17347fd7e5c3949d72d8d05b9e1e607b4ec5b2d92376080fd8f"
+        }
+      ]
+    },
+    "beforePopulated": {
+      "id": "receipt-adaptive-tests-bee6f65c6b90",
+      "sha256": "c555d472a220de4702f095c6e122d64e94fe3914ff336d4e9c77f7f3b58d4452",
+      "screenshots": [
+        {
+          "name": "data-ai-full-light-375.jpg",
+          "sha256": "82c42a8d87fef66ecd790c85bbe8215abe5a5ba153fdadf15d44f489a5b20afa"
+        },
+        {
+          "name": "data-ai-full-light-1366.jpg",
+          "sha256": "a7a369e16ee43c4cd58993ab3edec0623d3c026a481db9dddd6f667024c25a91"
+        },
+        {
+          "name": "data-ai-full-dark-375.jpg",
+          "sha256": "4c36187f75f29279a3ca53a2e84147cf207324d3430308137568915cacbed6b9"
+        },
+        {
+          "name": "data-ai-full-dark-1366.jpg",
+          "sha256": "d748707c3e13b63a18ac5840b3fe649f0274186c63dbeaf3d11e12e52b19578a"
+        },
+        {
+          "name": "data-ai-float-light-375.jpg",
+          "sha256": "9c3d7c1702db28aca3d7a888a34636caa49711e9d5029449f334d0e85591beb1"
+        },
+        {
+          "name": "data-ai-float-light-1366.jpg",
+          "sha256": "53043b85e42678d051933b0ab9bd850a2b8420d9960bbbf096d5c6036c7bd8eb"
+        },
+        {
+          "name": "data-ai-float-dark-375.jpg",
+          "sha256": "dc67111f9a29614b02650b45b3d9395002eb4ca3860cfcb47cb5b8e8c67bc5c7"
+        },
+        {
+          "name": "data-ai-float-dark-1366.jpg",
+          "sha256": "2ca4f75579f4b86075997dfd75d57038c6cb00943ff7c68752772924fc552b1f"
+        }
+      ]
+    },
+    "empty": {
+      "id": "receipt-adaptive-tests-5b8f6b6a4659",
+      "sha256": "997b50d48137176b3ec369eadacf9cbb16c63ca1972102d00cdcec96be3f8f04",
+      "screenshots": [
+        {
+          "name": "data-ai-full-empty-light-375.jpg",
+          "sha256": "9f2d3829de0ff63f83c8e95fbb57dc62ce6bea63dcc7e95292e197de31e22415"
+        },
+        {
+          "name": "data-ai-full-empty-light-1366.jpg",
+          "sha256": "e948be78a37670f627e8f3842d51eb8953fa1218ac98f51385b19424200cfe7b"
+        },
+        {
+          "name": "data-ai-full-empty-dark-375.jpg",
+          "sha256": "91742d1117505b165e474a22ee5da8e0a0136e8c8d8d1d4170f44b1d50eb30ca"
+        },
+        {
+          "name": "data-ai-full-empty-dark-1366.jpg",
+          "sha256": "2c78ad6db9b5f70de98a423da0037b39b4592ca3efcd4cde2b5fb4675cfe13fc"
+        },
+        {
+          "name": "data-ai-float-empty-light-375.jpg",
+          "sha256": "6d5991ebb3ec61f9159a8b83b28c52e8af09fa171834f59f72a88e33709a49e3"
+        },
+        {
+          "name": "data-ai-float-empty-light-1366.jpg",
+          "sha256": "a95e4880b0e2e5b9fc9b9d68aa35f8b90df5a63e5a9373a9812398e2ad0c3d8c"
+        },
+        {
+          "name": "data-ai-float-empty-dark-375.jpg",
+          "sha256": "8d992f7cec9c4035b554ba8063b1730dded0f4d719904d9ac6ff8032cc3cba31"
+        },
+        {
+          "name": "data-ai-float-empty-dark-1366.jpg",
+          "sha256": "60467502dd1c17053a302bc2b345737cacdaadc48884c1b118f16fedbaa52761"
+        }
+      ]
+    },
+    "populated": {
+      "id": "receipt-adaptive-tests-574edc8c8118",
+      "sha256": "f8cb058765f9983782b6bd26638dd23d32ac9e955817ac685fcdf48ab376fdbe",
+      "screenshots": [
+        {
+          "name": "data-ai-full-light-375.jpg",
+          "sha256": "cbcce34166ab936ca9851cab90dff095c21722ee4bda9b83d6a9a29ccbd36dfc"
+        },
+        {
+          "name": "data-ai-full-light-1366.jpg",
+          "sha256": "eb9f4ddeeb5326325ae8c1f70271342a2e00ed72bf08c9d1245e5f0197f8e31a"
+        },
+        {
+          "name": "data-ai-full-dark-375.jpg",
+          "sha256": "690a9695d9f4dfda3a2c9b553f92bd8eeb2a950269ac0c575e7acb96569ae7b5"
+        },
+        {
+          "name": "data-ai-full-dark-1366.jpg",
+          "sha256": "c2c8bdad6222a65ab75ddc000d8a806c59f79ced962c2bdd16252afa111d8695"
+        },
+        {
+          "name": "data-ai-float-light-375.jpg",
+          "sha256": "f8e8cb7a9c67713188399df33f7e081893c4f47da4ac30772f6c25eb95238a9f"
+        },
+        {
+          "name": "data-ai-float-light-1366.jpg",
+          "sha256": "ff34eaa0fcc94ffbf340a3a1cc19c4e338bca11edf5a6dbf8013600e2ab79b8f"
+        },
+        {
+          "name": "data-ai-float-dark-375.jpg",
+          "sha256": "12074007c0750fc0b37519ca53a26c2526bdf60d4c25f9b2e7cefac56492c0c8"
+        },
+        {
+          "name": "data-ai-float-dark-1366.jpg",
+          "sha256": "4dc9891bbfa770faa960b247e7e6bc279d9a8d1a982a5e74c0a0e20de972a8b3"
+        }
+      ]
+    }
+  },
+  "actionScreens": [
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-light-375-stop.jpg",
+      "sha256": "52b9cff0256add9524c04dfa39295190052a202496b77258e78d1d239dd3db85"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-light-375-copy.jpg",
+      "sha256": "f375603874fd33070bfbba9f044ff80dd859bece96959c8eed4bb76516c7a46b"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-light-1366-stop.jpg",
+      "sha256": "f7cef5f9e3e43746748dc9e67c9024326abc67a6cd5a90086c05d440f7fea282"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-light-1366-copy.jpg",
+      "sha256": "f112c37ef81fd02e6a58b49afcc7871aeaee65bbccdce73c8f8255d9158f8b1a"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-dark-375-stop.jpg",
+      "sha256": "45ae2a95c6eeeb235336d2ef263af9cfbfbd42dee44501a9e230a7a278bcab03"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-dark-375-copy.jpg",
+      "sha256": "d456b205b3dfe9dde6ab2841a82121351cbc277bd8da38db447b520f53b489a7"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-dark-1366-stop.jpg",
+      "sha256": "994ad5ebab89857a3ae86e4d6e18c70f391db8b0b07b2a1492e6a036c32a4fde"
+    },
+    {
+      "runId": "receipt-adaptive-tests-a2c3bfd3e3ac",
+      "name": "ai-compact-full-dark-1366-copy.jpg",
+      "sha256": "0be4fb1daff45057ed922aa2227d1ce000c51877ad3d9df0ef738dca04c92a52"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-light-375-stop.jpg",
+      "sha256": "e4816b6fd7826f08aeb9106683ed79b5d5a4087b37220238ff7dcdea02752f26"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-light-375-copy.jpg",
+      "sha256": "9a7f08adc715c66e97a5226da5658f7dcb6545dbb60a3b0de312b4b06951e721"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-light-1366-stop.jpg",
+      "sha256": "4d879c84ee77dfe1d6b2a66134b90e3355ae3eba7c7204be9ff045adb4bd99c8"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-light-1366-copy.jpg",
+      "sha256": "649db301ebf0bb9c771922956719c8f3d76c46f9859d84f51236aab37e495b03"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-dark-375-stop.jpg",
+      "sha256": "d2ea98a2996f2581a51569242cefcf3f6bacd659ad71565c4a37f996c6e2a2df"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-dark-375-copy.jpg",
+      "sha256": "268f9a92bfa4451aa724c9452eacd8d0151b19937fef9e1ddbb4f764a4d10220"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-dark-1366-stop.jpg",
+      "sha256": "95ac5af5197231270791216c5cd0f83cddb9bcba720cd78a7ceb8b31cfcb4053"
+    },
+    {
+      "runId": "receipt-adaptive-tests-4c3270f46fa3",
+      "name": "ai-compact-floating-dark-1366-copy.jpg",
+      "sha256": "f9a387e6df64f954003e78ef5e6cedaa93830816d1a63bbaf6634e449eed4336"
+    }
+  ],
+  "limits": [
+    "Synthetic fixtures only; no production backend, roles, real AI or customer data evaluated",
+    "Focused TypeScript13 files plus final visual spec; no whole-project CI claim",
+    "CPU throttling simulates slow CPUs; not physical devices or statistical benchmarking",
+    "Fullscreen small-phone/keyboard policy stays viewport-sized; dock/sheet uses natural height",
+    "Existing Activity scroll-compat timeout predates this task and is outside AI scope"
+  ]
+}

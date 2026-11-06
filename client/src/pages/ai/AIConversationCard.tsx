@@ -1,6 +1,7 @@
 import { useId, type RefObject } from "react";
 import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
-import { StopCircle, TriangleAlert } from "lucide-react";
+import { SendHorizonal, Square, SquarePen } from "lucide-react";
+import { handleAIQueryKeyDown } from "@/components/ai-query-keyboard";
 import {
   AI_PROCESSING_INDICATOR_DELAY_MS,
   AILoadingSkeleton,
@@ -70,6 +71,7 @@ export function AIConversationCard({
     ? "h-full max-h-[350px]"
     : "ai-page-message-log";
   const canStop = isProcessing || isTyping;
+  const canSend = aiEnabled && !canStop && Boolean(query.trim());
   const canReset = messages.length > 0 || isProcessing || isTyping;
   const remainingCharacters = getAIChatRemainingCharacterCount(query);
   const showCharacterLimit = remainingCharacters <= 200;
@@ -78,22 +80,35 @@ export function AIConversationCard({
     awaitingFirstToken,
     AI_PROCESSING_INDICATOR_DELAY_MS,
   );
+  const chatControls = showResetButton && canReset ? (
+    <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
+      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={onReset} disabled={!canReset}
+        aria-label="Sembang Baharu" title="Sembang Baharu">
+        <SquarePen className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </div>
+  ) : null;
 
   return (
-    <div className="rounded-2xl border border-border bg-background/70 p-4 sqr-backdrop-blur">
-      <div className="space-y-4">
+    <div className="ai-conversation-card rounded-2xl border border-border bg-card p-3 sm:p-4">
+      <div className="space-y-3">
         {!aiEnabled ? (
           <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
             Pembantu AI dinyahaktifkan oleh tetapan sistem.
           </div>
         ) : null}
 
-        {aiEnabled ? (
-          <div
-            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${statusContent.className}`}
-          >
-            <statusContent.icon className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>{statusContent.text}</span>
+        {(aiEnabled && aiStatus !== "IDLE") || chatControls ? (
+          <div className="ai-conversation-toolbar flex items-center justify-between gap-2">
+            {aiEnabled && aiStatus !== "IDLE" ? (
+              <div
+                className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-xs leading-5 ${statusContent.className}`}
+              >
+                <statusContent.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span>{statusContent.text}</span>
+              </div>
+            ) : null}
+            {chatControls}
           </div>
         ) : null}
 
@@ -106,61 +121,44 @@ export function AIConversationCard({
         {aiEnabled && slowNotice ? (
           <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
             <p className="font-medium">Sistem sedang memproses data.</p>
-            <p>Ini mungkin mengambil masa sedikit pada komputer spesifikasi rendah.</p>
-          </div>
-        ) : null}
-
-        {showResetButton ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              disabled={!canStop}
-              aria-label={`Hentikan ${assistantLabel}`}
-            >
-              <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
-              Hentikan AI
-            </Button>
-            <Button type="button" variant="outline" onClick={onReset} disabled={!canReset}>
-              Sembang Baharu
-            </Button>
+            <p>Jawapan mengambil masa lebih lama daripada biasa.</p>
           </div>
         ) : null}
 
         <div
           ref={messagesContainerRef}
           id={messagesId}
-          className={`${chatHeightClass} overflow-y-auto space-y-3 pr-2 scroll-fade-y`}
+          className={`${chatHeightClass} overflow-y-auto space-y-4 pr-2`}
           role="log"
+          tabIndex={0}
           aria-live="polite"
           aria-relevant="additions text"
           aria-label={`Perbualan ${assistantLabel}`}
         >
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground">
-              Mula dengan soalan seperti: <span className="font-semibold">IC 840703115667</span> atau{" "}
-              <span className="font-semibold">cawangan AEON terdekat</span>
+              Taip nama, nombor IC atau nombor akaun untuk bermula.
             </div>
           ) : null}
 
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm ${
+              className={`ai-page-message-row ${
                 message.role === "user"
-                  ? "ml-auto bg-primary text-primary-foreground"
-                  : "mr-auto bg-muted text-foreground"
+                  ? "ml-auto" : "mr-auto"
               }`}
             >
-              {message.content}
+              <div className={`ai-page-bubble whitespace-pre-wrap rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                {message.content}
+              </div>
             </div>
           ))}
 
           {streamingText ? (
             <div
               key={`streaming-${streamingTimestamp}`}
-              className="mr-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-sm text-foreground"
+              className="ai-page-bubble mr-auto whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-foreground"
             >
               {streamingText}
             </div>
@@ -181,16 +179,20 @@ export function AIConversationCard({
             name="aiConversationQuery"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
+            onKeyDown={(event) => handleAIQueryKeyDown(event, canSend, onSend)}
+            aria-keyshortcuts="Control+Enter Meta+Enter"
             placeholder="Taip soalan anda..."
             rows={2}
             disabled={!aiEnabled || isProcessing}
-            className={embedded ? "min-h-[72px]" : ""}
+            className={embedded ? "ai-page-input min-h-[72px]" : "ai-page-input"}
             autoComplete="off"
             maxLength={AI_REQUEST_MAX_CHARACTERS}
             aria-describedby="ai-conversation-query-limit"
           />
-          <Button type="button" onClick={onSend} disabled={!aiEnabled || isProcessing}>
-            {isProcessing ? "Memproses..." : "Hantar"}
+          <Button type="button" className="h-11 w-11 shrink-0 p-0" onClick={canStop ? onCancel : onSend}
+            disabled={!canStop && !canSend} aria-label={canStop ? `Hentikan ${assistantLabel}` : "Hantar"}
+            title={canStop ? "Hentikan AI" : "Hantar (Ctrl/Cmd+Enter)"}>
+            {canStop ? <Square className="h-4 w-4 fill-current" aria-hidden="true" /> : <SendHorizonal className="h-4 w-4" aria-hidden="true" />}
           </Button>
         </div>
         <p
@@ -201,28 +203,6 @@ export function AIConversationCard({
           Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
         </p>
 
-        {!showResetButton ? (
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={onCancel}
-              disabled={!canStop}
-              aria-label={`Hentikan ${assistantLabel}`}
-            >
-              <StopCircle className="mr-2 h-4 w-4" aria-hidden="true" />
-              Hentikan AI
-            </Button>
-          </div>
-        ) : null}
-
-        {aiEnabled && aiStatus === "IDLE" && gateNotice === null && slowNotice === false ? (
-          <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
-            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            <p>Tip: untuk respon lebih cepat pada komputer lama, gunakan soalan ringkas dan spesifik.</p>
-          </div>
-        ) : null}
       </div>
     </div>
   );

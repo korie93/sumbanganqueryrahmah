@@ -9,6 +9,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
+  SheetTrigger,
 } from "@/components/ui/sheet";
 import { CollectionNicknameMultiSelect } from "@/pages/collection-report/CollectionNicknameMultiSelect";
 import type { CollectionNicknameSummaryData } from "./collection-nickname-summary-page-shared";
@@ -41,44 +42,32 @@ export function CollectionNicknameSummaryMobileFilters({
   const hasDraftChanges = hasCollectionNicknameSummaryDraftChanges(summaryData);
 
   return (
-    <>
+    <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
       <div
-        className="relative overflow-hidden rounded-[1.75rem] border border-border/60 bg-background/80 px-4 py-4 shadow-sm"
+        className="min-w-0 space-y-4"
         data-floating-ai-avoid="true"
       >
-        <div className="absolute inset-x-0 top-0 h-24 bg-linear-to-br/srgb from-primary/12 via-primary/6 to-transparent" />
-        <div className="relative space-y-4">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
-              Collection
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Nickname Summary
-            </h1>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              Compare staff nickname performance from a calmer mobile summary view without leaving the current collection workspace.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-stretch gap-2">
+            <SheetTrigger asChild>
             <Button
               type="button"
-              className="h-11 w-full justify-center rounded-2xl"
+              className="h-auto min-h-11 min-w-0 flex-1 justify-center whitespace-normal rounded-lg"
               aria-haspopup="dialog"
-              onClick={() => setMobileFiltersOpen(true)}
             >
-              <Filter className="mr-2 h-4 w-4" aria-hidden="true" />
-              Summary Filters
+              <Filter className="mr-2 h-4 w-4 shrink-0" aria-hidden="true" />
+              <span>Summary Filters</span>
               {activeControlCount > 0 ? (
                 <Badge variant="secondary" className="ml-2 rounded-full px-2 py-0.5 text-2xs">
                   {activeControlCount}
                 </Badge>
               ) : null}
             </Button>
+            </SheetTrigger>
             <Button
               type="button"
               variant="outline"
-              className="h-11 w-full rounded-2xl"
+              className="h-auto min-h-11 shrink-0 rounded-lg"
               onClick={summaryData.reset}
               disabled={!canReset || summaryData.loadingSummary}
             >
@@ -128,7 +117,7 @@ export function CollectionNicknameSummaryMobileFilters({
             {selectedNicknamePreview.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {selectedNicknamePreview.map((nickname) => (
-                  <Badge key={nickname} variant="secondary" className="rounded-full px-3 py-1">
+                  <Badge key={nickname} variant="secondary" className="max-w-full whitespace-normal [overflow-wrap:anywhere] rounded-full px-3 py-1">
                     {nickname}
                   </Badge>
                 ))}
@@ -143,7 +132,6 @@ export function CollectionNicknameSummaryMobileFilters({
         </div>
       </div>
 
-      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
         <SheetContent
           side="bottom"
           className="rounded-t-[1.75rem] border-border/70 bg-background/98 px-4 pb-[calc(var(--safe-area-inset-bottom)+1rem)] pt-4"
@@ -248,7 +236,6 @@ export function CollectionNicknameSummaryMobileFilters({
             </div>
           </div>
         </SheetContent>
-      </Sheet>
-    </>
+    </Sheet>
   );
 }

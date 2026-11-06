@@ -179,7 +179,7 @@ function ActivityMobileVirtualRow({
               </div>
             </div>
           </div>
-          <div className="shrink-0 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-2xs text-muted-foreground">
+          <div className="shrink-0 rounded-full border border-border/60 bg-background/75 px-2.5 py-1 text-2xs text-muted-foreground" data-floating-ai-avoid="true">
             {getSessionDuration(activity.loginTime, activity.logoutTime)}
           </div>
         </div>

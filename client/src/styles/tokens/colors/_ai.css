@@ -1,7 +1,7 @@
 /* AI surface color tokens */
 
 :root {
-  --ai-surface-bg: linear-gradient(180deg, hsl(0 0% 100% / 0.98) 0%, hsl(210 40% 98% / 0.96) 100%);
+  --ai-surface-bg: hsl(var(--background));
 
   --ai-surface-border: hsl(var(--border) / 0.85);
 
@@ -13,7 +13,7 @@
 
   --ai-notice-text: hsl(215 25% 27%);
 
-  --ai-scroll-thumb: hsl(215 20% 65%);
+  --ai-scroll-thumb: hsl(var(--muted-foreground));
 
   --ai-empty-text: hsl(215 16% 47%);
 
@@ -33,13 +33,15 @@
 
   --ai-input-text: hsl(222 47% 11%);
 
-  --ai-send-btn-bg: hsl(199 89% 48%);
+  --ai-send-btn-bg: hsl(var(--primary));
+
+  --ai-send-btn-text: hsl(var(--primary-foreground));
 
   --ai-send-btn-border: hsl(199 94% 86% / 0.3);
 
   --ai-stop-btn-text: hsl(215 20% 65%);
 
-  --floating-ai-backdrop: hsl(222 47% 11% / 0.72);
+  --floating-ai-backdrop: hsl(var(--foreground) / 0.32);
 
   --floating-ai-panel-bg: hsl(0 0% 100% / 0.98);
 
@@ -53,30 +55,25 @@
 
   --floating-ai-header-border: hsl(214 20% 88% / 0.8);
 
-  --floating-ai-header-desktop-bg: linear-gradient(
-    90deg,
-    hsl(199 89% 48% / 0.12),
-    hsl(214 25% 86% / 0.6),
-    transparent
-  );
+  --floating-ai-header-desktop-bg: hsl(var(--muted));
 
-  --floating-ai-header-mobile-bg: hsl(222 47% 11% / 0.8);
+  --floating-ai-header-mobile-bg: hsl(var(--muted));
 
-  --floating-ai-header-mobile-text: hsl(0 0% 100%);
+  --floating-ai-header-mobile-text: hsl(var(--foreground));
 
-  --floating-ai-header-mobile-description: hsl(0 0% 100% / 0.7);
+  --floating-ai-header-mobile-description: hsl(var(--foreground) / 0.75);
 
-  --floating-ai-header-mobile-button-text: hsl(0 0% 100% / 0.8);
+  --floating-ai-header-mobile-button-text: hsl(var(--foreground));
 
-  --floating-ai-header-mobile-button-hover-bg: hsl(0 0% 100% / 0.1);
+  --floating-ai-header-mobile-button-hover-bg: hsl(var(--accent));
 
-  --floating-ai-header-mobile-button-hover-text: hsl(0 0% 100%);
+  --floating-ai-header-mobile-button-hover-text: hsl(var(--foreground));
 
   --floating-ai-header-title: hsl(222 47% 11%);
 
-  --floating-ai-header-description: hsl(215 16% 47%);
+  --floating-ai-header-description: hsl(var(--foreground) / 0.75);
 
-  --floating-ai-header-button-text: hsl(215 16% 47%);
+  --floating-ai-header-button-text: hsl(var(--foreground) / 0.75);
 
   --floating-ai-header-button-hover-bg: hsl(214 25% 86% / 0.7);
 
@@ -114,7 +111,7 @@
 
   --ai-notice-text: var(--color-text-secondary);
 
-  --ai-scroll-thumb: var(--dm-border);
+  --ai-scroll-thumb: var(--color-text-muted);
 
   --ai-empty-text: var(--color-text-muted);
 

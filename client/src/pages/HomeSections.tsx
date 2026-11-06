@@ -1,5 +1,6 @@
 import { Activity, CalendarDays, Clock3, Files, RefreshCw } from "lucide-react";
 import type { NavigationEntry } from "@/app/navigation";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { OperationalPage } from "@/components/layout/OperationalPage";
 import { HomeNavigationCard, type HomeNavigationHandlers } from "./HomeNavigationCards";
 import { HomeLeaderBreakdown } from "./HomeLeaderBreakdown";
@@ -66,7 +67,7 @@ function HomeRecentActivity() {
   const state = useHomeRecentActivity();
   return <section className="home-panel home-activity" aria-labelledby="home-activity-title" data-testid="home-recent-activity">
     <div className="home-panel-heading"><div><h2 id="home-activity-title">Recent activity</h2><p>Latest sign-in activity</p></div><Clock3 size={16} aria-hidden="true" /></div>
-    <div className="home-activity-list" aria-live="polite">
+    <div className="home-activity-list" aria-live="polite" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       {state.status === "loading" ? <p className="home-muted" role="status">Loading recent activity…</p> : null}
       {state.status === "error" ? <p className="home-muted">Recent activity is unavailable.</p> : null}
       {state.status === "empty" ? <p className="home-muted">No recent activity to show.</p> : null}
@@ -78,7 +79,7 @@ function HomeRecentActivity() {
         return <div className="home-activity-row" key={entry.id || `${entry.username}:${index}`}>
           <span className="home-activity-icon"><Activity size={15} aria-hidden="true" /></span>
           <div className="home-activity-copy"><strong>{entry.username}</strong><span>{entry.status === "active" ? "Signed in" : entry.status === "failed" ? "Sign-in failed" : "Session ended"}</span></div>
-          {validDate ? <time dateTime={date.toISOString()}>{new Intl.DateTimeFormat("en-MY", { timeZone: HOME_TIME_ZONE, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date)}</time> : null}
+          {validDate ? <time data-floating-ai-avoid="true" dateTime={date.toISOString()}>{new Intl.DateTimeFormat("en-MY", { timeZone: HOME_TIME_ZONE, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date)}</time> : null}
         </div>;
       })}
     </div>

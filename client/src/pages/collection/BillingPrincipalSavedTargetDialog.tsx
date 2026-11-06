@@ -262,7 +262,7 @@ export function BillingPrincipalSavedTargetDialog({ target, onSaved, disabled = 
   return <Dialog open={open} onOpenChange={(value) => { if (!busy && (!value || !disabled)) setOpen(value); }}>
     <DialogTrigger asChild><Button type="button" disabled={disabled} variant={target ? "outline" : "default"}>{target ? <Pencil className="mr-2 h-4 w-4" aria-hidden="true" /> : <BookmarkPlus className="mr-2 h-4 w-4" aria-hidden="true" />}{target ? "Edit Target" : "Create Target"}</Button></DialogTrigger>
     <DialogContent className="overflow-y-auto sm:max-w-3xl" onInteractOutside={(event) => event.preventDefault()} onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}>
-      <DialogHeader><DialogTitle>{target ? "Edit shared target" : "Create Billing OSP target"}</DialogTitle><DialogDescription>Select the assigned account, review the saved source and shared percentages, then save. Private TABLE B is not changed here.</DialogDescription></DialogHeader>
+      <DialogHeader className="pr-8 text-left"><DialogTitle>{target ? "Edit shared target" : "Create Billing OSP target"}</DialogTitle><DialogDescription>Select the assigned account, review the saved source and shared percentages, then save. Private TABLE B is not changed here.</DialogDescription></DialogHeader>
       {open ? <TargetForm target={target} onBusy={setBusy} onCancel={() => setOpen(false)} onSaved={(saved) => { setBusy(false); setOpen(false); onSaved(saved); }} /> : null}
     </DialogContent>
   </Dialog>;

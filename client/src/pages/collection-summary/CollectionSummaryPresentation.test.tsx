@@ -46,15 +46,14 @@ test("collection summary softly marks the current month and aligns numeric total
   }));
   assert.match(markup, /bg-primary\/5/);
   assert.equal((markup.match(/>Current month<\/span>/g) || []).length, 1);
-  assert.match(markup, /text-right tabular-nums[^>]*>59/);
+  assert.match(markup, /text-right tabular-nums[^>]*>(?:<span[^>]*>)?59/);
   assert.match(markup, /text-right font-medium tabular-nums/);
 });
 
-test("collection summary totals retain amounts in two compact columns", () => {
+test("collection summary totals retain complete amounts and their labels", () => {
   const markup = renderToStaticMarkup(createElement(CollectionSummaryTotals, {
     grandTotal: { totalRecords: 59, totalAmount: 144 },
   }));
-  assert.match(markup, /grid-cols-2/);
   assert.match(markup, /Grand Total Records/);
   assert.match(markup, /Grand Total Amount/);
   assert.match(markup, /RM(?:&nbsp;|\u00a0| )144\.00/);

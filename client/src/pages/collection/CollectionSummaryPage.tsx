@@ -1,6 +1,7 @@
 import { Suspense, lazy, memo, useMemo, useRef, useState } from "react";
 import { Filter, RotateCcw } from "lucide-react";
 import { CollectionReportFreshnessBadge } from "@/components/collection-report/CollectionReportFreshnessBadge";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,7 @@ function CollectionSummaryPage({ role }: CollectionSummaryPageProps) {
   };
 
   return (
-    <section aria-labelledby="collection-summary-heading" className="min-w-0 space-y-4">
+    <section aria-labelledby="collection-summary-heading" className="min-w-0 space-y-4" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1">
           <h2 id="collection-summary-heading" className="text-lg font-semibold">Collection Summary</h2>

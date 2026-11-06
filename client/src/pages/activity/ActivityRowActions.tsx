@@ -34,6 +34,7 @@ export function ActivityRowActions({
   return (
     <div className={mobile ? "grid grid-cols-[minmax(0,1fr)_auto] gap-2" : "flex justify-end gap-1"}>
       <Button
+        data-floating-ai-avoid="true"
         type="button"
         variant={mobile ? "outline" : "ghost"}
         size={mobile ? "default" : "icon"}
@@ -51,6 +52,7 @@ export function ActivityRowActions({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            data-floating-ai-avoid="true"
             ref={triggerRef}
             type="button"
             variant={mobile ? "outline" : "ghost"}

@@ -1,0 +1,31 @@
+/* Keep the single-month date field inside its viewport without shrinking rows. */
+.sqr-date-field-calendar {
+  width: calc(7 * var(--spacing-11) + 2 * var(--spacing-3) + 2px);
+  max-width: calc(100vw - var(--spacing-4) - 2px);
+}
+
+.sqr-date-field-calendar .sqr-calendar-month {
+  width: 100%;
+}
+
+.sqr-date-field-calendar .sqr-calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.sqr-date-field-calendar .sqr-calendar-weekday,
+.sqr-date-field-calendar .sqr-calendar-cell {
+  min-width: 0;
+  width: auto;
+}
+
+.sqr-date-field-calendar .sqr-calendar-day {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .sqr-date-field-calendar {
+    width: calc(7 * var(--spacing-9) + 2 * var(--spacing-3) + 2px);
+  }
+}

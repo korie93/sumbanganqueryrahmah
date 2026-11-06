@@ -24,19 +24,26 @@
 }
 
 .floatingPanelShell {
+  display: flex;
+  flex-direction: column;
   position: absolute;
   left: var(--floating-ai-panel-left, auto);
   /* AUDIT-FIX [C2]: panel dimensions fall back to bounded mobile-safe values. */
   right: var(--floating-ai-panel-right, var(--floating-ai-edge-gap, 1.5rem));
   bottom: var(--floating-ai-panel-bottom, var(--floating-ai-edge-gap, 1.5rem));
-  width: min(var(--floating-ai-panel-width, 380px), calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
-  height: var(--floating-ai-panel-height, 420px);
+  width: min(var(--floating-ai-panel-width, 412px), calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
+  height: auto;
   min-width: min(260px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
-  min-height: 200px;
+  min-height: 0;
   max-width: calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2));
-  max-height: calc(100vh - 5rem);
-  max-height: calc(100svh - 5rem);
-  max-height: calc(100dvh - 5rem);
+  max-height: min(var(--floating-ai-panel-height, 460px), calc(100vh - 5rem));
+  max-height: min(var(--floating-ai-panel-height, 460px), calc(100svh - 5rem));
+  max-height: min(var(--floating-ai-panel-height, 460px), calc(100dvh - 5rem));
+}
+
+.floatingPanelShellSheet {
+  /* Match the resolver's 6px sheet gutters instead of clamping one side. */
+  --floating-ai-edge-gap: 6px;
 }
 
 .floatingPanelShellFullscreen {
@@ -51,6 +58,11 @@
   max-height: none;
 }
 
+.floatingPanelShellFullscreen > .floatingPanelSurface {
+  flex: 1;
+  height: 100%;
+}
+
 .floatingPanelFullscreenSurface {
   border-radius: 0;
   border-left: 0;
@@ -61,6 +73,8 @@
 }
 
 .floatingPanelSurface {
+  min-height: 0;
+  max-height: inherit;
   /* AUDIT-FIX [C2]: visual tokens use explicit fallbacks for resilient theming. */
   /* AUDIT-FIX [C2]: token contract keeps var(--floating-ai-panel-bg), var(--floating-ai-trigger-bg), while fallback values stay explicit below. */
   color: var(--floating-ai-panel-text, hsl(var(--foreground)));
@@ -190,11 +204,12 @@
 @media (min-width: 768px) {
   .floatingPanelShell {
     min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
-    min-height: 452px;
-    max-width: min(420px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
-    max-height: calc(100vh - 6rem);
-    max-height: calc(100svh - 6rem);
-    max-height: calc(100dvh - 6rem);
+    /* The resolver already clamps height to available space on short screens. */
+    min-height: 200px;
+    max-width: min(452px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
+    max-height: min(var(--floating-ai-panel-height, 460px), calc(100vh - 6rem));
+    max-height: min(var(--floating-ai-panel-height, 460px), calc(100svh - 6rem));
+    max-height: min(var(--floating-ai-panel-height, 460px), calc(100dvh - 6rem));
   }
 }
 

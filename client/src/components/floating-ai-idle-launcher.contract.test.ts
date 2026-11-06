@@ -13,6 +13,7 @@ test("ordinary idle launchers defer placement and full panel dependencies", () =
   assert.doesNotMatch(launcher, /import \{[^}]*useFloatingAILayoutState|useFloatingAIFocusManagement|FloatingAIPanel|requestIdleCallback|setTimeout/);
   assert.match(launcher, /isFloatingAiSaveCollectionRoute\(props\.activePage, location\)/);
   assert.match(launcher, /isFloatingAiSavedMobileRoute\(props\.activePage, location, isMobile\)/);
+  assert.match(launcher, /isFloatingAiGuardedWorkspaceRoute\(props\.activePage, location, search\)/);
   assert.match(launcher, /<Suspense fallback=\{<LazySuspenseFallback label="Menyiapkan bantuan AI\." \/>\}>/);
   assert.doesNotMatch(launcher, /fallback=\{null\}|fallback=\{<FloatingAIIdleView/);
   assert.doesNotMatch(view, /FloatingAIPanel|useFloatingAILayoutState|useFloatingAIFocusManagement/);
@@ -54,6 +55,16 @@ test("a first runtime mount opens only on the route that requested activation", 
   const runtimeLauncher = readComponent("FloatingAILauncher.tsx");
   assert.match(runtimeLauncher, /setRuntime\(\{ Component: module\.default, activatedOnRoute: owner \}\)/);
   assert.match(runtimeLauncher, /initiallyOpen=\{runtime\.activatedOnRoute === routeKey\}/);
+});
+
+test("the activated runtime keeps guarded trigger placement when minimized, including monitor query sections", () => {
+  const runtime = readComponent("FloatingAI.tsx");
+  assert.match(runtime, /const search = useSearch\(\)/);
+  const trigger = runtime.match(/<FloatingAITrigger([\s\S]*?)\/>/)?.[1];
+  assert.ok(trigger, "The activated runtime must retain its real trigger");
+  assert.match(trigger, /applyLayoutPlacement=\{[^}]*isFloatingAiGuardedWorkspaceRoute\(activePage, location, search\)/);
+  assert.match(trigger, /layoutState=\{layoutState\}/);
+  assert.match(trigger, /isOpen=\{isOpen\}/);
 });
 
 test("a placement import failure stays local and retries with a fresh lazy component", () => {

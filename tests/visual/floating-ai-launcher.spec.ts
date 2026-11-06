@@ -13,8 +13,8 @@ function isRuntimeUrl(url: string) {
   return runtimeChunk.test(new URL(url).pathname);
 }
 
-async function installFixture(page: Page, baseURL: string | undefined) {
-  const fixture = await installSessionFixture(page, baseURL, { role: "superuser", aiEnabled: true });
+async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark" = "light") {
+  const fixture = await installSessionFixture(page, baseURL, { role: "superuser", aiEnabled: true, theme });
   const origin = new URL(baseURL!).origin;
   const runtimeRequests: string[] = [];
   const state = { searches: 0, completed: 0, holdSearch: false, queries: [] as string[] };
@@ -71,6 +71,155 @@ async function expectOpenPanel(page: Page) {
   await expect(page.getByTestId("floating-ai-toggle")).toHaveAttribute("aria-expanded", "true");
   await expect(panel.getByRole("textbox", { name: "Taip soalan kepada AI SQR", exact: true })).toBeVisible();
   return panel;
+}
+
+for (const theme of ["light", "dark"] as const) {
+  for (const width of [375, 1366]) {
+    test("layout repair L13 Home values stay clear before and after AI activation at " + width + "px " + theme, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fixture = await installFixture(page, baseURL, theme);
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => { release = resolve; });
+      await page.context().route(`${fixture.origin}/api/collection/summary?*`, (route) => route.fulfill({ json: {
+        ok: true, year: 2026, summary: [],
+      } }));
+      await page.context().route(`${fixture.origin}/api/analytics/recent-login-activity?*`, async (route) => {
+        await gate;
+        return route.fulfill({ json: Array.from({ length: 5 }, (_, index) => ({
+          id: `synthetic-home-activity-${index}`, username: `synthetic.operator.${index + 1}`, role: "user",
+          loginTime: "2026-10-10T08:00:00.000Z", logoutTime: null, status: "active",
+          browser: "Synthetic browser", platform: "Synthetic workstation", ipAddress: "203.0.113.10",
+          lastActivityTime: "2026-10-10T08:00:00.000Z", failureReason: null, eventType: "success",
+          logoutReason: null, userAgentSummary: "Synthetic browser",
+        })) });
+      });
+      try {
+        await page.goto("/");
+        await expect(page.getByTestId("home-recent-activity")).toContainText("Loading recent activity");
+        await expect(page.getByTestId("floating-ai-toggle")).toBeVisible();
+        expect(fixture.runtimeRequests).toEqual([]);
+        release();
+        await expect(page.locator(".home-activity-row time")).toHaveCount(5);
+        const assertClear = async () => {
+          await page.locator(".home-activity-row:last-child time").evaluate((element) => {
+            element.scrollIntoView({ block: "end", behavior: "instant" });
+            window.scrollBy(0, element.getBoundingClientRect().bottom - (innerHeight - 22));
+          });
+          await expect.poll(() => page.evaluate(() => {
+            const trigger = document.querySelector('[data-testid="floating-ai-toggle"]')!.getBoundingClientRect();
+            const value = document.querySelector(".home-activity-row:last-child time")!.getBoundingClientRect();
+            return trigger.width > 0 && value.top >= 0 && value.bottom <= innerHeight
+              && (Math.min(trigger.right, value.right) <= Math.max(trigger.left, value.left)
+                || Math.min(trigger.bottom, value.bottom) <= Math.max(trigger.top, value.top));
+          })).toBe(true);
+        };
+        await assertClear();
+        expect(fixture.runtimeRequests).toEqual([]);
+        await page.getByTestId("floating-ai-toggle").click();
+        const panel = await expectOpenPanel(page);
+        await panel.getByRole("button", { name: "Kecilkan panel AI SQR", exact: true }).click();
+        await expect(panel).toBeHidden();
+        await assertClear();
+        expect(fixture.runtimeRequests).toHaveLength(1);
+        expect(fixture.state.searches).toBe(0);
+        await checkFixture(page, fixture.fixture);
+      } finally {
+        release();
+      }
+    });
+  }
+}
+
+for (const theme of ["light", "dark"] as const) {
+  for (const width of [1024, 1366]) {
+    test("layout repair L14 Save adaptive placement clears its sidebar and controls at " + width + "px " + theme, async ({ page, baseURL }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const fixture = await installFixture(page, baseURL, theme);
+      await page.goto("/collection/save");
+      await page.locator("#save-collection-superuser-nickname").click();
+      await page.getByRole("button", { name: nickname, exact: true }).click();
+      await expect(page.locator("#save-collection-customer-name")).toBeVisible();
+      const assertClear = async () => {
+        await page.locator("#save-collection-actions").scrollIntoViewIfNeeded();
+        for (const offset of [0, -144, 72]) {
+          await page.evaluate((delta) => window.scrollBy(0, delta), offset);
+          await expect.poll(() => page.evaluate(() => {
+            const trigger = document.querySelector('[data-testid="floating-ai-toggle"]')!.getBoundingClientRect();
+            const sidebar = document.querySelector(".workspace-sidebar")!.getBoundingClientRect();
+            const topbar = document.querySelector(".workspace-topbar")!.getBoundingClientRect();
+            const controls = [...document.querySelectorAll(".save-collection-workspace input:not([type='hidden']), .save-collection-workspace textarea, .save-collection-workspace select, .save-collection-workspace button, #save-collection-actions button")];
+            const overlaps = controls.some((element) => {
+              const rect = element.getBoundingClientRect();
+              return rect.width > 0 && rect.height > 0 && rect.bottom > 0 && rect.top < innerHeight
+                && Math.min(trigger.right, rect.right) > Math.max(trigger.left, rect.left)
+                && Math.min(trigger.bottom, rect.bottom) > Math.max(trigger.top, rect.top);
+            });
+            return trigger.width > 0 && trigger.left >= sidebar.right && trigger.top >= topbar.bottom && !overlaps;
+          })).toBe(true);
+        }
+      };
+      for (const collapsed of [false, true]) {
+        if (collapsed) await page.getByTestId("button-toggle-sidebar").click();
+        await assertClear();
+      }
+      expect(fixture.runtimeRequests).toEqual([]);
+      await page.getByTestId("floating-ai-toggle").click();
+      const panel = await expectOpenPanel(page);
+      await panel.getByRole("button", { name: "Kecilkan panel AI SQR", exact: true }).click();
+      await expect(panel).toBeHidden();
+      await assertClear();
+      expect(fixture.runtimeRequests).toHaveLength(1);
+      expect(fixture.fixture.saves).toEqual([]);
+      expect(fixture.fixture.matches).toBe(0);
+      expect(fixture.state.searches).toBe(0);
+      await checkFixture(page, fixture.fixture);
+    });
+  }
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test("layout repair L15 Saved mobile filters keep idle AI clear in " + theme, async ({ page, baseURL }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    const fixture = await installFixture(page, baseURL, theme);
+    await page.goto("/saved");
+    await expect(page.getByRole("heading", { name: "Saved Imports", exact: true })).toBeVisible();
+    const trigger = page.getByTestId("floating-ai-toggle");
+    await expect(trigger).toBeVisible();
+    await page.getByTestId("button-toggle-saved-advanced-filters").click();
+    const input = page.getByTestId("input-saved-max-rows");
+    await expect(input).toBeVisible();
+    await input.scrollIntoViewIfNeeded();
+    const assertClear = async () => expect.poll(() => page.evaluate(() => {
+      const trigger = document.querySelector('[data-testid="floating-ai-toggle"]')!.getBoundingClientRect();
+      const controls = [...document.querySelectorAll(".saved-workspace input, .saved-workspace select, .saved-workspace button")];
+      return trigger.width > 0 && controls.every((element) => {
+        const rect = element.getBoundingClientRect();
+        return !rect.width || !rect.height || rect.top >= innerHeight || rect.bottom <= 0
+          || Math.min(trigger.right, rect.right) <= Math.max(trigger.left, rect.left)
+          || Math.min(trigger.bottom, rect.bottom) <= Math.max(trigger.top, rect.top);
+      });
+    })).toBe(true);
+    await assertClear();
+    await input.focus();
+    await expect(trigger).toBeHidden();
+    await input.blur();
+    await expect(trigger).toBeVisible();
+    await page.getByTestId("button-date-filter").click();
+    await expect(page.getByRole("grid")).toBeVisible();
+    await expect(trigger).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeVisible();
+    await assertClear();
+    expect(fixture.runtimeRequests).toEqual([]);
+    await trigger.click();
+    const panel = await expectOpenPanel(page);
+    await panel.getByRole("button", { name: "Kecilkan panel AI SQR", exact: true }).click();
+    await expect(panel).toBeHidden();
+    await assertClear();
+    expect(fixture.runtimeRequests).toHaveLength(1);
+    expect(fixture.state.searches).toBe(0);
+    await checkFixture(page, fixture.fixture);
+  });
 }
 
 test("AI launcher: idle stays cold and the first keyboard activation opens one accessible panel", async ({ page, baseURL }) => {

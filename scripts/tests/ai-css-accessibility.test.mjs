@@ -11,9 +11,14 @@ test("AI chat typography uses rem units for small text sizes", () => {
   );
 
   assert.doesNotMatch(css, /font-size:\s*(12|13|14)px;/);
-  assert.match(css, /font-size:\s*0\.75rem;/);
+  const tokens = readThemeTokenSource();
+  for (const [name, value] of [["xs", "0.75rem"], ["sm", "0.875rem"]]) {
+    assert.ok(css.includes(`font-size: ${value};`) || (
+      css.includes(`font-size: var(--font-size-${name});`)
+      && tokens.includes(`--font-size-${name}: ${value};`)
+    ), `AI small text must use ${value} directly or its verified rem token`);
+  }
   assert.match(css, /font-size:\s*0\.8125rem;/);
-  assert.match(css, /font-size:\s*0\.875rem;/);
 });
 
 test("theme tokens keep a keyboard-safe dvh to svh to vh viewport fallback chain", () => {

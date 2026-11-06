@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
+import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -155,7 +156,7 @@ export function SingleImportPanel({
   };
 
   return (
-    <section className="space-y-4" {...loadingBusyProps}>
+    <section className="space-y-4" {...loadingBusyProps} ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
       <nav
         aria-label="Import workflow progress"
         className="overflow-hidden rounded-lg border border-border bg-card"

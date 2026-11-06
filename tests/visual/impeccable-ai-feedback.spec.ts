@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { installFixture } from "./helpers/save-collection-fixture";
 
 type Surface = "full" | "floating";
-async function openAI(page: Page, baseURL: string | undefined, surface: Surface, reduced = false) {
-  const fixture = await installFixture(page, baseURL, { role: "superuser", aiEnabled: true, theme: surface === "full" ? "light" : "dark" });
+async function openAI(page: Page, baseURL: string | undefined, surface: Surface, reduced = false, theme?: "light" | "dark") {
+  const fixture = await installFixture(page, baseURL, { role: "superuser", aiEnabled: true, theme: theme ?? (surface === "full" ? "light" : "dark") });
   await page.emulateMedia({ reducedMotion: reduced ? "reduce" : "no-preference" });
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
@@ -21,6 +21,78 @@ async function openAI(page: Page, baseURL: string | undefined, surface: Surface,
   const log = root.getByRole("log", { name: "Perbualan AI SQR", exact: true });
   const send = root.getByRole("button", { name: surface === "full" ? "Hantar" : "Hantar soalan AI", exact: true });
   return { fixture, root, input, log, send };
+}
+
+test("AI readable layout floating streaming code retains keyboard focus", async ({ page, baseURL }) => {
+  const answer = "```text\n" + "synthetic_account = 0000123412341234; ".repeat(200) + "\n```";
+  await page.route((url) => url.pathname === "/api/ai/search", (route) => route.fulfill({ json: { ai_explanation: answer } }));
+  const { fixture, root, input, log, send } = await openAI(page, baseURL, "floating");
+  await input.fill("Synthetic code keyboard check"); await send.click();
+  const code = log.getByRole("region", { name: "Kod dalam jawapan AI", exact: true });
+  await expect(code).toContainText("synthetic_account");
+  await code.focus();
+  const initialLength = (await code.innerText()).length;
+  await expect.poll(async () => (await code.innerText()).length).toBeGreaterThan(initialLength + 100);
+  await expect(code).toBeFocused();
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => code.evaluate((node) => node.scrollLeft)).toBeGreaterThan(0);
+  await root.getByRole("button", { name: "Hentikan AI SQR", exact: true }).click();
+  await expect(input).toBeEnabled();
+  expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
+});
+
+for (const surface of ["full", "floating"] as const) {
+  for (const theme of ["light", "dark"] as const) {
+    for (const width of [375, 1366]) {
+      test(`AI readable layout ${surface} ${theme} ${width}px preserves text, controls and reset`, async ({ page, baseURL }) => {
+        await page.setViewportSize({ width, height: 900 });
+        const reference = "SYNTHETICREFERENCE".repeat(20);
+        const answer = `Semakan sintetik.\n\nRujukan: ${reference}\n\nNombor akaun: 0000123412341234\n\n${Array.from({ length: 25 }, () => "Baris bacaan sintetik.").join("\n")}\n\nSemakan sintetik selesai.`;
+        await page.route((url) => url.pathname === "/api/ai/search", (route) => route.fulfill({ json: { ai_explanation: answer } }));
+        const { fixture, root, input, log, send } = await openAI(page, baseURL, surface, true, theme);
+        await input.fill("Semak rujukan sintetik");
+        await send.click();
+        await expect(log).toContainText("Semakan sintetik selesai.");
+        await expect(input).toBeEnabled();
+        const message = surface === "full" ? log.locator(".ai-page-bubble").last() : log.locator(".ai-bubble-assistant").last();
+        await expect(message).toHaveCSS("font-size", "16px");
+        await expect(input).toHaveCSS("font-size", "16px");
+        await expect(message).toContainText(reference);
+        await expect(message).toContainText("0000123412341234");
+        await log.focus();
+        await expect(log).toBeFocused();
+        await page.keyboard.press("End");
+        await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+        const reading = await log.evaluate((node) => ({ client: node.clientWidth, scroll: node.scrollWidth, mask: getComputedStyle(node).maskImage }));
+        expect(reading.scroll).toBeLessThanOrEqual(reading.client + 1);
+        expect(reading.mask).toBe("none");
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+        if (surface === "floating") {
+          await input.blur();
+          await expect.poll(async () => (await root.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(width < 768 ? 340 : 440);
+          const box = (await root.boundingBox())!;
+          expect(box.x).toBeGreaterThanOrEqual(0);
+          expect(box.x + box.width).toBeLessThanOrEqual(width + 1);
+          expect(box.y).toBeGreaterThanOrEqual(0);
+          expect(box.y + box.height).toBeLessThanOrEqual(901);
+          expect(box.height).toBeGreaterThan(420);
+        } else if (width >= 768) {
+          expect((await log.boundingBox())!.height).toBeGreaterThanOrEqual(400);
+        }
+        await root.getByRole("button", { name: surface === "full" ? "Sembang Baharu" : "Reset sesi AI SQR", exact: true }).click();
+        await expect(log).not.toContainText(reference);
+        await expect(input).toBeEnabled();
+        if (surface === "floating") {
+          await input.focus();
+          await page.keyboard.press("Escape");
+          await expect(root).toBeHidden();
+          await expect(page.getByTestId("floating-ai-toggle")).toBeFocused();
+        }
+        expect(fixture.errors).toEqual([]);
+        expect(fixture.unexpected).toEqual([]);
+      });
+    }
+  }
 }
 
 for (const surface of ["full", "floating"] as const) {

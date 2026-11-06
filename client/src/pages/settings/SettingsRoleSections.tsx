@@ -298,7 +298,7 @@ export function SettingsRoleSections({
 
   return (
     <section className="min-w-0 space-y-4" aria-label="Role and permission manager">
-      <div className="sticky top-3 z-20 space-y-3 border-b border-border bg-background py-3">
+      <div className="sticky top-[calc(var(--workspace-topbar-height)+var(--spacing-3))] z-20 space-y-3 border-b border-border bg-background py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0 space-y-1">
             <h2 className="text-sm font-medium text-foreground">Role permission workspace</h2>

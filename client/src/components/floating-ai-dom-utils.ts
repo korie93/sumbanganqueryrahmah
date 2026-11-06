@@ -5,6 +5,16 @@ export const FLOATING_AI_DIALOG_SELECTOR = "[role='dialog'], [data-radix-dialog-
 export const FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR =
   ".save-collection-workspace :is(input:not([type='hidden']), textarea, select, button, summary, [role='combobox']), .collection-save-nickname-controls :is(button, [role='combobox'])";
 export const FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR = ".save-collection-workspace, .collection-save-nickname-controls";
+export const FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR = "[data-floating-ai-layout='true']";
+export const FLOATING_AI_WORKSPACE_CHROME_SELECTOR = ".workspace-sidebar, .workspace-topbar";
+export const FLOATING_AI_LAYOUT_READY_EVENT = "sqr:floating-ai-layout-ready";
+
+/** A stable callback ref announces lazy workspace roots without a body observer. */
+export function notifyFloatingAiLayoutReady(element: HTMLElement | null) {
+  if (element?.isConnected) {
+    element.ownerDocument.dispatchEvent(new Event(FLOATING_AI_LAYOUT_READY_EVENT));
+  }
+}
 
 export type FloatingAiObstacleQueryResult = {
   avoidElements: Element[];
@@ -63,17 +73,21 @@ export function queryFloatingAiObstacleElements(
   documentObject: Document = document,
   includeSaveCollectionControls = false,
   includeSavedLayout = false,
+  includeWorkspaceLayout = false,
 ): FloatingAiObstacleQueryResult {
+  const includeWorkspaceChrome = includeSaveCollectionControls || includeSavedLayout || includeWorkspaceLayout;
   const avoidSelector = [
     FLOATING_AI_AVOID_SELECTOR,
     ...(includeSaveCollectionControls ? [FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR] : []),
     ...(includeSavedLayout ? ["[data-saved-ai-avoid='true']"] : []),
+    ...(includeWorkspaceChrome ? [FLOATING_AI_WORKSPACE_CHROME_SELECTOR] : []),
   ].join(", ");
   const avoidElements = Array.from(documentObject.querySelectorAll(avoidSelector));
   const dialogElements = Array.from(documentObject.querySelectorAll(FLOATING_AI_DIALOG_SELECTOR));
   const layoutSelectors = [
     ...(includeSaveCollectionControls ? [FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR] : []),
     ...(includeSavedLayout ? [".saved-workspace"] : []),
+    ...(includeWorkspaceLayout ? [FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR] : []),
   ];
   const layoutElements = layoutSelectors.length > 0
     ? Array.from(documentObject.querySelectorAll(layoutSelectors.join(", ")))

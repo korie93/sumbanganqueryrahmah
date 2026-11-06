@@ -1,5 +1,5 @@
 import { Suspense, lazy, type MouseEventHandler, type Ref } from "react";
-import { Minimize2 } from "lucide-react";
+import { Minimize2, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FloatingAIChatErrorBoundary } from "@/components/FloatingAIChatErrorBoundary";
 import { FloatingPanelShell } from "@/components/FloatingAIShell";
@@ -10,7 +10,7 @@ import styles from "./FloatingAI.module.css";
 
 const AIChat = lazy(() => import("@/components/AIChat"));
 
-export const FLOATING_AI_PANEL_DESCRIPTION = "Panel bantuan AI untuk pertanyaan berkaitan koleksi dan rekod";
+export const FLOATING_AI_PANEL_DESCRIPTION = "Bantuan untuk koleksi dan rekod SQR.";
 
 type FloatingAIPanelProps = {
   activePage: string;
@@ -70,10 +70,12 @@ export function FloatingAIPanel({
 
   return (
     <FloatingPanelShell
+      placement={layoutState.panel}
       hidden={!shouldShowPanel}
       className={cn(
         "pointer-events-none absolute transition-[opacity,transform] duration-200",
         styles.floatingPanelShell,
+        layoutState.panel.mode === "sheet" ? styles.floatingPanelShellSheet : "",
         layoutState.panel.mode === "fullscreen" ? styles.floatingPanelShellFullscreen : "",
         shouldShowPanel ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0",
       )}
@@ -82,7 +84,7 @@ export function FloatingAIPanel({
         ref={panelSurfaceRef}
         id={panelId}
         className={cn(
-          "flex h-full w-full flex-col overflow-hidden border sqr-backdrop-blur-sm",
+          "flex min-h-0 w-full flex-col overflow-hidden border",
           styles.floatingPanelSurface,
           shouldShowPanel ? "pointer-events-auto" : "pointer-events-none",
           layoutState.panel.mode === "fullscreen"
@@ -114,10 +116,10 @@ export function FloatingAIPanel({
         ) : null}
         <header
           className={cn(
-            "flex shrink-0 items-center justify-between border-b",
+            "flex shrink-0 items-center justify-between gap-2 border-b",
             styles.floatingPanelHeader,
             isMobile
-              ? cn(styles.floatingPanelHeaderMobile, "sqr-backdrop-blur-xl")
+              ? styles.floatingPanelHeaderMobile
               : styles.floatingPanelHeaderDesktop,
             isMobile && layoutState.panel.mode === "fullscreen"
               ? "min-h-16 px-4"
@@ -126,58 +128,51 @@ export function FloatingAIPanel({
                 : "h-14 px-4",
           )}
         >
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2
               id={panelTitleId}
               className={cn(
                 "truncate font-semibold",
                 styles.floatingPanelTitle,
-                layoutState.panel.mode === "fullscreen" ? "text-base" : "text-sm",
+                "text-base leading-6",
               )}
             >
               {assistantLabel}
             </h2>
             <p
               id={panelDescriptionId}
-              className={cn("truncate text-2xs", styles.floatingPanelDescription)}
+              className={cn("truncate text-xs leading-4", styles.floatingPanelDescription)}
             >
               {FLOATING_AI_PANEL_DESCRIPTION}
             </p>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5">
+            {messagesLength > 0 || isThinking ? <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className={cn(
+                styles.floatingHeaderButton,
+                isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
+              )}
+              onClick={handleReset}
+              disabled={messagesLength === 0 && !isThinking}
+              aria-label={`Reset sesi ${assistantLabel}`}
+              title="Sembang Baharu"
+            >
+              <SquarePen className="h-4 w-4" aria-hidden="true" />
+            </Button> : null}
             <Button
               type="button"
               size="sm"
               variant="ghost"
               className={cn(
-                "text-xs",
                 styles.floatingHeaderButton,
-                isMobile && layoutState.panel.mode === "fullscreen"
-                  ? "h-10 px-3"
-                  : isMobile
-                    ? "h-11 px-2.5"
-                    : "h-8 px-2",
-              )}
-              onClick={handleReset}
-              disabled={messagesLength === 0 && !isThinking}
-              aria-label={`Reset sesi ${assistantLabel}`}
-            >
-              Reset Sesi
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className={cn(
-                styles.floatingHeaderButton,
-                isMobile && layoutState.panel.mode === "fullscreen"
-                  ? "h-10 w-10"
-                  : isMobile
-                    ? "h-11 w-11"
-                    : "h-8 w-8",
+                isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
               )}
               onClick={handlePanelMinimizeClick}
               aria-label={`Kecilkan panel ${assistantLabel}`}
+              title="Kecilkan panel AI"
             >
               <Minimize2 className="h-4 w-4" aria-hidden="true" />
             </Button>
@@ -185,7 +180,7 @@ export function FloatingAIPanel({
         </header>
         <div
           className={cn(
-            "min-h-0 flex-1 overflow-hidden",
+            "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
             layoutState.panel.mode === "fullscreen"
               ? "p-3"
               : isMobile
@@ -193,7 +188,7 @@ export function FloatingAIPanel({
                 : "p-3",
           )}
         >
-          <div className="h-full min-h-0">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             <Suspense
               fallback={
                 <div

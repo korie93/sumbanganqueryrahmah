@@ -28,6 +28,7 @@ type FloatingPanelShellProps = {
   className: string;
   hidden: boolean;
   children: ReactNode;
+  placement?: FloatingAiLayout["panel"] | undefined;
 };
 
 /**
@@ -37,9 +38,17 @@ export function FloatingPanelShell({
   className,
   hidden,
   children,
+  placement,
 }: FloatingPanelShellProps) {
+  const placementStyle = placement ? {
+    "--floating-ai-panel-left": placement.left === null ? "auto" : `${placement.left}px`,
+    "--floating-ai-panel-right": placement.right === null ? "auto" : `${placement.right}px`,
+    "--floating-ai-panel-bottom": `${placement.bottom}px`,
+    "--floating-ai-panel-width": `${placement.width}px`,
+    "--floating-ai-panel-height": `${placement.height}px`,
+  } as CSSProperties : undefined;
   return (
-    <div hidden={hidden} className={className}>
+    <div hidden={hidden} className={className} style={placementStyle}>
       {children}
     </div>
   );

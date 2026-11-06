@@ -5,15 +5,77 @@ import {
   FLOATING_AI_DIALOG_SELECTOR,
   FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR,
   FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR,
+  FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR,
+  FLOATING_AI_WORKSPACE_CHROME_SELECTOR,
+  FLOATING_AI_LAYOUT_READY_EVENT,
   collectFloatingAiDomSnapshot,
   queryFloatingAiObstacleElements,
   resolveFloatingAiHasDensePage,
+  notifyFloatingAiLayoutReady,
 } from "@/components/floating-ai-dom-utils";
 
 test("resolveFloatingAiHasDensePage detects dense operational routes", () => {
   assert.equal(resolveFloatingAiHasDensePage("monitor", "/monitor"), true);
   assert.equal(resolveFloatingAiHasDensePage("viewer", "/imports/123/viewer"), true);
   assert.equal(resolveFloatingAiHasDensePage("home", "/"), false);
+});
+
+test("a guarded workspace observes its loading root and discovers later value markers on requery", () => {
+  const workspace = { id: "natural-height-workspace" };
+  const value = { id: "late-loaded-summary-value" };
+  const sidebar = { id: "workspace-sidebar" };
+  const topbar = { id: "workspace-topbar" };
+  const guardedAvoidSelector = FLOATING_AI_AVOID_SELECTOR + ", " + FLOATING_AI_WORKSPACE_CHROME_SELECTOR;
+  const selectors: string[] = [];
+  let loaded = false;
+  const documentStub = {
+    querySelectorAll(selector: string) {
+      selectors.push(selector);
+      if (selector === FLOATING_AI_AVOID_SELECTOR) return loaded ? [value] : [];
+      if (selector === guardedAvoidSelector) return loaded ? [value, sidebar, topbar] : [sidebar, topbar];
+      if (selector === FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR) return [workspace];
+      return [];
+    },
+  } as unknown as Document;
+  const loading = queryFloatingAiObstacleElements(documentStub, false, false, true);
+  assert.deepEqual(selectors, [
+    guardedAvoidSelector, FLOATING_AI_DIALOG_SELECTOR, FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR,
+  ]);
+  assert.deepEqual(loading.avoidElements, [sidebar, topbar]);
+  assert.deepEqual(loading.observedElements, [sidebar, topbar, workspace]);
+  selectors.length = 0;
+  loaded = true;
+  const populated = queryFloatingAiObstacleElements(documentStub, false, false, true);
+  assert.deepEqual(selectors, [
+    guardedAvoidSelector, FLOATING_AI_DIALOG_SELECTOR, FLOATING_AI_WORKSPACE_LAYOUT_SELECTOR,
+  ]);
+  assert.deepEqual(populated.avoidElements, [value, sidebar, topbar]);
+  assert.deepEqual(populated.observedElements, [value, sidebar, topbar, workspace]);
+  assert.equal(populated.avoidElements.includes(workspace as unknown as Element), false);
+  assert.ok(!selectors.some((selector) => selector === "body" || selector === "*"));
+  assert.equal(FLOATING_AI_WORKSPACE_CHROME_SELECTOR, ".workspace-sidebar, .workspace-topbar");
+  selectors.length = 0;
+  const ordinary = queryFloatingAiObstacleElements(documentStub);
+  assert.deepEqual(selectors, [FLOATING_AI_AVOID_SELECTOR, FLOATING_AI_DIALOG_SELECTOR]);
+  assert.deepEqual(ordinary.avoidElements, [value]);
+  assert.deepEqual(ordinary.observedElements, [value]);
+});
+
+test("a connected lazy workspace announces readiness on its own document, without a retained observer", () => {
+  const events: Event[] = [];
+  const element = {
+    isConnected: false,
+    ownerDocument: { dispatchEvent: (event: Event) => { events.push(event); return true; } },
+  };
+  notifyFloatingAiLayoutReady(null);
+  notifyFloatingAiLayoutReady(element as unknown as HTMLElement);
+  assert.equal(events.length, 0);
+  element.isConnected = true;
+  notifyFloatingAiLayoutReady(element as unknown as HTMLElement);
+  assert.deepEqual(events.map((event) => event.type), [FLOATING_AI_LAYOUT_READY_EVENT]);
+  element.isConnected = false;
+  notifyFloatingAiLayoutReady(element as unknown as HTMLElement);
+  assert.equal(events.length, 1);
 });
 
 test("queryFloatingAiObstacleElements collects avoid, dialog, and observed elements in one pass", () => {
@@ -45,19 +107,26 @@ test("save collection obstacle queries opt into interactive controls without tre
   const field = { id: "customer-name" };
   const nickname = { id: "save-nickname" };
   const workspace = { id: "save-workspace" };
+  const sidebar = { id: "workspace-sidebar" };
+  const topbar = { id: "workspace-topbar" };
+  const saveAvoidSelector = [
+    FLOATING_AI_AVOID_SELECTOR, FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, FLOATING_AI_WORKSPACE_CHROME_SELECTOR,
+  ].join(", ");
   const selectors: string[] = [];
   const documentStub = {
     querySelectorAll(selector: string) {
       selectors.push(selector);
       if (selector === FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR) return [workspace];
-      return selector.includes(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR) ? [field, nickname] : [];
+      if (selector === saveAvoidSelector) return [field, nickname, sidebar, topbar];
+      if (selector === FLOATING_AI_AVOID_SELECTOR) return [field];
+      return [];
     },
   } as unknown as Document;
   const snapshot = queryFloatingAiObstacleElements(documentStub, true);
-  assert.deepEqual(snapshot.avoidElements, [field, nickname]);
-  assert.deepEqual(snapshot.observedElements, [field, nickname, workspace]);
+  assert.deepEqual(snapshot.avoidElements, [field, nickname, sidebar, topbar]);
+  assert.deepEqual(snapshot.observedElements, [field, nickname, sidebar, topbar, workspace]);
   assert.deepEqual(selectors, [
-    `${FLOATING_AI_AVOID_SELECTOR}, ${FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR}`,
+    saveAvoidSelector,
     FLOATING_AI_DIALOG_SELECTOR,
     FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR,
   ]);
@@ -65,6 +134,12 @@ test("save collection obstacle queries opt into interactive controls without tre
   assert.match(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /\.collection-save-nickname-controls :is\(button,/);
   assert.match(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /button, summary,/);
   assert.doesNotMatch(FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR, /\.save-collection-section(?:,|$)/);
+  assert.equal(snapshot.avoidElements.includes(workspace as unknown as Element), false);
+  selectors.length = 0;
+  const ordinary = queryFloatingAiObstacleElements(documentStub);
+  assert.deepEqual(selectors, [FLOATING_AI_AVOID_SELECTOR, FLOATING_AI_DIALOG_SELECTOR]);
+  assert.deepEqual(ordinary.avoidElements, [field]);
+  assert.deepEqual(ordinary.observedElements, [field]);
 });
 
 test("Saved observes its stable workspace root without treating the entire page as an obstacle", () => {
@@ -72,13 +147,17 @@ test("Saved observes its stable workspace root without treating the entire page 
   const sourceControl = { id: "saved-source-control" };
   const dialog = { id: "saved-dialog" };
   const workspace = { id: "saved-workspace" };
-  const savedAvoidSelector = `${FLOATING_AI_AVOID_SELECTOR}, [data-saved-ai-avoid='true']`;
+  const sidebar = { id: "workspace-sidebar" };
+  const topbar = { id: "workspace-topbar" };
+  const savedAvoidSelector = [
+    FLOATING_AI_AVOID_SELECTOR, "[data-saved-ai-avoid='true']", FLOATING_AI_WORKSPACE_CHROME_SELECTOR,
+  ].join(", ");
   const selectors: string[] = [];
   const documentStub = {
     querySelectorAll(selector: string) {
       selectors.push(selector);
       if (selector === FLOATING_AI_AVOID_SELECTOR) return [pagination];
-      if (selector === savedAvoidSelector) return [pagination, sourceControl];
+      if (selector === savedAvoidSelector) return [pagination, sourceControl, sidebar, topbar];
       if (selector === FLOATING_AI_DIALOG_SELECTOR) return [dialog];
       if (selector === ".saved-workspace") return [workspace];
       return [];
@@ -87,9 +166,9 @@ test("Saved observes its stable workspace root without treating the entire page 
 
   const result = queryFloatingAiObstacleElements(documentStub, false, true);
   assert.deepEqual(selectors, [savedAvoidSelector, FLOATING_AI_DIALOG_SELECTOR, ".saved-workspace"]);
-  assert.deepEqual(result.avoidElements, [pagination, sourceControl]);
+  assert.deepEqual(result.avoidElements, [pagination, sourceControl, sidebar, topbar]);
   assert.deepEqual(result.dialogElements, [dialog]);
-  assert.deepEqual(result.observedElements, [pagination, sourceControl, dialog, workspace]);
+  assert.deepEqual(result.observedElements, [pagination, sourceControl, sidebar, topbar, dialog, workspace]);
   assert.equal(result.avoidElements.includes(workspace as unknown as Element), false);
   assert.equal(result.dialogElements.includes(workspace as unknown as Element), false);
 
@@ -106,14 +185,19 @@ test("Saved layout observation composes with existing Save controls and deduplic
   const control = { id: "source-control" };
   const saveWorkspace = { id: "save-workspace" };
   const savedWorkspace = { id: "saved-workspace" };
-  const combinedAvoidSelector = `${FLOATING_AI_AVOID_SELECTOR}, ${FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR}, [data-saved-ai-avoid='true']`;
+  const sidebar = { id: "workspace-sidebar" };
+  const topbar = { id: "workspace-topbar" };
+  const combinedAvoidSelector = [
+    FLOATING_AI_AVOID_SELECTOR, FLOATING_AI_SAVE_COLLECTION_CONTROL_SELECTOR,
+    "[data-saved-ai-avoid='true']", FLOATING_AI_WORKSPACE_CHROME_SELECTOR,
+  ].join(", ");
   const selectors: string[] = [];
   const documentStub = {
     querySelectorAll(selector: string) {
       selectors.push(selector);
-      if (selector === combinedAvoidSelector) return [control];
+      if (selector === combinedAvoidSelector) return [control, sidebar, topbar];
       if (selector === `${FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR}, .saved-workspace`) {
-        return [saveWorkspace, savedWorkspace, control];
+        return [saveWorkspace, savedWorkspace, control, sidebar];
       }
       return [];
     },
@@ -125,8 +209,8 @@ test("Saved layout observation composes with existing Save controls and deduplic
     FLOATING_AI_DIALOG_SELECTOR,
     `${FLOATING_AI_SAVE_COLLECTION_LAYOUT_SELECTOR}, .saved-workspace`,
   ]);
-  assert.deepEqual(result.avoidElements, [control]);
-  assert.deepEqual(result.observedElements, [control, saveWorkspace, savedWorkspace]);
+  assert.deepEqual(result.avoidElements, [control, sidebar, topbar]);
+  assert.deepEqual(result.observedElements, [control, sidebar, topbar, saveWorkspace, savedWorkspace]);
 });
 
 test("collectFloatingAiDomSnapshot reuses queried elements to derive visible rects and dialog state", () => {
