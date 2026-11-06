@@ -15,7 +15,8 @@ const compile = (name, extra = "") => postcss([
 ]).process(source(name) + extra, { from: rootFile(name) });
 const compiled = Promise.all([
   compile("client/src/public-shell.css"),
-  compile("client/src/index.css", '\n@source inline("space-x-2 space-x-reverse space-y-2 space-y-reverse sm:space-y-4 outline-hidden font-sans shadow-sm ring border");'),
+  // Probe-only utilities must not depend on incidental production markup usage.
+  compile("client/src/index.css", '\n@source inline("space-x-2 space-x-reverse space-y-2 space-y-reverse sm:space-y-4 outline-hidden font-sans shadow-sm ring border bg-linear-to-br/srgb");'),
 ]);
 
 function declarations(root, selector) {

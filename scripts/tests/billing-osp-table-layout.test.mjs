@@ -43,13 +43,25 @@ test("each Billing result table has one named keyboard-focusable scroll owner", 
 });
 
 test("Aging remains pinned for column headings, aging rows and ALL totals in both tables", () => {
-  for (const html of [markup.system, markup.client, markup.readonly]) {
-    assert.match(html, /<th[^>]*billing-osp-table-aging[^>]*>Aging<\/th>/);
-    assert.match(html, /<th scope="row"[^>]*billing-osp-table-aging[^>]*>D3<\/th>/);
-    assert.match(html, /<th scope="row"[^>]*billing-osp-table-aging[^>]*>ALL/);
-    assert.equal((html.match(/billing-osp-table-aging/g) ?? []).length, 3);
+  const cellText = (cell) => cell.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  const openingTag = (cell) => cell.slice(0, cell.indexOf(">") + 1);
+  for (const [kind, totalLabel] of [["system", "ALL"], ["client", "ALL Calculated"], ["readonly", "ALL Calculated"]]) {
+    const cells = markup[kind].match(/<th\b[^>]*>[\s\S]*?<\/th>/g) ?? [];
+    const pinned = cells.filter((cell) => {
+      const classes = openingTag(cell).match(/\bclass="([^"]*)"/)?.[1] ?? "";
+      return classes.split(/\s+/).includes("billing-osp-table-aging");
+    });
+    assert.equal(pinned.length, 3, `${kind} must pin the column header, aging row and total`);
+    assert.equal((markup[kind].match(/billing-osp-table-aging/g) ?? []).length, 3);
+    const columns = pinned.filter((cell) => /\bscope="col"/.test(openingTag(cell)));
+    const rows = pinned.filter((cell) => /\bscope="row"/.test(openingTag(cell)));
+    assert.equal(columns.length, 1);
+    assert.equal(rows.length, 2);
+    assert.equal(cellText(columns[0]), "Aging");
+    assert.equal(cellText(rows[0]), "D3");
+    assert.equal(cellText(rows[1]), totalLabel);
+    if (kind === "system") assert.match(openingTag(rows[1]), /\bclass="[^"]*\bfont-semibold\b/);
   }
-  assert.match(markup.system, /<th scope="row"[^>]*font-semibold[^>]*>ALL<\/th>/);
 });
 
 test("editable percentages and calculated amounts have text labels and separate input outlines", () => {
