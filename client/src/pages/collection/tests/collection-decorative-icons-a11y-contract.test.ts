@@ -21,8 +21,15 @@ const dailyDayStatusNoticeSource = readCollectionSource("CollectionDailyDayStatu
 const manageNicknamesSource = readCollectionSource("ManageCollectionNicknamesPage.tsx");
 
 test("collection mobile filter action icons are decorative only", () => {
-  assert.match(nicknameSummaryMobileFiltersSource, /<Filter className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
-  assert.match(nicknameSummaryMobileFiltersSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
+  for (const iconName of ["Filter", "RotateCcw"]) {
+    const icon = nicknameSummaryMobileFiltersSource.match(new RegExp(`<${iconName}\\b[^>]*\\/>`))?.[0];
+    assert.ok(icon, `${iconName} must remain present in the mobile filter action`);
+    assert.match(icon, /aria-hidden="true"/);
+    const classes = (icon.match(/className="([^"]+)"/)?.[1] ?? "").split(/\s+/);
+    for (const requiredClass of ["mr-2", "h-4", "w-4"]) {
+      assert.ok(classes.includes(requiredClass), `${iconName} must retain ${requiredClass}`);
+    }
+  }
   assert.match(summaryPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);
   assert.match(summaryPageSource, /<RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" \/>/);
   assert.match(recordsPageSource, /<Filter className="h-4 w-4 shrink-0" aria-hidden="true" \/>/);

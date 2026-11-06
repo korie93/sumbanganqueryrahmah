@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BackupFiltersPanel } from "./BackupFiltersPanel";
+
+// Register before importing the component: Calendar's CSS is tested in the browser.
+await import(new URL("../../../../scripts/lib/register-client-css-test-loader.mjs", import.meta.url).href);
+const { BackupFiltersPanel } = await import("./BackupFiltersPanel");
 
 const noop = () => undefined;
 

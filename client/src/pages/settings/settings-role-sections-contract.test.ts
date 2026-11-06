@@ -27,7 +27,7 @@ test("settings role permission UI exposes compact manager-first controls", () =>
   assert.match(source, /Blocked/);
   assert.match(source, /const roleOrder: RolePermissionId\[\] = \["manager", "admin", "user"\]/);
   assert.match(source, /useState<RolePermissionId>\("manager"\)/);
-  assert.match(source, /sticky top-3/);
+  assert.match(source, /sticky top-\[calc\(var\(--workspace-topbar-height\)\+var\(--spacing-3\)\)\]/);
   assert.match(source, /Compact role view/);
 });
 

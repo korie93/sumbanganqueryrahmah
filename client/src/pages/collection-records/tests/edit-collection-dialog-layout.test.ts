@@ -5,15 +5,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { Button } from "@/components/ui/button";
 import { DialogContent, DialogFooter, DialogHeader } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { DatePickerField } from "@/components/ui/date-picker-field";
 import { SelectTrigger } from "@/components/ui/select";
 import { CollectionReceiptPanel } from "@/pages/collection/CollectionReceiptPanel";
 import { CollectionRecordEditChangeSummary } from "../CollectionRecordEditChangeSummary";
 import { CollectionRecordDiscardDialog } from "../CollectionRecordDiscardDialog";
-import {
-  EditCollectionRecordDialog,
-  type EditCollectionRecordDialogProps,
-} from "../EditCollectionRecordDialog";
+import type { EditCollectionRecordDialogProps } from "../EditCollectionRecordDialog";
+
+await import(new URL("../../../../../scripts/lib/register-client-css-test-loader.mjs", import.meta.url).href);
+const { DatePickerField } = await import("@/components/ui/date-picker-field");
+const { EditCollectionRecordDialog } = await import("../EditCollectionRecordDialog");
 
 type ElementProps = {
   children?: ReactNode;
