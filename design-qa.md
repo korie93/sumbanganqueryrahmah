@@ -1,3 +1,50 @@
+# AI chat SQR — composer rujukan dan polish bacaan — 2026-11-07
+
+final result: passed
+
+Skop keputusan ini ialah perbandingan visual komponen composer dan susunan AI yang telah dirender. Regresi akhir lengkap:170/170 ujian berkaitan,54/54 Playwright,24 kes strict CSP dan12 paparan axe. Bukti source/hash serta batas prestasi CPU6× direkodkan dalam `docs/ui-ai-chat-reading-polish-report.md` dan manifest pengesahan; visual QA ini sahaja tidak membuktikan prestasi hardware atau pematuhan WCAG penuh.
+
+## Source visual truth dan keadaan
+
+- `C:/Users/Administrator/Downloads/1000331072.jpg`: input kosong, 976×154 piksel.
+- `C:/Users/Administrator/Downloads/1000331073.jpg`: input berbilang baris, 964×380 piksel.
+- Kedua-dua imej ialah crop UI tanpa ukuran viewport CSS atau devicePixelRatio. Perbandingan dibuat pada bentuk dan hubungan ruang, bukan dakwaan padanan piksel 1:1. SQR mengekalkan font16px, paletnya dan hit area44/48px.
+- Implementasi: binaan `receipt-adaptive-build-20722597505e`, Playwright/Chromium lokal, deviceScaleFactor1, data sintetik. Tiada production digunakan.
+
+## Bukti render dan perbandingan
+
+Direktori asas: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/`.
+
+- Cerah/full1366×900: `receipt-adaptive-tests-cf6e2f7ae60b/ai-reference-full-light-1366-empty.jpg` dan `...-multiline.jpg` (crop multiline862×143px).
+- Gelap/floating375×900: `receipt-adaptive-tests-53f7e65f0354/ai-reference-floating-dark-375-empty.jpg` (341×69px) dan `...-multiline.jpg`.
+- Tambahan yang dilihat: full/light375 `893682f68778`, full/dark1366 `d4b46ff047c2`, floating/light375 `1bcc1cea5656`. Nama capture mengikuti `ai-reference-<surface>-<theme>-<width>-<state>.jpg`.
+- Gambar sumber dan crop implementasi dibuka bersama dalam input perbandingan yang sama. Ia tidak didakwa sebagai kolaj side-by-side atau screenshot pada density yang sama. Crop composer sudah memperlihatkan semua butiran penting; tiada gambar hiasan untuk diperiksa.
+- Full-view before/after juga diperiksa pada viewport/tema/kandungan/posisi scroll padanan: cerah1366 (`6a1506e9215d` → `030acb2886d3`) dan gelap1920 (`005e32ad5ccd` → `bf872d4d4ff3`), capture `ai-reading-polish-<theme>-<width>-long.jpg`.
+
+## Lima permukaan fidelity
+
+1. **Typography:** font SQR16px, line-height1.5 dalam input dan1.6 dalam jawapan dikekalkan. Teks sumber raster yang kelihatan besar tidak dianggap ukuran CSS. Placeholder `Taip mesej...` mengikuti rujukan; body/UI lain tidak diganti.
+2. **Layout/spacing:** input satu baris46px, padding10×16px dan radius24px menghasilkan pill ketika kosong; input membesar sehingga lima baris142px. Send kekal di luar kotak, sejajar bawah dengan gap8px dan hit area44/48px. Desktop panjang menggunakan baki viewport; jawapan pendek tidak diregangkan.
+3. **Colors/tokens:** permukaan cerah/gelap, teks, caret/focus dan ikon menggunakan token SQR. Ikon aktif biru korporat; ikon disabled muted. Butang Send/Stop tiada kotak/background; fokus keyboard masih jelas. Palet gelap kekal kelabu, tanpa glass/gradient tambahan.
+4. **Asset/icon quality:** SendHorizonal daripada library Lucide sedia ada, berisi dan bersaiz26px, memberikan siluet pesawat kertas serta garisan pemisah. Tiada SVG/logo atau imej baharu dilukis; tiada dependency tambahan.
+5. **Copy/content:** placeholder ringkas dan label ARIA/tooltip BM dikekalkan; teks “Baris…” hanya fixture. Mesej production, data pelanggan dan aliran backend tidak diubah.
+
+## Findings dan sejarah pembetulan
+
+- Tiada P0/P1/P2 visual berbaki dalam skop rujukan composer yang diperiksa.
+- Risiko collapse transcript pada1024×600 telah direplikasi (5px) sebelum steering; fallback document-scrolling apabila notis hadir memberi224px pada checkpoint awal. Regresi sama lulus lagi pada composer baharu (`receipt-adaptive-tests-6e312d964b90`).
+- Capture pilot multiline dengan teks melebihi lima baris menunjukkan posisi scroll native separa di tepi atas. Capture rujukan akhir menggunakan tepat lima baris penuh, sepadan dengan keadaan gambar. Overflow/caret melebihi lima baris tetap diuji secara berasingan; tiada perubahan scroll native dibuat untuk menyembunyikan masalah.
+- Ujian visual/geometri lapan varian (penuh/floating × cerah/gelap ×375/1366px) lulus. Fokus/hover, Send/Stop/retry dan keadaan pemprosesan diuji dalam matriks regresi berasingan.
+- Source layout detector selepas edit akhir: `[]`, exit0. Ia tidak menggantikan pemeriksaan gambar.
+
+## Batas dan keputusan
+
+Output suara pembaca skrin fizikal, Safari/Firefox, hardware sebenar dan browser zoom fizikal tidak disahkan. Ujian text-scale200% dan CPU4×/6× ialah emulasi Chromium. Tiada dakwaan WCAG penuh, padanan density sumber atau peningkatan prestasi statistik dibuat. Tiada P3 tambahan diperlukan untuk menerima bentuk composer ini.
+
+Laporan QA terdahulu dikekalkan di bawah sebagai sejarah bagi skop Forgot Password; ia bukan sumber visual AI chat.
+
+---
+
 # Forgot Password manual retry feedback — 2026-11-03
 
 final result: passed

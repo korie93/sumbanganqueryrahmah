@@ -18,6 +18,7 @@ test("AI page reducer applies every page-local state action", () => {
   let state = withState();
 
   state = aiPageStateReducer(state, { type: "SET_QUERY", value: "semak rekod" });
+  state = aiPageStateReducer(state, { type: "SET_RETRY_AVAILABLE", value: true });
   state = aiPageStateReducer(state, { type: "SET_AI_STATUS", value: "SEARCHING" });
   state = aiPageStateReducer(state, { type: "SET_GATE_NOTICE", value: "Queued" });
   state = aiPageStateReducer(state, { type: "SET_SLOW_NOTICE", value: true });
@@ -32,6 +33,7 @@ test("AI page reducer applies every page-local state action", () => {
     isProcessing: true,
     isTyping: true,
     query: "semak rekod",
+    retryAvailable: true,
     slowNotice: true,
     streamingText: "Jawapan",
     streamingTimestamp: "2026-06-03T00:00:00.000Z",

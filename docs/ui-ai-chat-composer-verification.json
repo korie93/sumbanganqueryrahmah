@@ -1,0 +1,442 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "a1d577a26ec09e42a9eadd665880e1c13c32568d",
+  "build": "receipt-adaptive-build-1620df963bb5",
+  "builtApplicationFilesMatched": 1425,
+  "sourceFiles": [
+    {
+      "name": "client/src/components/AIChat.tsx",
+      "sha256": "412e8fbdba0d4fc7a3902b0978a3a17489cf5a9a58882e313577dcb43120a166"
+    },
+    {
+      "name": "client/src/components/AIMessage.tsx",
+      "sha256": "4473d3afe4c296c8bd3e5181154738e003552fffa8361c10c425afad7d17a8c0"
+    },
+    {
+      "name": "client/src/components/useAIChatRequestExecutor.ts",
+      "sha256": "bd2c63f5bb4679e1afcf8a20f6c8ede8d2a813492266664812b09071e4f3da50"
+    },
+    {
+      "name": "client/src/components/useAIChatState.ts",
+      "sha256": "d9c8405f1243f902af3a14dd06db686c4e736c3dffb0ca9f783f5eb72f194a0f"
+    },
+    {
+      "name": "client/src/pages/AI.tsx",
+      "sha256": "ef317fa821451170e97f15e076dd4710fb1de7515b0c19ee6bd27e4cdb9df6df"
+    },
+    {
+      "name": "client/src/pages/ai/AIConversationCard.tsx",
+      "sha256": "9ad58e48dd627149bbef4cbda86a01a0f0b722e3e9af7e8213b9188f948e6b9e"
+    },
+    {
+      "name": "client/src/pages/ai/useAIPageActions.ts",
+      "sha256": "894dbb46baca1a1bc8d36c53507a50fc385f8471942ccdb37d1642a55a8b0856"
+    },
+    {
+      "name": "client/src/pages/ai/useAIPageController.ts",
+      "sha256": "e58557269d8762cd5f461eabec7f74a2d599c235d04f104ecc2cc1b00f81838f"
+    },
+    {
+      "name": "client/src/pages/ai/useAIPageState.reducer.test.ts",
+      "sha256": "ca5356bd6e5538a718d7b21a5a0635ae1a6d5c33dc634cedd9c01afe86dd4ee1"
+    },
+    {
+      "name": "client/src/pages/ai/useAIPageState.ts",
+      "sha256": "090a0224af0165dbceb26b505a5ba0a721993063357085934978dd7a161058c6"
+    },
+    {
+      "name": "client/src/styles/ai.css",
+      "sha256": "3644b52a004aa08c58267eb79e8f836054f437e2a671a8524c2acc2649b3c021"
+    },
+    {
+      "name": "tests/visual/ai-compact-layout.spec.ts",
+      "sha256": "2502e6f056b188b2aa1f05d806dcbd583cc1e5c834b05f50068e2fd4cbcf69a9"
+    },
+    {
+      "name": "client/src/components/ai-chat-manual-retry.ts",
+      "sha256": "69916427a53893e18f9211c6e1078f506afc922bc424812834e54318936edf09"
+    },
+    {
+      "name": "client/src/components/ai-chat-manual-retry.test.ts",
+      "sha256": "5e1b24f0959901e94d70114dfe3313ecbb782b21a56cf314783b025a104d4592"
+    },
+    {
+      "name": "client/src/components/ai-message-formatting.test.ts",
+      "sha256": "6a292a4ebb5f1106862fc88798dcce308d3374062feb392f1c1013d248930a53"
+    },
+    {
+      "name": "client/src/hooks/auto-grow-textarea.ts",
+      "sha256": "0207677e3f735baa124765ff6d491e01e25d45ae2f6d83fca1e36a49d8968ccd"
+    },
+    {
+      "name": "client/src/hooks/auto-grow-textarea.test.ts",
+      "sha256": "f567ea4e30915a99b36aba8db45dbd21cf00f2f72921dc569f5cf8d39251a39f"
+    },
+    {
+      "name": "client/src/hooks/useAutoGrowTextarea.ts",
+      "sha256": "f04665689721df1c2cb75b3934e56960bc18a1f252e036f93bc2c9870ef2cfe6"
+    },
+    {
+      "name": "tests/visual/ai-composer-polish.spec.ts",
+      "sha256": "067493c90106e90b8affbf38ae6153f93ef7b9405640d334d3bb0389ea05077d"
+    },
+    {
+      "name": "tests/visual/ai-retry-boundaries.spec.ts",
+      "sha256": "b177041bae40240894ad97b775be750ce25b2c637bc75b92822e92349379965d"
+    }
+  ],
+  "runs": [
+    {
+      "args": [
+        "tests",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-chat-session-guards.test.ts",
+        "client/src/components/ai-chat-utils.test.ts",
+        "client/src/components/ai-loading-skeleton-contract.test.tsx",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/components/ai-message-sanitizer.test.ts",
+        "client/src/components/ai-query-keyboard.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/floating-ai-accessibility.test.ts",
+        "client/src/components/floating-ai-dom-utils.test.ts",
+        "client/src/components/floating-ai-idle-launcher.contract.test.ts",
+        "client/src/components/floating-ai-layout.test.ts",
+        "client/src/components/floating-ai-runtime-loader.test.ts",
+        "client/src/components/floating-ai-scroll-lock.test.ts",
+        "client/src/components/floating-ai-shell-placement.test.tsx",
+        "client/src/components/floating-ai-status.test.ts",
+        "client/src/components/floating-ai-trigger-placement.test.ts",
+        "client/src/components/floating-ai-visibility.test.ts",
+        "client/src/components/useAIChatRuntimeRefs.test.ts",
+        "client/src/components/useAIChatState.contract.test.ts",
+        "client/src/components/useAIChatTypingAction.contract.test.ts",
+        "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+        "client/src/components/useFloatingAILayoutState.contract.test.ts",
+        "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts",
+        "client/src/pages/ai/ai-page-controller-structure.contract.test.ts",
+        "client/src/pages/ai/ai-page-controller-utils.test.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "client/src/hooks/ai-message-follow.test.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts"
+      ],
+      "runId": "receipt-adaptive-tests-ef14dba08d98",
+      "exitCode": 0,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 163,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 163,
+        "todo": 0
+      },
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "lint",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/useAIChatRequestExecutor.ts",
+        "client/src/components/useAIChatState.ts",
+        "client/src/components/ai-chat-manual-retry.ts",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "client/src/hooks/auto-grow-textarea.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "client/src/pages/AI.tsx",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/pages/ai/useAIPageActions.ts",
+        "client/src/pages/ai/useAIPageController.ts",
+        "client/src/pages/ai/useAIPageState.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-compact-layout.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-2b336aedbd00",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "types-focused",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/useAIChatRequestExecutor.ts",
+        "client/src/components/useAIChatState.ts",
+        "client/src/components/ai-chat-manual-retry.ts",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "client/src/hooks/auto-grow-textarea.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "client/src/pages/AI.tsx",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/pages/ai/useAIPageActions.ts",
+        "client/src/pages/ai/useAIPageController.ts",
+        "client/src/pages/ai/useAIPageState.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-compact-layout.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-adf58b06689a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-1d67ce982cd5",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "light",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-d53cf55282e7",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-bf10bf83ef85",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "dark",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-2d506631ff1a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-76ad65e23204",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "light",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-efde2a0c54c9",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-34a24592882b",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "dark",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-bdc0a05cfc31",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-retry",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-51fc88477b32",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-retry",
+        "floating"
+      ],
+      "runId": "receipt-adaptive-tests-8bd7f5343bdc",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "lint",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-2f6cc7c8e656",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "types-focused",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-1a4f8d937877",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-compact",
+        "full",
+        "light",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-3cc0d0443840",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-compact",
+        "floating",
+        "dark",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-a95a99a3d8ee",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "motion"
+      ],
+      "runId": "receipt-adaptive-tests-0ae299a50069",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "motion"
+      ],
+      "runId": "receipt-adaptive-tests-172e30ba623e",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-7e6168d9618a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-04709f98babb",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    }
+  ],
+  "profile": [
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-e4f84d04e6d9",
+      "build": "receipt-adaptive-build-ba9692af20a2",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 768,
+      "completeMs": 3302,
+      "longTasks": 14,
+      "longTaskMaxMs": 199,
+      "longTaskTotalMs": 1308,
+      "taskSeconds": 3.021043
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-9898fe1e72f5",
+      "build": "receipt-adaptive-build-1620df963bb5",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 885,
+      "completeMs": 3405,
+      "longTasks": 16,
+      "longTaskMaxMs": 211,
+      "longTaskTotalMs": 1396,
+      "taskSeconds": 3.2278880000000005
+    }
+  ],
+  "limits": "Synthetic static frontend in existing SQR-Audit bwrap; CPU100%, memory768MiB/swap0, pids128, CPU120s/wall180s. No real backend, production AI or physical-device benchmark. Focused semantic TypeScript, not whole-project CI.",
+  "scope": "Frontend AI chat only. No backend, dependency, API, database, permission or navigation changes. No commit/push/deploy."
+}

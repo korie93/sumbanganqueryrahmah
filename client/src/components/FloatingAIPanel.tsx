@@ -3,6 +3,7 @@ import { Minimize2, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FloatingAIChatErrorBoundary } from "@/components/FloatingAIChatErrorBoundary";
 import { FloatingPanelShell } from "@/components/FloatingAIShell";
+import { AIIconTooltip } from "@/components/AIIconTooltip";
 import type { AIChatStatus } from "@/components/AIChat";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 import { cn } from "@/lib/utils";
@@ -147,35 +148,39 @@ export function FloatingAIPanel({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {messagesLength > 0 || isThinking ? <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn(
-                styles.floatingHeaderButton,
-                isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
-              )}
-              onClick={handleReset}
-              disabled={messagesLength === 0 && !isThinking}
-              aria-label={`Reset sesi ${assistantLabel}`}
-              title="Sembang Baharu"
-            >
-              <SquarePen className="h-4 w-4" aria-hidden="true" />
-            </Button> : null}
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className={cn(
-                styles.floatingHeaderButton,
-                isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
-              )}
-              onClick={handlePanelMinimizeClick}
-              aria-label={`Kecilkan panel ${assistantLabel}`}
-              title="Kecilkan panel AI"
-            >
-              <Minimize2 className="h-4 w-4" aria-hidden="true" />
-            </Button>
+            {messagesLength > 0 || isThinking ? (
+              <AIIconTooltip label="Sembang Baharu" side="bottom">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className={cn(
+                    styles.floatingHeaderButton,
+                    isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
+                  )}
+                  onClick={handleReset}
+                  disabled={messagesLength === 0 && !isThinking}
+                  aria-label={`Reset sesi ${assistantLabel}`}
+                >
+                  <SquarePen className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </AIIconTooltip>
+            ) : null}
+            <AIIconTooltip label="Kecilkan panel AI" side="bottom">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={cn(
+                  styles.floatingHeaderButton,
+                  isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
+                )}
+                onClick={handlePanelMinimizeClick}
+                aria-label={`Kecilkan panel ${assistantLabel}`}
+              >
+                <Minimize2 className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </AIIconTooltip>
           </div>
         </header>
         <div

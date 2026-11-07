@@ -30,7 +30,8 @@ test("floating AI chat input has a formal accessible label", () => {
   assert.match(source, /aria-live="polite"/);
   assert.match(source, /aria-relevant="additions text"/);
   assert.match(source, /aria-atomic="false"/);
-  assert.match(source, /aria-atomic="true"/);
+  assert.match(source, /<AIChatStatusAnnouncement/);
+  assert.match(readComponentSource("AIChatStatusAnnouncement.tsx"), /aria-atomic="true"/);
   assert.match(source, /disabled=\{!canStop && !canSend\}/);
   assert.doesNotMatch(source, /aria-disabled=\{!isProcessing && !isTyping\}/);
   assert.match(source, /<Square className="h-4 w-4 fill-current" aria-hidden="true"/);
@@ -85,7 +86,7 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(triggerSource, /id=\{minimizedStatusId\}/);
   assert.match(triggerSource, /role="status"/);
   assert.match(triggerSource, /aria-live="polite"/);
-  assert.match(triggerSource, /aria-describedby=\{showMinimizedStatus \? minimizedStatusId : undefined\}/);
+  assert.match(triggerSource, /persistentDescriptionId=\{showMinimizedStatus \? minimizedStatusId : undefined\}/);
   assert.match(panelSource, /Bantuan untuk koleksi dan rekod SQR\./);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(focusSource, /onEscapeKeyDown: handleMinimize/);

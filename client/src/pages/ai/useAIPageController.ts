@@ -39,6 +39,7 @@ export function useAIPageController({
     setIsTyping: pageState.setIsTyping,
     setMessages,
     setQuery: pageState.setRawQuery,
+    setRetryAvailable: pageState.setRetryAvailable,
     setSlowNotice: pageState.setSlowNotice,
     setStreamingText: pageState.setStreamingText,
     setStreamingTimestamp: pageState.setStreamingTimestamp,
@@ -66,6 +67,7 @@ export function useAIPageController({
     messages,
     isThinking,
     query: pageState.query,
+    retryAvailable: pageState.retryAvailable,
     aiStatus: pageState.aiStatus,
     gateNotice: pageState.gateNotice,
     slowNotice: pageState.slowNotice,
@@ -77,6 +79,7 @@ export function useAIPageController({
     statusContent,
     setQuery: pageState.setQuery,
     handleSend: actions.handleSend,
+    retryLastQuery: actions.retryLastQuery,
     cancelAI: actions.cancelAI,
     resetChat: actions.resetChat,
   };

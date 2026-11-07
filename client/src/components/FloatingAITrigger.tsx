@@ -2,6 +2,7 @@ import type { MouseEventHandler, Ref } from "react";
 import { Bot, LoaderCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { FloatingTriggerShell } from "@/components/FloatingAIShell";
+import { AIIconTooltip, AIIconTooltipButton } from "@/components/AIIconTooltip";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
@@ -69,39 +70,40 @@ export function FloatingAITrigger({
           {minimizedStatus}
         </div>
       ) : null}
-      <button
-        ref={triggerButtonRef}
-        type="button"
-        onClick={handleTriggerToggleClick}
-        aria-controls={panelId}
-        aria-describedby={showMinimizedStatus ? minimizedStatusId : undefined}
-        aria-haspopup="dialog"
-        aria-busy={isLoading || undefined}
-        title={isLoading ? "Memuatkan bantuan AI." : undefined}
-        aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
-        {...getAriaExpandedProps(isOpen)}
-        className={cn(
-          "pointer-events-auto relative flex items-center justify-center rounded-full border transition-transform hover:scale-[1.03]",
-          styles.floatingTriggerButton,
-          isMobile ? "h-12 w-12" : "h-14 w-14",
-          hideForFocusedEditable ? "pointer-events-none" : "",
-          triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
-          !isOpen && isThinking ? styles.aiThinkingRing : "",
-        )}
-        data-testid="floating-ai-toggle"
-      >
-        {isLoading
-          ? <LoaderCircle className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
-          : <Bot className="h-6 w-6" aria-hidden="true" />}
-        {!isOpen && unreadCount > 0 ? (
-          <Badge
-            className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-xxs text-destructive-foreground"
-            data-testid="floating-ai-unread-badge"
-          >
-            {unreadCount > 99 ? "99+" : unreadCount}
-          </Badge>
-        ) : null}
-      </button>
+      <AIIconTooltip label={isLoading ? "Memuatkan bantuan AI." : isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}>
+        <AIIconTooltipButton
+          ref={triggerButtonRef}
+          type="button"
+          onClick={handleTriggerToggleClick}
+          aria-controls={panelId}
+          persistentDescriptionId={showMinimizedStatus ? minimizedStatusId : undefined}
+          aria-haspopup="dialog"
+          aria-busy={isLoading || undefined}
+          aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
+          {...getAriaExpandedProps(isOpen)}
+          className={cn(
+            "pointer-events-auto relative flex items-center justify-center rounded-full border transition-transform hover:scale-[1.03]",
+            styles.floatingTriggerButton,
+            isMobile ? "h-12 w-12" : "h-14 w-14",
+            hideForFocusedEditable ? "pointer-events-none" : "",
+            triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
+            !isOpen && isThinking ? styles.aiThinkingRing : "",
+          )}
+          data-testid="floating-ai-toggle"
+        >
+          {isLoading
+            ? <LoaderCircle className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
+            : <Bot className="h-6 w-6" aria-hidden="true" />}
+          {!isOpen && unreadCount > 0 ? (
+            <Badge
+              className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-xxs text-destructive-foreground"
+              data-testid="floating-ai-unread-badge"
+            >
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </Badge>
+          ) : null}
+        </AIIconTooltipButton>
+      </AIIconTooltip>
     </FloatingTriggerShell>
   );
 }

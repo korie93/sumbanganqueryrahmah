@@ -8,7 +8,7 @@ type AIMessageProps = {
 
 type AIMessageMarkdownBlock =
   | { type: "code"; content: string; language?: string }
-  | { type: "list"; ordered: boolean; items: string[] }
+  | { type: "list"; ordered: boolean; start: number; items: string[] }
   | { type: "paragraph"; lines: string[] };
 
 function hashAIMessageKey(value: string) {
@@ -38,7 +38,7 @@ function getAIMessageBlockSeed(block: AIMessageMarkdownBlock) {
     return block.language ?? "";
   }
   if (block.type === "list") {
-    return `${block.ordered ? "ordered" : "unordered"}\n${block.items.join("\n")}`;
+    return `${block.ordered ? `ordered:${block.start}` : "unordered"}\n${block.items.join("\n")}`;
   }
   return block.lines.join("\n");
 }
@@ -49,6 +49,7 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
   let paragraphLines: string[] = [];
   let listItems: string[] = [];
   let listOrdered = false;
+  let listStart = 1;
   let codeLines: string[] = [];
   let codeLanguage = "";
   let inCodeBlock = false;
@@ -65,7 +66,7 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
     if (listItems.length === 0) {
       return;
     }
-    blocks.push({ type: "list", ordered: listOrdered, items: listItems });
+    blocks.push({ type: "list", ordered: listOrdered, start: listStart, items: listItems });
     listItems = [];
   };
 
@@ -103,7 +104,8 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
     }
 
     const unorderedMatch = line.match(/^\s*[-*]\s+(.+)$/);
-    const orderedMatch = line.match(/^\s*\d+[.)]\s+(.+)$/);
+    // Leading-zero references and account-length identifiers are plain text.
+    const orderedMatch = line.match(/^\s*(0|[1-9]\d{0,8})[.)]\s+(.+)$/);
     const nextListOrdered = Boolean(orderedMatch);
     const listMatch = orderedMatch ?? unorderedMatch;
     if (listMatch) {
@@ -112,7 +114,10 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
         flushList();
       }
       listOrdered = nextListOrdered;
-      listItems.push(listMatch[1] ?? "");
+      if (listItems.length === 0) {
+        listStart = orderedMatch ? Number(orderedMatch[1]) : 1;
+      }
+      listItems.push(orderedMatch ? orderedMatch[2] ?? "" : listMatch[1] ?? "");
       continue;
     }
 
@@ -175,7 +180,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
     if (block.type === "list") {
       const ListTag = block.ordered ? "ol" : "ul";
       return (
-        <ListTag key={blockKey} className="ai-markdown-list">
+        <ListTag key={blockKey} className="ai-markdown-list" start={block.ordered && block.start !== 1 ? block.start : undefined}>
           {block.items.map((item) => (
             <li key={getContentKey(`${blockKey}:item`, item)}>{item}</li>
           ))}
@@ -191,9 +196,13 @@ function renderAIMessageMarkdown(content: string): ReactNode {
   });
 }
 
+export const AIMessageContent = memo(function AIMessageContent({ content }: { content: string }) {
+  const safeContent = sanitizeAIMessageContentForDisplay(content);
+  return <>{renderAIMessageMarkdown(safeContent)}</>;
+});
+
 function AIMessageImpl({ messageRole, content }: AIMessageProps) {
   const messageLabel = messageRole === "user" ? "Mesej pengguna" : "Mesej pembantu AI";
-  const safeContent = sanitizeAIMessageContentForDisplay(content);
 
   return (
     <div
@@ -202,7 +211,7 @@ function AIMessageImpl({ messageRole, content }: AIMessageProps) {
       aria-label={messageLabel}
     >
       <div className={`ai-bubble ${messageRole === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
-        {renderAIMessageMarkdown(safeContent)}
+        <AIMessageContent content={content} />
       </div>
     </div>
   );

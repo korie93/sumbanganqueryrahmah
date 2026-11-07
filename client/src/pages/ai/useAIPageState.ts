@@ -18,6 +18,7 @@ export type AIPageLocalState = {
   isProcessing: boolean;
   isTyping: boolean;
   query: string;
+  retryAvailable: boolean;
   slowNotice: boolean;
   streamingText: string;
   streamingTimestamp: string;
@@ -29,6 +30,7 @@ export type AIPageStateAction =
   | { type: "SET_IS_PROCESSING"; value: SetStateAction<boolean> }
   | { type: "SET_IS_TYPING"; value: SetStateAction<boolean> }
   | { type: "SET_QUERY"; value: SetStateAction<string> }
+  | { type: "SET_RETRY_AVAILABLE"; value: SetStateAction<boolean> }
   | { type: "SET_SLOW_NOTICE"; value: SetStateAction<boolean> }
   | { type: "SET_STREAMING_TEXT"; value: SetStateAction<string> }
   | { type: "SET_STREAMING_TIMESTAMP"; value: SetStateAction<string> };
@@ -39,6 +41,7 @@ export const AI_PAGE_INITIAL_STATE: AIPageLocalState = {
   isProcessing: false,
   isTyping: false,
   query: "",
+  retryAvailable: false,
   slowNotice: false,
   streamingText: "",
   streamingTimestamp: "",
@@ -65,6 +68,8 @@ export function aiPageStateReducer(
       return { ...state, isTyping: resolveStateAction(state.isTyping, action.value) };
     case "SET_QUERY":
       return { ...state, query: resolveStateAction(state.query, action.value) };
+    case "SET_RETRY_AVAILABLE":
+      return { ...state, retryAvailable: resolveStateAction(state.retryAvailable, action.value) };
     case "SET_SLOW_NOTICE":
       return { ...state, slowNotice: resolveStateAction(state.slowNotice, action.value) };
     case "SET_STREAMING_TEXT":
@@ -88,6 +93,9 @@ export function useAIPageState() {
   }, []);
   const setAiStatus: Dispatch<SetStateAction<AIChatStatus>> = useCallback((value) => {
     dispatch({ type: "SET_AI_STATUS", value });
+  }, []);
+  const setRetryAvailable: Dispatch<SetStateAction<boolean>> = useCallback((value) => {
+    dispatch({ type: "SET_RETRY_AVAILABLE", value });
   }, []);
   const setGateNotice: Dispatch<SetStateAction<string | null>> = useCallback((value) => {
     dispatch({ type: "SET_GATE_NOTICE", value });
@@ -129,6 +137,7 @@ export function useAIPageState() {
     setIsTyping,
     setQuery: updateQuery,
     setRawQuery,
+    setRetryAvailable,
     setSlowNotice,
     setStreamingText,
     setStreamingTimestamp,

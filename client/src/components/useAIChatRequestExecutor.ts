@@ -20,6 +20,7 @@ import {
   isAIChatAbortError,
   isActiveAIChatSession,
 } from "./ai-chat-session-guards";
+import { isRetryableAIChatFailure } from "./ai-chat-manual-retry";
 
 type UseAIChatRequestExecutorOptions = {
   abortActiveRequest: (reason?: string) => void;
@@ -41,6 +42,7 @@ type UseAIChatRequestExecutorOptions = {
   startTyping: (text: string, sessionId: number) => void;
   timeoutMs: number;
   unregisterRetryTimer: (timerId: number) => void;
+  onRetryableFailure: (text: string, sessionId: number) => void;
 };
 
 export function useAIChatRequestExecutor({
@@ -63,6 +65,7 @@ export function useAIChatRequestExecutor({
   startTyping,
   timeoutMs,
   unregisterRetryTimer,
+  onRetryableFailure,
 }: UseAIChatRequestExecutorOptions) {
   const finishAsyncCycle = useCallback((options?: {
     clearStreamingText?: boolean;
@@ -107,11 +110,15 @@ export function useAIChatRequestExecutor({
     requestControllerRef.current = controller;
     let waitingRetry = false;
     let startedTyping = false;
+    let responseStatus: number | null = null;
+    let retryAfter: string | null = null;
     const timeoutId = window.setTimeout(() => controller.abort("timeout"), timeoutMs);
     requestTimeoutRef.current = timeoutId;
 
     try {
       const response = await searchAI(text, { signal: controller.signal });
+      responseStatus = response.status;
+      retryAfter = response.headers.get("retry-after");
 
       if (!isActiveAIChatSession(sessionId, sessionRef)) {
         return;
@@ -166,16 +173,20 @@ export function useAIChatRequestExecutor({
       startedTyping = true;
       startTyping(outputText, sessionId);
     } catch (error: unknown) {
-      if (isAIChatAbortError(error)) {
+      const timedOut = controller.signal.aborted && controller.signal.reason === "timeout";
+      if ((isAIChatAbortError(error) || controller.signal.aborted) && !timedOut) {
         return;
       }
       if (!canApplyAIChatUiUpdate(sessionId, sessionRef, isMountedRef)) {
         return;
       }
       const gateNotice = error instanceof AIChatRequestError ? error.gateNotice : null;
+      if (isRetryableAIChatFailure(error, { status: responseStatus, retryAfter, gateNotice, timedOut })) {
+        onRetryableFailure(text, sessionId);
+      }
       appendMessage({
         role: "assistant",
-        content: resolveAiErrorMessage(error),
+        content: timedOut ? DEFAULT_AI_CHAT_ERROR_MESSAGE : resolveAiErrorMessage(error),
         timestamp: new Date().toISOString(),
       });
       finishAsyncCycle({
@@ -204,6 +215,7 @@ export function useAIChatRequestExecutor({
     clearRequestTimeout,
     finishAsyncCycle,
     isMountedRef,
+    onRetryableFailure,
     processingRef,
     registerRetryTimer,
     requestControllerRef,

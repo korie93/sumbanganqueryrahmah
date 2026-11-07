@@ -69,13 +69,15 @@ for (const surface of ["full", "floating"] as const) {
           await expect(log).toContainText("0000123412341234"); await expect(stop).toHaveCount(0);
           const reset = root.getByRole("button", { name: surface === "full" ? "Sembang Baharu" : "Reset sesi AI SQR", exact: true });
           await expect(reset).toHaveText("");
-          await expect(reset).toHaveAttribute("title", "Sembang Baharu");
+          await reset.focus();
+          await expect(page.getByRole("tooltip", { name: "Sembang Baharu", exact: true })).toBeVisible();
+          await input.focus();
           expect(await reset.locator("svg").count()).toBe(1);
           await expect(copies).toHaveCount(0);
           await expect(log.getByRole("button")).toHaveCount(0);
           await expect(log.locator(".ai-message-tools")).toHaveCount(0);
           if (surface === "full") {
-            await expect(input).toHaveCSS("resize", "vertical");
+            await expect(input).toHaveCSS("resize", "none");
             const bounds = await root.locator(".ai-conversation-card").boundingBox();
             expect(bounds!.width).toBeLessThanOrEqual(896);
           }
@@ -107,7 +109,9 @@ for (const surface of ["full", "floating"] as const) {
           const jump = root.getByRole("button", { name: "Ke mesej terkini", exact: true });
           await expect(jump).toBeVisible();
           await expect(jump).toHaveText("");
-          await expect(jump).toHaveAttribute("title", "Ke mesej terkini");
+          await jump.focus();
+          await expect(page.getByRole("tooltip", { name: "Ke mesej terkini", exact: true })).toBeVisible();
+          await log.focus();
           expect(await jump.locator("svg").count()).toBe(1);
           await log.focus(); await page.keyboard.press("End");
           await expect.poll(() => log.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);

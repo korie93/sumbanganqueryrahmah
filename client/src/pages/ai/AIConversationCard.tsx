@@ -1,6 +1,9 @@
-import { useId, type RefObject } from "react";
+import { useId, useRef, type RefObject } from "react";
+import { AIMessageContent } from "@/components/AIMessage";
 import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
-import { SendHorizonal, Square, SquarePen } from "lucide-react";
+import { AIIconTooltip } from "@/components/AIIconTooltip";
+import { AIChatStatusAnnouncement } from "@/components/AIChatStatusAnnouncement";
+import { RotateCcw, SendHorizonal, Square, SquarePen } from "lucide-react";
 import { handleAIQueryKeyDown } from "@/components/ai-query-keyboard";
 import {
   AI_PROCESSING_INDICATOR_DELAY_MS,
@@ -11,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
+import { useAutoGrowTextarea } from "@/hooks/useAutoGrowTextarea";
 import type { AIPageStatusContent } from "@/pages/ai/ai-page-controller-utils";
 import {
   AI_REQUEST_MAX_CHARACTERS,
@@ -38,6 +42,8 @@ interface AIConversationCardProps {
   onSend: () => void;
   onCancel: () => void;
   onReset: () => void;
+  retryAvailable?: boolean | undefined;
+  onRetry?: (() => void) | undefined;
   showJumpToLatest?: boolean | undefined;
   onJumpToLatest?: (() => void) | undefined;
 }
@@ -63,10 +69,15 @@ export function AIConversationCard({
   onSend,
   onCancel,
   onReset,
+  retryAvailable = false,
+  onRetry,
   showJumpToLatest = false,
   onJumpToLatest,
 }: AIConversationCardProps) {
   const messagesId = useId();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const sendButtonRef = useRef<HTMLButtonElement | null>(null);
+  useAutoGrowTextarea(textareaRef, query, { minRows: 1, maxRows: 5 });
   const chatHeightClass = embedded
     ? "h-full max-h-[350px]"
     : "ai-page-message-log";
@@ -82,18 +93,21 @@ export function AIConversationCard({
   );
   const chatControls = showResetButton && canReset ? (
     <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
-      <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={onReset} disabled={!canReset}
-        aria-label="Sembang Baharu" title="Sembang Baharu">
-        <SquarePen className="h-4 w-4" aria-hidden="true" />
-      </Button>
+      <AIIconTooltip label="Sembang Baharu">
+        <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={onReset} disabled={!canReset}
+          aria-label="Sembang Baharu">
+          <SquarePen className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </AIIconTooltip>
     </div>
   ) : null;
 
   return (
     <div className="ai-conversation-card rounded-2xl border border-border bg-card p-3 sm:p-4">
-      <div className="space-y-3">
+      <AIChatStatusAnnouncement enabled={aiEnabled} status={aiStatus} gateNotice={gateNotice} slowNotice={slowNotice} retryAvailable={retryAvailable} />
+      <div className="ai-conversation-content space-y-3">
         {!aiEnabled ? (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
             Pembantu AI dinyahaktifkan oleh tetapan sistem.
           </div>
         ) : null}
@@ -133,6 +147,7 @@ export function AIConversationCard({
           tabIndex={0}
           aria-live="polite"
           aria-relevant="additions text"
+          aria-busy={canStop}
           aria-label={`Perbualan ${assistantLabel}`}
         >
           {messages.length === 0 ? (
@@ -148,9 +163,11 @@ export function AIConversationCard({
                 message.role === "user"
                   ? "ml-auto" : "mr-auto"
               }`}
+              role="article"
+              aria-label={message.role === "user" ? "Mesej pengguna" : "Mesej pembantu AI"}
             >
               <div className={`ai-page-bubble whitespace-pre-wrap rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                {message.content}
+                <AIMessageContent content={message.content} />
               </div>
             </div>
           ))}
@@ -159,8 +176,10 @@ export function AIConversationCard({
             <div
               key={`streaming-${streamingTimestamp}`}
               className="ai-page-bubble mr-auto whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-foreground"
+              role="article"
+              aria-label="Mesej pembantu AI"
             >
-              {streamingText}
+              <AIMessageContent content={streamingText} />
             </div>
           ) : null}
 
@@ -170,30 +189,45 @@ export function AIConversationCard({
         </div>
 
         {onJumpToLatest ? <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={onJumpToLatest} /> : null}
-        <div className="flex items-end gap-2">
+        <div className="ai-composer-row flex items-end gap-2">
           <label htmlFor="ai-conversation-query" className="sr-only">
             Taip soalan kepada {assistantLabel}
           </label>
           <Textarea
+            ref={textareaRef}
             id="ai-conversation-query"
             name="aiConversationQuery"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={(event) => handleAIQueryKeyDown(event, canSend, onSend)}
             aria-keyshortcuts="Control+Enter Meta+Enter"
-            placeholder="Taip soalan anda..."
-            rows={2}
+            placeholder="Taip mesej..."
+            rows={1}
             disabled={!aiEnabled || isProcessing}
-            className={embedded ? "ai-page-input min-h-[72px]" : "ai-page-input"}
+            className="ai-page-input"
             autoComplete="off"
             maxLength={AI_REQUEST_MAX_CHARACTERS}
             aria-describedby="ai-conversation-query-limit"
           />
-          <Button type="button" className="h-11 w-11 shrink-0 p-0" onClick={canStop ? onCancel : onSend}
-            disabled={!canStop && !canSend} aria-label={canStop ? `Hentikan ${assistantLabel}` : "Hantar"}
-            title={canStop ? "Hentikan AI" : "Hantar (Ctrl/Cmd+Enter)"}>
-            {canStop ? <Square className="h-4 w-4 fill-current" aria-hidden="true" /> : <SendHorizonal className="h-4 w-4" aria-hidden="true" />}
-          </Button>
+          {aiEnabled && retryAvailable && onRetry ? (
+            <AIIconTooltip label="Cuba semula soalan terakhir">
+              <Button type="button" variant="outline" className="ai-retry-btn" disabled={canStop}
+                aria-label="Cuba semula soalan terakhir"
+                onClick={() => {
+                  onRetry();
+                  requestAnimationFrame(() => sendButtonRef.current?.focus({ preventScroll: true }));
+                }}>
+                <RotateCcw className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </AIIconTooltip>
+          ) : null}
+          <AIIconTooltip label={canStop ? "Hentikan AI" : "Hantar (Ctrl/Cmd+Enter)"}>
+            <Button ref={sendButtonRef} type="button" variant="ghost" className="ai-send-btn ai-composer-action h-11 w-11 shrink-0 p-0" onClick={canStop ? onCancel : onSend}
+              data-ai-action={canStop ? "stop" : "send"}
+              disabled={!canStop && !canSend} aria-label={canStop ? `Hentikan ${assistantLabel}` : "Hantar"}>
+              {canStop ? <Square className="h-4 w-4 fill-current" aria-hidden="true" /> : <SendHorizonal className="ai-send-icon" fill="currentColor" strokeWidth={1.5} aria-hidden="true" />}
+            </Button>
+          </AIIconTooltip>
         </div>
         <p
           id="ai-conversation-query-limit"

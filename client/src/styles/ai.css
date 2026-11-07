@@ -151,13 +151,23 @@
 .ai-markdown-code + .ai-markdown-paragraph,
 .ai-markdown-paragraph + .ai-markdown-code,
 .ai-markdown-list + .ai-markdown-code,
-.ai-markdown-code + .ai-markdown-list {
+.ai-markdown-code + .ai-markdown-list,
+.ai-markdown-list + .ai-markdown-list,
+.ai-markdown-code + .ai-markdown-code {
   margin-top: 0.75rem;
 }
 
 .ai-markdown-list {
   margin: 0;
   padding-inline-start: 1.1rem;
+}
+
+ul.ai-markdown-list {
+  list-style-type: disc;
+}
+
+ol.ai-markdown-list {
+  list-style-type: decimal;
 }
 
 .ai-markdown-list li + li {
@@ -170,6 +180,7 @@
   overflow-x: auto;
   border-radius: 8px;
   background: hsl(var(--muted) / 0.72);
+  color: hsl(var(--foreground));
   padding: 0.75rem;
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
@@ -231,6 +242,12 @@
   scrollbar-color: var(--ai-scroll-thumb) transparent;
 }
 
+.ai-page-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .ai-page-bubble {
   width: fit-content;
   min-width: 0;
@@ -258,9 +275,9 @@
 
 .ai-page-input {
   min-width: 0;
-  min-height: 4rem;
-  max-height: min(12rem, max(4rem, calc(var(--viewport-min-height-value) / 4)));
-  resize: vertical;
+  min-height: 2.875rem;
+  max-height: min(12rem, max(2.875rem, calc(var(--viewport-min-height-value) / 4)));
+  resize: none;
   flex: 1;
   font-size: var(--font-size-base);
   line-height: 1.5;
@@ -275,6 +292,60 @@
 
 @media (min-width: 768px) {
   .ai-page-message-log {
+    max-height: clamp(14rem, calc(var(--viewport-min-height-value) - 26rem), 28rem);
+  }
+}
+
+/* Full desktop conversation uses the shell's remaining height. Only the log
+   shrinks; short replies keep their intrinsic size and controls stay in flow.
+   Small/zoomed viewports retain the established document-scrolling layout. */
+@media (min-width: 1024px) and (min-height: 600px) {
+  .ai-page-workspace {
+    max-height: calc(var(--app-shell-min-height-value) - 3rem);
+    min-height: 0;
+  }
+
+  .ai-page-workspace > :first-child {
+    flex: none;
+  }
+
+  .ai-page-workspace > .ai-conversation-card {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .ai-page-workspace .ai-conversation-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-height: 0;
+  }
+
+  .ai-page-workspace .ai-conversation-content > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+
+  .ai-page-workspace .ai-conversation-content > * {
+    flex: none;
+  }
+
+  .ai-page-workspace .ai-page-message-log {
+    flex: 0 1 auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  /* Queues/slow notices may consume the available budget alongside a long
+     retry draft. Let the document grow rather than collapsing the transcript. */
+  .ai-page-workspace[data-ai-layout-notice="true"] {
+    max-height: none;
+  }
+
+  .ai-page-workspace[data-ai-layout-notice="true"] .ai-page-message-log {
     max-height: clamp(14rem, calc(var(--viewport-min-height-value) - 26rem), 28rem);
   }
 }
@@ -365,16 +436,18 @@
   background: var(--ai-input-surface-bg);
 }
 
-.ai-input {
+.ai-input,
+.ai-page-input {
   flex: 1;
   min-width: 0;
-  min-height: 44px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  min-height: 46px;
+  padding: 10px 16px;
+  border-radius: 24px;
   resize: none;
   background: var(--ai-input-bg);
-  border: 1px solid var(--ai-input-border);
+  border: 1px solid hsl(var(--border));
   color: var(--ai-input-text);
+  caret-color: hsl(var(--primary));
   font-size: var(--font-size-base);
   line-height: 1.5;
 }
@@ -388,22 +461,52 @@
 }
 
 .ai-send-btn {
+  flex: none;
   height: 44px;
   width: 44px;
   min-width: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
-  background: var(--ai-send-btn-bg);
-  color: var(--ai-send-btn-text);
-  border: 1px solid var(--ai-send-btn-border);
+  padding: 8px;
+  border-radius: 50%;
+  background: transparent;
+  color: hsl(var(--primary));
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+.ai-send-btn:hover,
+.ai-send-btn:active,
+.ai-send-btn:disabled {
+  background: transparent;
+  border-color: transparent;
+}
+
+.ai-send-btn:hover,
+.ai-send-btn:active {
+  color: hsl(var(--primary));
 }
 
 .ai-send-btn:disabled {
-  background: hsl(var(--muted));
   color: hsl(var(--muted-foreground));
-  border-color: hsl(var(--border));
+}
+
+.ai-send-btn .ai-send-icon {
+  width: 26px;
+  height: 26px;
+}
+
+.ai-send-icon path:last-child {
+  stroke: var(--ai-input-surface-bg);
+  stroke-width: 1.5;
+}
+
+.ai-retry-btn {
+  flex: none;
+  height: 44px;
+  width: 44px;
+  padding: 0;
 }
 
 @media (max-width: 767px) {
@@ -430,6 +533,13 @@
     width: 48px;
     min-width: 48px;
     padding: 8px;
+  }
+
+  .ai-retry-btn,
+  .ai-composer-action {
+    height: 48px;
+    width: 48px;
+    min-width: 48px;
   }
 
   .ai-actions {

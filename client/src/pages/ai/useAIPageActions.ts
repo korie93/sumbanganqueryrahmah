@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 
 import {
   AIChatRequestError,
@@ -12,6 +12,7 @@ import type { AIChatMessage, AIChatMessageInput } from "@/context/AIContext";
 import { searchAI } from "@/lib/api";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
+import { isRetryableAIChatFailure, takeAIChatFailedQuery, type AIChatFailedQuery } from "@/components/ai-chat-manual-retry";
 
 import {
   AI_PAGE_MAX_RETRIES,
@@ -34,6 +35,7 @@ type UseAIPageActionsOptions = {
   setIsTyping: Dispatch<SetStateAction<boolean>>;
   setMessages: Dispatch<SetStateAction<AIChatMessage[]>>;
   setQuery: Dispatch<SetStateAction<string>>;
+  setRetryAvailable: Dispatch<SetStateAction<boolean>>;
   setSlowNotice: Dispatch<SetStateAction<boolean>>;
   setStreamingText: Dispatch<SetStateAction<string>>;
   setStreamingTimestamp: Dispatch<SetStateAction<string>>;
@@ -53,12 +55,14 @@ export function useAIPageActions({
   setIsTyping,
   setMessages,
   setQuery,
+  setRetryAvailable,
   setSlowNotice,
   setStreamingText,
   setStreamingTimestamp,
   timeoutMs,
   typingIntervalMs,
 }: UseAIPageActionsOptions) {
+  const failedQueryRef = useRef<AIChatFailedQuery | null>(null);
   const {
     abortActiveRequest,
     clearRetryTimers,
@@ -103,6 +107,7 @@ export function useAIPageActions({
   );
 
   const cancelAI = useCallback(() => {
+    failedQueryRef.current = null;
     sessionRef.current += 1;
     stopTyping();
     clearRetryTimers();
@@ -111,6 +116,7 @@ export function useAIPageActions({
     if (isMountedRef.current) {
       setStreamingText("");
       setGateNotice(null);
+      setRetryAvailable(false);
     }
     stopProcessingState();
   }, [
@@ -120,6 +126,7 @@ export function useAIPageActions({
     isMountedRef,
     sessionRef,
     setGateNotice,
+    setRetryAvailable,
     setStreamingText,
     stopProcessingState,
     stopTyping,
@@ -130,6 +137,10 @@ export function useAIPageActions({
     setQuery("");
     resetSession();
   }, [cancelAI, resetSession, setQuery]);
+
+  useEffect(() => {
+    if (!aiEnabled) cancelAI();
+  }, [aiEnabled, cancelAI]);
 
   const startSlowNoticeWatch = useCallback(
     (sessionId: number) => {
@@ -169,13 +180,16 @@ export function useAIPageActions({
   });
 
   const sendQuery = useCallback(
-    async (text: string, isRetry = false, retryCount = 0, activeSessionId?: number) => {
-      if (!text) return;
+    async (text: string, isRetry = false, retryCount = 0, activeSessionId?: number, recordUserMessage = true) => {
+      if (!text || !aiEnabled || !isMountedRef.current) return;
       if (!isRetry && (processingRef.current || pendingSendRef.current)) return;
 
       const sessionId = isRetry ? activeSessionId ?? sessionRef.current : sessionRef.current + 1;
+      if (isRetry && (sessionRef.current !== sessionId || !processingRef.current)) return;
 
       if (!isRetry) {
+        failedQueryRef.current = null;
+        setRetryAvailable(false);
         sessionRef.current = sessionId;
         pendingSendRef.current = true;
         processingRef.current = true;
@@ -186,11 +200,13 @@ export function useAIPageActions({
         setGateNotice(null);
         setStreamingText("");
         startSlowNoticeWatch(sessionId);
-        appendMessage({
-          role: "user",
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
+        if (recordUserMessage) {
+          appendMessage({
+            role: "user",
+            content: text,
+            timestamp: new Date().toISOString(),
+          });
+        }
         setIsThinking(true);
       }
 
@@ -200,12 +216,16 @@ export function useAIPageActions({
       let shouldStopProcessing = false;
       let waitingNextRetry = false;
       let timeoutId: number | null = null;
+      let responseStatus: number | null = null;
+      let retryAfter: string | null = null;
 
       try {
-        timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+        timeoutId = window.setTimeout(() => controller.abort("timeout"), timeoutMs);
         const response = await searchAI(text, { signal: controller.signal });
+        responseStatus = response.status;
+        retryAfter = response.headers.get("retry-after");
 
-        if (sessionRef.current !== sessionId) return;
+        if (!isMountedRef.current || sessionRef.current !== sessionId) return;
 
         const gateWaitMs = Number(response.headers.get("x-ai-gate-wait-ms") || "0");
         if (!response.ok) {
@@ -213,6 +233,7 @@ export function useAIPageActions({
             response,
             response.statusText || DEFAULT_AI_CHAT_ERROR_MESSAGE,
           );
+          if (!isMountedRef.current || sessionRef.current !== sessionId) return;
           if (error.gateNotice) {
             setGateNotice(error.gateNotice);
           }
@@ -220,7 +241,7 @@ export function useAIPageActions({
         }
 
         const data = await readAIChatSuccessPayload(response, DEFAULT_AI_CHAT_ERROR_MESSAGE);
-        if (sessionRef.current !== sessionId) return;
+        if (!isMountedRef.current || sessionRef.current !== sessionId) return;
 
         if (!isRetry && gateWaitMs > 0) {
           setGateNotice(formatAIQueuedNotice(gateWaitMs));
@@ -249,6 +270,7 @@ export function useAIPageActions({
           waitingNextRetry = true;
           const timerId = window.setTimeout(() => {
             retryTimersRef.current = retryTimersRef.current.filter((existingId) => existingId !== timerId);
+            if (!isMountedRef.current || sessionRef.current !== sessionId || !processingRef.current) return;
             void sendQuery(text, true, retryCount + 1, sessionId);
           }, AI_PAGE_RETRY_MS + retryCount * 500);
           retryTimersRef.current.push(timerId);
@@ -259,16 +281,25 @@ export function useAIPageActions({
       } catch (error: unknown) {
         const err = error as { name?: string; message?: string };
         const isAbort = err?.name === "AbortError";
-        if (isAbort || sessionRef.current !== sessionId) {
+        const timedOut = controller.signal.aborted && controller.signal.reason === "timeout";
+        if (!isMountedRef.current || sessionRef.current !== sessionId || ((isAbort || controller.signal.aborted) && !timedOut)) {
           return;
         }
 
         if (error instanceof AIChatRequestError && error.gateNotice) {
           setGateNotice(error.gateNotice);
         }
+        const retryable = isRetryableAIChatFailure(error, {
+          status: responseStatus,
+          retryAfter,
+          gateNotice: error instanceof AIChatRequestError ? error.gateNotice : null,
+          timedOut,
+        });
+        failedQueryRef.current = retryable ? { text, sessionId } : null;
+        setRetryAvailable(retryable);
         appendMessage({
           role: "assistant",
-          content: resolveAiErrorMessage(error),
+          content: timedOut ? DEFAULT_AI_CHAT_ERROR_MESSAGE : resolveAiErrorMessage(error),
           timestamp: new Date().toISOString(),
         });
         shouldStopProcessing = true;
@@ -282,12 +313,13 @@ export function useAIPageActions({
         if (shouldStopProcessing && isMountedRef.current && sessionRef.current === sessionId) {
           stopProcessingState();
         }
-        if (waitingNextRetry) {
+        if (waitingNextRetry && sessionRef.current === sessionId) {
           pendingSendRef.current = false;
         }
       }
     },
     [
+      aiEnabled,
       abortActiveRequest,
       appendMessage,
       isMountedRef,
@@ -301,6 +333,7 @@ export function useAIPageActions({
       setIsProcessing,
       setIsThinking,
       setIsTyping,
+      setRetryAvailable,
       setSlowNotice,
       setStreamingText,
       startSlowNoticeWatch,
@@ -322,9 +355,19 @@ export function useAIPageActions({
     await sendQuery(trimmed);
   }, [aiEnabled, pendingSendRef, processingRef, query, sendQuery, setGateNotice, setQuery]);
 
+  const retryLastQuery = useCallback(async () => {
+    if (!aiEnabled) return;
+    const text = takeAIChatFailedQuery(failedQueryRef, sessionRef.current, isMountedRef.current,
+      processingRef.current || pendingSendRef.current);
+    if (text === null) return;
+    setRetryAvailable(false);
+    await sendQuery(text, false, 0, undefined, false);
+  }, [aiEnabled, isMountedRef, pendingSendRef, processingRef, sendQuery, sessionRef, setRetryAvailable]);
+
   return {
     cancelAI,
     handleSend,
     resetChat,
+    retryLastQuery,
   };
 }

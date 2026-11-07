@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -21,6 +22,7 @@ import { useAIChatExternalEffects } from "./useAIChatExternalEffects";
 import { useAIChatRequestExecutor } from "./useAIChatRequestExecutor";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
 import { useAIChatTypingAction } from "./useAIChatTypingAction";
+import { takeAIChatFailedQuery, type AIChatFailedQuery } from "./ai-chat-manual-retry";
 
 type UseAIChatStateOptions = {
   aiEnabled: boolean;
@@ -36,6 +38,7 @@ type AIChatLocalState = {
   isProcessing: boolean;
   isTyping: boolean;
   query: string;
+  retryAvailable: boolean;
   slowNotice: boolean;
   streamingText: string;
 };
@@ -46,6 +49,7 @@ type AIChatLocalStateAction =
   | { type: "setIsProcessing"; value: SetStateAction<boolean> }
   | { type: "setIsTyping"; value: SetStateAction<boolean> }
   | { type: "setQuery"; value: SetStateAction<string> }
+  | { type: "setRetryAvailable"; value: SetStateAction<boolean> }
   | { type: "setSlowNotice"; value: SetStateAction<boolean> }
   | { type: "setStreamingText"; value: SetStateAction<string> };
 
@@ -55,6 +59,7 @@ const AI_CHAT_INITIAL_LOCAL_STATE: AIChatLocalState = {
   isProcessing: false,
   isTyping: false,
   query: "",
+  retryAvailable: false,
   slowNotice: false,
   streamingText: "",
 };
@@ -80,6 +85,8 @@ function aiChatLocalStateReducer(
       return { ...state, isTyping: resolveStateActionValue(state.isTyping, action.value) };
     case "setQuery":
       return { ...state, query: resolveStateActionValue(state.query, action.value) };
+    case "setRetryAvailable":
+      return { ...state, retryAvailable: resolveStateActionValue(state.retryAvailable, action.value) };
     case "setSlowNotice":
       return { ...state, slowNotice: resolveStateActionValue(state.slowNotice, action.value) };
     case "setStreamingText":
@@ -113,6 +120,7 @@ export function useAIChatState({
     isProcessing,
     isTyping,
     query,
+    retryAvailable,
     slowNotice,
     streamingText,
   } = localState;
@@ -131,6 +139,9 @@ export function useAIChatState({
   const setQuery = useCallback((value: SetStateAction<string>) => {
     dispatchLocalState({ type: "setQuery", value });
   }, []);
+  const setRetryAvailable = useCallback((value: SetStateAction<boolean>) => {
+    dispatchLocalState({ type: "setRetryAvailable", value });
+  }, []);
   const setSlowNotice = useCallback((value: SetStateAction<boolean>) => {
     dispatchLocalState({ type: "setSlowNotice", value });
   }, []);
@@ -140,6 +151,7 @@ export function useAIChatState({
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const failedQueryRef = useRef<AIChatFailedQuery | null>(null);
   const {
     abortActiveRequest,
     clearRetryTimers,
@@ -162,6 +174,7 @@ export function useAIChatState({
   }, [setMessages]);
 
   const cancelAISearch = useCallback((incrementSession = true) => {
+    failedQueryRef.current = null;
     if (incrementSession) {
       sessionRef.current += 1;
     }
@@ -176,6 +189,7 @@ export function useAIChatState({
       setStreamingText("");
       setSlowNotice(false);
       setGateNotice(null);
+      setRetryAvailable(false);
     }
 
     processingRef.current = false;
@@ -196,10 +210,15 @@ export function useAIChatState({
     setGateNotice,
     setIsProcessing,
     setIsThinking,
+    setRetryAvailable,
     setSlowNotice,
     setStreamingText,
     stopTyping,
   ]);
+
+  useEffect(() => {
+    if (!aiEnabled) cancelAISearch(true);
+  }, [aiEnabled, cancelAISearch]);
 
   const updateQuery = useCallback((value: string) => {
     const normalized = normalizeAIChatQueryInput(value);
@@ -257,6 +276,12 @@ export function useAIChatState({
     slowNoticeTimerRef,
   ]);
 
+  const onRetryableFailure = useCallback((text: string, sessionId: number) => {
+    if (!isMountedRef.current || sessionRef.current !== sessionId) return;
+    failedQueryRef.current = { text, sessionId };
+    setRetryAvailable(true);
+  }, [isMountedRef, sessionRef, setRetryAvailable]);
+
   const executeSearch = useAIChatRequestExecutor({
     abortActiveRequest,
     appendMessage,
@@ -277,26 +302,16 @@ export function useAIChatState({
     startTyping,
     timeoutMs,
     unregisterRetryTimer,
+    onRetryableFailure,
   });
 
-  const handleSend = useCallback(async () => {
-    if (!aiEnabled) {
-      return;
-    }
-    const trimmed = query.trim();
-    if (!trimmed || processingRef.current) {
-      return;
-    }
-    if (isAIChatQueryOverLimit(query)) {
-      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
-      return;
-    }
-
+  const sendQuery = useCallback(async (text: string, recordUserMessage: boolean) => {
+    if (!aiEnabled || !isMountedRef.current || processingRef.current) return;
     cancelAISearch(false);
     sessionRef.current += 1;
     const sessionId = sessionRef.current;
 
-    setQuery("");
+    if (recordUserMessage) setQuery("");
     setGateNotice(null);
     setSlowNotice(false);
     setAiStatus("SEARCHING");
@@ -305,26 +320,28 @@ export function useAIChatState({
     setIsThinking(true);
     setIsTyping(false);
 
-    appendMessage({
-      role: "user",
-      content: trimmed,
-      timestamp: new Date().toISOString(),
-    });
+    if (recordUserMessage) {
+      appendMessage({
+        role: "user",
+        content: text,
+        timestamp: new Date().toISOString(),
+      });
+    }
 
     if (isMobile) {
       textareaRef.current?.blur();
     }
 
     startSlowNoticeWatch(sessionId);
-    await executeSearch(trimmed, sessionId, 0);
+    await executeSearch(text, sessionId, 0);
   }, [
     aiEnabled,
     appendMessage,
     cancelAISearch,
     executeSearch,
     isMobile,
+    isMountedRef,
     processingRef,
-    query,
     setAiStatus,
     setGateNotice,
     setIsProcessing,
@@ -335,6 +352,24 @@ export function useAIChatState({
     sessionRef,
     startSlowNoticeWatch,
   ]);
+
+  const handleSend = useCallback(async () => {
+    const trimmed = query.trim();
+    if (!trimmed || !aiEnabled || processingRef.current) return;
+    if (isAIChatQueryOverLimit(query)) {
+      setGateNotice(AI_CHAT_CHARACTER_LIMIT_NOTICE);
+      return;
+    }
+    await sendQuery(trimmed, true);
+  }, [aiEnabled, processingRef, query, sendQuery, setGateNotice]);
+
+  const retryLastQuery = useCallback(async () => {
+    if (!aiEnabled) return;
+    const text = takeAIChatFailedQuery(failedQueryRef, sessionRef.current, isMountedRef.current, processingRef.current);
+    if (text === null) return;
+    setRetryAvailable(false);
+    await sendQuery(text, false);
+  }, [aiEnabled, isMountedRef, processingRef, sendQuery, sessionRef, setRetryAvailable]);
 
   const messageFollow = useAIChatExternalEffects({
     aiStatus,
@@ -360,6 +395,8 @@ export function useAIChatState({
     messages,
     messagesRef,
     query,
+    retryAvailable,
+    retryLastQuery,
     setQuery: updateQuery,
     showActions: isProcessing || isTyping,
     slowNotice,

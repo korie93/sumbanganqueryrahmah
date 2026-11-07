@@ -1,0 +1,1356 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "a1d577a26ec09e42a9eadd665880e1c13c32568d",
+  "beforeBuild": "receipt-adaptive-build-1620df963bb5",
+  "afterBuild": "receipt-adaptive-build-20722597505e",
+  "builtClientFilesMatched": 2013,
+  "changedClientFilesSinceBefore": [
+    {
+      "name": "client/src/components/AIChat.tsx",
+      "sha256": "2155d74fbff0c53b5840281c6c92307f57401edd45609b29a83bd0e02aa493f9"
+    },
+    {
+      "name": "client/src/components/AIChatStatusAnnouncement.tsx",
+      "sha256": "abf808166a23411a9142eb40a33c2cd59408ff4d859796f292922c0e79bc0a75"
+    },
+    {
+      "name": "client/src/components/AIIconTooltip.tsx",
+      "sha256": "3712d8f3c8a5b32ea44bf9693f3c276b24510c99e97c4149e011ac4187ace4c3"
+    },
+    {
+      "name": "client/src/components/AIJumpToLatestButton.tsx",
+      "sha256": "56ef68de98e0af3589ebedaab6394d3cb7d6f26060b926c4f31418cef690756c"
+    },
+    {
+      "name": "client/src/components/FloatingAIPanel.tsx",
+      "sha256": "904f6445bfe6c5bedc27d014806bc49be1c02d7fb43bc97f785f9d6f7b7ffe39"
+    },
+    {
+      "name": "client/src/components/FloatingAITrigger.tsx",
+      "sha256": "36100f81d26413fe04941440234708d3910e5e3d2bf83cf7631557ac5843b671"
+    },
+    {
+      "name": "client/src/components/ai-chat-presentation-a11y.test.ts",
+      "sha256": "da269b0049b0c0f943ec01736a458d317a813100369b3fed7353d444891a779b"
+    },
+    {
+      "name": "client/src/components/floating-ai-a11y-contract.test.ts",
+      "sha256": "bbdef1cc30c18496d182bfb9c0f7e11480405fc851a4a97e412378fcb6f97155"
+    },
+    {
+      "name": "client/src/pages/AI.tsx",
+      "sha256": "af85e05bd054a6d9db36c1e1de47d17173a55590f8af41aa6c71596de802f659"
+    },
+    {
+      "name": "client/src/pages/ai/AIConversationCard.tsx",
+      "sha256": "60ab65171bf25c52812d680ce5d74666377c61386d50dbbf3b6a8c362fcb3eb7"
+    },
+    {
+      "name": "client/src/styles/ai.css",
+      "sha256": "4dd29f9cd4e6a14cbfd7277a46ea19162037871e1f17f89d62500ece250b1ab2"
+    }
+  ],
+  "clientTests": {
+    "cancelled": 0,
+    "fail": 0,
+    "pass": 170,
+    "skipped": 0,
+    "suites": 0,
+    "tests": 170,
+    "todo": 0
+  },
+  "browserTests": 54,
+  "cspCases": 24,
+  "axeCases": 12,
+  "referenceImages": [
+    {
+      "path": "C:/Users/Administrator/Downloads/1000331073.jpg",
+      "bytes": 104215,
+      "sha256": "6fdb2342ed1d7cfe1d1d8e794cc908c8ed8ac79866635acbe78160016920092a"
+    },
+    {
+      "path": "C:/Users/Administrator/Downloads/1000331072.jpg",
+      "bytes": 12021,
+      "sha256": "3f010130b567c4b88c43c5a4614085350e38086bb33f2ee5207fc412b872f31b"
+    }
+  ],
+  "runs": [
+    {
+      "args": [
+        "lint",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-e1cd2452a124",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "types-focused",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-91ddf022bdae",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "crowded",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-6e312d964b90",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "full",
+        "light",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-893682f68778",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "full",
+        "light",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-cf6e2f7ae60b",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "full",
+        "dark",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-cd783d461acf",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "full",
+        "dark",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-d4b46ff047c2",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "floating",
+        "light",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-1bcc1cea5656",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "floating",
+        "light",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-bbd67f28d71d",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "floating",
+        "dark",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-53f7e65f0354",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-reference",
+        "floating",
+        "dark",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-a727c308bf9d",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-b8ecfbaf0437",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "light",
+        "medium"
+      ],
+      "runId": "receipt-adaptive-tests-086645517793",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "light",
+        "wide"
+      ],
+      "runId": "receipt-adaptive-tests-b2f34d992954",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "floating",
+        "light",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-2dd1c952f4e6",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-8fb2ffbcafd5",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "dark",
+        "medium"
+      ],
+      "runId": "receipt-adaptive-tests-46590b5eeb4f",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "full",
+        "dark",
+        "wide"
+      ],
+      "runId": "receipt-adaptive-tests-e81d9abd2efe",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "behavior",
+        "floating",
+        "dark",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-895d038c7e9a",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "status",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-a7b092b8fc10",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "status",
+        "floating"
+      ],
+      "runId": "receipt-adaptive-tests-c821c5067411",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "extremes",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-9c12ebe2c9bb",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "extremes",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-421c3470c517",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "evidence",
+        "light",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-030acb2886d3",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "evidence",
+        "light",
+        "1920"
+      ],
+      "runId": "receipt-adaptive-tests-b5174cd2863c",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "evidence",
+        "dark",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-ad18af726cf3",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "evidence",
+        "dark",
+        "1920"
+      ],
+      "runId": "receipt-adaptive-tests-bf872d4d4ff3",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-compact",
+        "full",
+        "light",
+        "1366"
+      ],
+      "runId": "receipt-adaptive-tests-7ff80d9fddaf",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-compact",
+        "floating",
+        "dark",
+        "375"
+      ],
+      "runId": "receipt-adaptive-tests-e230039ea179",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "motion"
+      ],
+      "runId": "receipt-adaptive-tests-dd9957d263c7",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-1ba5634f669b",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "motion"
+      ],
+      "runId": "receipt-adaptive-tests-788407b12b83",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-c5e5bf51b31d",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-e92dc207cde1",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "full",
+        "dark",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-d8d4f2742a99",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "light",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-19887b811498",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-composer",
+        "floating",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-73afebd4da80",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher"
+      ],
+      "runId": "receipt-adaptive-tests-a5f720564649",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "browser",
+        "data",
+        "ai-full"
+      ],
+      "runId": "receipt-adaptive-tests-bc863789b82b",
+      "exitCode": 0,
+      "budgetFailure": null
+    },
+    {
+      "args": [
+        "browser",
+        "data",
+        "ai-float"
+      ],
+      "runId": "receipt-adaptive-tests-19b4203b4310",
+      "exitCode": 0,
+      "budgetFailure": null
+    }
+  ],
+  "checks": [
+    {
+      "args": [
+        "tests",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-chat-presentation-a11y.test.ts",
+        "client/src/components/ai-chat-session-guards.test.ts",
+        "client/src/components/ai-chat-utils.test.ts",
+        "client/src/components/ai-loading-skeleton-contract.test.tsx",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/components/ai-message-sanitizer.test.ts",
+        "client/src/components/ai-query-keyboard.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/floating-ai-accessibility.test.ts",
+        "client/src/components/floating-ai-dom-utils.test.ts",
+        "client/src/components/floating-ai-idle-launcher.contract.test.ts",
+        "client/src/components/floating-ai-layout.test.ts",
+        "client/src/components/floating-ai-runtime-loader.test.ts",
+        "client/src/components/floating-ai-scroll-lock.test.ts",
+        "client/src/components/floating-ai-shell-placement.test.tsx",
+        "client/src/components/floating-ai-status.test.ts",
+        "client/src/components/floating-ai-trigger-placement.test.ts",
+        "client/src/components/floating-ai-visibility.test.ts",
+        "client/src/components/useAIChatRuntimeRefs.test.ts",
+        "client/src/components/useAIChatState.contract.test.ts",
+        "client/src/components/useAIChatTypingAction.contract.test.ts",
+        "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+        "client/src/components/useFloatingAILayoutState.contract.test.ts",
+        "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts",
+        "client/src/pages/ai/ai-page-controller-structure.contract.test.ts",
+        "client/src/pages/ai/ai-page-controller-utils.test.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "client/src/hooks/ai-message-follow.test.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "scripts/tests/ai-css-accessibility.test.mjs"
+      ],
+      "runId": "receipt-adaptive-tests-bb5319d17903",
+      "exitCode": 0,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 170,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 170,
+        "todo": 0
+      }
+    },
+    {
+      "args": [
+        "lint",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIJumpToLatestButton.tsx",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/FloatingAIPanel.tsx",
+        "client/src/components/FloatingAITrigger.tsx",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/useAIChatRequestExecutor.ts",
+        "client/src/components/useAIChatState.ts",
+        "client/src/pages/AI.tsx",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/pages/ai/useAIPageActions.ts",
+        "client/src/pages/ai/useAIPageController.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "client/src/pages/ai/useAIPageState.ts",
+        "tests/visual/ai-compact-layout.spec.ts",
+        "client/src/components/AIChatStatusAnnouncement.tsx",
+        "client/src/components/AIIconTooltip.tsx",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-chat-manual-retry.ts",
+        "client/src/components/ai-chat-presentation-a11y.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "client/src/hooks/auto-grow-textarea.ts",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-reading-polish.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-c5ab101af6c4",
+      "exitCode": 0,
+      "counts": {}
+    },
+    {
+      "args": [
+        "types-focused",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIJumpToLatestButton.tsx",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/FloatingAIPanel.tsx",
+        "client/src/components/FloatingAITrigger.tsx",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/useAIChatRequestExecutor.ts",
+        "client/src/components/useAIChatState.ts",
+        "client/src/pages/AI.tsx",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/pages/ai/useAIPageActions.ts",
+        "client/src/pages/ai/useAIPageController.ts",
+        "client/src/pages/ai/useAIPageState.reducer.test.ts",
+        "client/src/pages/ai/useAIPageState.ts",
+        "tests/visual/ai-compact-layout.spec.ts",
+        "client/src/components/AIChatStatusAnnouncement.tsx",
+        "client/src/components/AIIconTooltip.tsx",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/ai-chat-manual-retry.ts",
+        "client/src/components/ai-chat-presentation-a11y.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "client/src/hooks/auto-grow-textarea.ts",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "tests/visual/ai-composer-polish.spec.ts",
+        "tests/visual/ai-reading-polish.spec.ts",
+        "tests/visual/ai-retry-boundaries.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-39cdc763bdd7",
+      "exitCode": 0,
+      "counts": {}
+    },
+    {
+      "args": [
+        "build"
+      ],
+      "runId": "receipt-adaptive-build-20722597505e",
+      "exitCode": 0,
+      "counts": {}
+    }
+  ],
+  "geometry": [
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-030acb2886d3",
+      "theme": "light",
+      "width": 1366,
+      "empty": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 271.59375,
+        "inputHeight": 46,
+        "inputBottom": 254.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "short": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 422.78125,
+        "inputHeight": 46,
+        "inputBottom": 405.78125,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "long": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 569,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 877,
+        "inputHeight": 46,
+        "inputBottom": 860,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "draft": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 425,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 877,
+        "inputHeight": 142,
+        "inputBottom": 860,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      }
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b5174cd2863c",
+      "theme": "light",
+      "width": 1920,
+      "empty": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 271.59375,
+        "inputHeight": 46,
+        "inputBottom": 254.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "short": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 422.78125,
+        "inputHeight": 46,
+        "inputBottom": 405.78125,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "long": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 749,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 1057,
+        "inputHeight": 46,
+        "inputBottom": 1040,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "draft": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 605,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 1057,
+        "inputHeight": 142,
+        "inputBottom": 1040,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-ad18af726cf3",
+      "theme": "dark",
+      "width": 1366,
+      "empty": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 271.59375,
+        "inputHeight": 46,
+        "inputBottom": 254.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "short": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 422.78125,
+        "inputHeight": 46,
+        "inputBottom": 405.78125,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "long": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 569,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 877,
+        "inputHeight": 46,
+        "inputBottom": 860,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "draft": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 425,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 877,
+        "inputHeight": 142,
+        "inputBottom": 860,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      }
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-bf872d4d4ff3",
+      "theme": "dark",
+      "width": 1920,
+      "empty": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 271.59375,
+        "inputHeight": 46,
+        "inputBottom": 254.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "short": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 422.78125,
+        "inputHeight": 46,
+        "inputBottom": 405.78125,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "long": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 749,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 1057,
+        "inputHeight": 46,
+        "inputBottom": 1040,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "draft": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 605,
+        "logScrollHeight": 2068,
+        "cardTop": 159.59375,
+        "cardBottom": 1057,
+        "inputHeight": 142,
+        "inputBottom": 1040,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-6a1506e9215d",
+      "theme": "light",
+      "width": 1366,
+      "empty": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 291.59375,
+        "inputHeight": 66,
+        "inputBottom": 274.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "short": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 442.78125,
+        "inputHeight": 66,
+        "inputBottom": 425.78125,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "long": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 775.59375,
+        "inputHeight": 66,
+        "inputBottom": 758.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "draft": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 895.59375,
+        "inputHeight": 138,
+        "inputBottom": 878.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      }
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-f1d02e853609",
+      "theme": "light",
+      "width": 1920,
+      "empty": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 291.59375,
+        "inputHeight": 66,
+        "inputBottom": 274.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "short": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 442.78125,
+        "inputHeight": 66,
+        "inputBottom": 425.78125,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "long": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 775.59375,
+        "inputHeight": 66,
+        "inputBottom": 758.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "draft": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 895.59375,
+        "inputHeight": 138,
+        "inputBottom": 878.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-cbfa6fb99093",
+      "theme": "dark",
+      "width": 1366,
+      "empty": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 291.59375,
+        "inputHeight": 66,
+        "inputBottom": 274.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "short": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 442.78125,
+        "inputHeight": 66,
+        "inputBottom": 425.78125,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "long": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 775.59375,
+        "inputHeight": 66,
+        "inputBottom": 758.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      },
+      "draft": {
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 895.59375,
+        "inputHeight": 138,
+        "inputBottom": 878.59375,
+        "scrollWidth": 1366,
+        "clientWidth": 1366
+      }
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-005e32ad5ccd",
+      "theme": "dark",
+      "width": 1920,
+      "empty": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 20,
+        "logScrollHeight": 20,
+        "cardTop": 159.59375,
+        "cardBottom": 291.59375,
+        "inputHeight": 66,
+        "inputBottom": 274.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "short": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 115,
+        "logScrollHeight": 115,
+        "cardTop": 159.59375,
+        "cardBottom": 442.78125,
+        "inputHeight": 66,
+        "inputBottom": 425.78125,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "long": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 775.59375,
+        "inputHeight": 66,
+        "inputBottom": 758.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      },
+      "draft": {
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "logHeight": 448,
+        "logScrollHeight": 2044,
+        "cardTop": 159.59375,
+        "cardBottom": 895.59375,
+        "inputHeight": 138,
+        "inputBottom": 878.59375,
+        "scrollWidth": 1920,
+        "clientWidth": 1920
+      }
+    }
+  ],
+  "profile": [
+    {
+      "round": 1,
+      "phase": "before",
+      "build": "receipt-adaptive-build-1620df963bb5",
+      "runId": "receipt-adaptive-tests-b4187b76aef7",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 841,
+      "completeMs": 3494,
+      "longTasks": 14,
+      "longTaskMaxMs": 213,
+      "longTaskTotalMs": 1286,
+      "taskSeconds": 3.332063
+    },
+    {
+      "round": 1,
+      "phase": "after",
+      "build": "receipt-adaptive-build-20722597505e",
+      "runId": "receipt-adaptive-tests-02fe2dfc0c98",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 794,
+      "completeMs": 3387,
+      "longTasks": 18,
+      "longTaskMaxMs": 191,
+      "longTaskTotalMs": 1648,
+      "taskSeconds": 3.1140540000000003
+    },
+    {
+      "round": 2,
+      "phase": "before",
+      "build": "receipt-adaptive-build-1620df963bb5",
+      "runId": "receipt-adaptive-tests-e546cade9686",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 724,
+      "completeMs": 3323,
+      "longTasks": 14,
+      "longTaskMaxMs": 232,
+      "longTaskTotalMs": 1227,
+      "taskSeconds": 3.023091
+    },
+    {
+      "round": 2,
+      "phase": "after",
+      "build": "receipt-adaptive-build-20722597505e",
+      "runId": "receipt-adaptive-tests-8ea6f39730c7",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 744,
+      "completeMs": 3280,
+      "longTasks": 14,
+      "longTaskMaxMs": 273,
+      "longTaskTotalMs": 1584,
+      "taskSeconds": 3.09451
+    },
+    {
+      "round": 3,
+      "phase": "before",
+      "build": "receipt-adaptive-build-1620df963bb5",
+      "runId": "receipt-adaptive-tests-b6b06f51d90a",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 821,
+      "completeMs": 3492,
+      "longTasks": 13,
+      "longTaskMaxMs": 315,
+      "longTaskTotalMs": 1362,
+      "taskSeconds": 3.2625420000000003
+    },
+    {
+      "round": 3,
+      "phase": "after",
+      "build": "receipt-adaptive-build-20722597505e",
+      "runId": "receipt-adaptive-tests-4024fd2a67c8",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 801,
+      "completeMs": 3393,
+      "longTasks": 13,
+      "longTaskMaxMs": 271,
+      "longTaskTotalMs": 1505,
+      "taskSeconds": 3.094781
+    }
+  ],
+  "firstProfile": [
+    {
+      "phase": "before",
+      "build": "receipt-adaptive-build-1620df963bb5",
+      "runId": "receipt-adaptive-tests-64af8b22b888",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 903,
+      "completeMs": 3410,
+      "longTasks": 13,
+      "longTaskMaxMs": 295,
+      "longTaskTotalMs": 1313,
+      "taskSeconds": 3.0164349999999995
+    },
+    {
+      "phase": "after",
+      "build": "receipt-adaptive-build-20722597505e",
+      "runId": "receipt-adaptive-tests-6e97c4612f56",
+      "cpu": 6,
+      "characters": 4000,
+      "outcome": "completed",
+      "firstTextMs": 1006,
+      "completeMs": 3776,
+      "longTasks": 18,
+      "longTaskMaxMs": 351,
+      "longTaskTotalMs": 2078,
+      "taskSeconds": 3.446347
+    }
+  ],
+  "profileSummary": {
+    "before": {
+      "firstTextMs": {
+        "median": 821,
+        "min": 724,
+        "max": 841
+      },
+      "completeMs": {
+        "median": 3492,
+        "min": 3323,
+        "max": 3494
+      },
+      "longTasks": {
+        "median": 14,
+        "min": 13,
+        "max": 14
+      },
+      "longTaskMaxMs": {
+        "median": 232,
+        "min": 213,
+        "max": 315
+      },
+      "longTaskTotalMs": {
+        "median": 1286,
+        "min": 1227,
+        "max": 1362
+      },
+      "taskSeconds": {
+        "median": 3.2625420000000003,
+        "min": 3.023091,
+        "max": 3.332063
+      }
+    },
+    "after": {
+      "firstTextMs": {
+        "median": 794,
+        "min": 744,
+        "max": 801
+      },
+      "completeMs": {
+        "median": 3387,
+        "min": 3280,
+        "max": 3393
+      },
+      "longTasks": {
+        "median": 14,
+        "min": 13,
+        "max": 18
+      },
+      "longTaskMaxMs": {
+        "median": 271,
+        "min": 191,
+        "max": 273
+      },
+      "longTaskTotalMs": {
+        "median": 1584,
+        "min": 1505,
+        "max": 1648
+      },
+      "taskSeconds": {
+        "median": 3.094781,
+        "min": 3.09451,
+        "max": 3.1140540000000003
+      }
+    }
+  },
+  "limits": "All target execution in existing bounded bwrap. Synthetic local static frontend/HTTP only. Chromium emulated viewports/CPU/text scale; not physical hardware, browser zoom or actual AT speech. Focused TypeScript, not full-project CI. No production or backend validation.",
+  "scope": "Four approved AI chat polish changes plus the user-supplied reference composer (one-to-five-row pill and external unboxed filled send icon); no new dependencies/backend/navigation/permission changes. Previous composer/retry changes remain uncommitted. No commit/push/deploy."
+}
