@@ -159,7 +159,7 @@ test("collapsed desktop artwork lazy loads behind a genuine static Q instead of 
   const artwork = readSource("SidebarAnimatedQ.tsx");
   assert.match(artwork, /className="workspace-sidebar-toggle-logo sidebar-q-artwork"/);
   assert.match(artwork, /aria-hidden="true" data-motion=\{state\}/);
-  assert.match(artwork, /className="sidebar-q-static" src="\/brand\/sidebar-q-static\.png"/);
+  assert.match(artwork, /className="sidebar-q-static" src=\{dotsHidden \? "\/brand\/sidebar-q-body\.png" : "\/brand\/sidebar-q-static\.png"\}/);
   assert.match(artwork, /const ready = loaded === ALL_LOADED && !failed/);
   assert.match(artwork, /onError=\{\(\) => setFailed\(true\)\}/);
   assert.match(artwork, /!failed && <span className="sidebar-q-layers"/);

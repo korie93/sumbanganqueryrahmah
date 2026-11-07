@@ -16,6 +16,28 @@
 
 .sidebar-q-artwork img { object-fit: contain; }
 
+.sidebar-q-dot-cluster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+
+.sidebar-q-artwork[data-dots-hidden="true"] .sidebar-q-dot-cluster {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-q-dot-cluster {
+    transition: opacity 180ms ease-out;
+  }
+
+  .low-spec .sidebar-q-artwork .sidebar-q-dot-cluster {
+    transition: opacity 180ms ease-out !important;
+  }
+}
+
 .sidebar-q-layers {
   visibility: hidden;
 }

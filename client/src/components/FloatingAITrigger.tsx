@@ -1,5 +1,6 @@
-import type { MouseEventHandler, Ref } from "react";
-import { Bot, LoaderCircle } from "lucide-react";
+import { lazy, Suspense, useEffect, useId, useState, type MouseEventHandler, type Ref } from "react";
+import { LoaderCircle } from "lucide-react";
+import { SQR_BRAND_ASSETS, SQR_BRAND_DIMENSIONS } from "@shared/brand-assets";
 import { Badge } from "@/components/ui/badge";
 import { FloatingTriggerShell } from "@/components/FloatingAIShell";
 import { AIIconTooltip, AIIconTooltipButton } from "@/components/AIIconTooltip";
@@ -7,6 +8,20 @@ import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import styles from "./FloatingAI.module.css";
+
+function StaticLauncherQ({ dotsHidden = false }: { dotsHidden?: boolean }) {
+  return <img src={dotsHidden ? "/brand/sidebar-q-body.png" : SQR_BRAND_ASSETS.transparentIcon}
+    width={SQR_BRAND_DIMENSIONS.icon.width} height={SQR_BRAND_DIMENSIONS.icon.height}
+    className={styles.floatingBrandImage} alt="" aria-hidden="true" decoding="async" draggable={false}
+    onError={({ currentTarget }) => {
+      if (!currentTarget.src.endsWith(SQR_BRAND_ASSETS.transparentIcon)) currentTarget.src = SQR_BRAND_ASSETS.transparentIcon;
+    }} />;
+}
+
+// Share the original sidebar artwork/motion chunk, with no blank loading frame.
+const LauncherAnimatedQ = lazy(() => import("./SidebarAnimatedQ")
+  .then((module) => ({ default: module.SidebarAnimatedQ }))
+  .catch(() => ({ default: StaticLauncherQ })));
 
 type FloatingAITriggerProps = {
   assistantLabel: string;
@@ -48,11 +63,20 @@ export function FloatingAITrigger({
     layoutState.triggerHidden
     && (isOpen || layoutState.shouldAutoMinimize);
   const showMinimizedStatus = !isOpen && isThinking && !layoutState.rootHidden && !isMobile;
+  const showUnreadBadge = !isOpen && unreadCount > 0;
+  const [lastUnreadCount, setLastUnreadCount] = useState(Math.max(1, unreadCount));
+  useEffect(() => { if (unreadCount > 0) setLastUnreadCount(unreadCount); }, [unreadCount]);
+  const visibleUnreadCount = unreadCount > 0 ? unreadCount : lastUnreadCount;
+  const unreadDescriptionId = useId();
+  const triggerDescriptionId = [
+    showMinimizedStatus ? minimizedStatusId : undefined,
+    showUnreadBadge ? unreadDescriptionId : undefined,
+  ].filter(Boolean).join(" ") || undefined;
 
   return (
     <FloatingTriggerShell
       className={cn(
-        "absolute flex flex-col gap-2 pointer-events-none",
+        "absolute flex flex-col gap-3 pointer-events-none",
         styles.floatingTriggerShell,
         layoutState.trigger.anchor === "left" ? "items-start" : "items-end",
         triggerHidden ? "translate-y-2 opacity-0" : "opacity-100",
@@ -70,37 +94,36 @@ export function FloatingAITrigger({
           {minimizedStatus}
         </div>
       ) : null}
-      <AIIconTooltip label={isLoading ? "Memuatkan bantuan AI." : isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}>
+      <AIIconTooltip sideOffset={16} label={isLoading ? "Memuatkan bantuan AI." : isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}>
         <AIIconTooltipButton
           ref={triggerButtonRef}
           type="button"
           onClick={handleTriggerToggleClick}
           aria-controls={panelId}
-          persistentDescriptionId={showMinimizedStatus ? minimizedStatusId : undefined}
+          persistentDescriptionId={triggerDescriptionId}
           aria-haspopup="dialog"
           aria-busy={isLoading || undefined}
           aria-label={isOpen ? `Kecilkan panel ${assistantLabel}` : `Buka panel ${assistantLabel}`}
           {...getAriaExpandedProps(isOpen)}
           className={cn(
-            "pointer-events-auto relative flex items-center justify-center rounded-full border transition-transform hover:scale-[1.03]",
+            "pointer-events-auto relative flex items-center justify-center",
             styles.floatingTriggerButton,
             isMobile ? "h-12 w-12" : "h-14 w-14",
             hideForFocusedEditable ? "pointer-events-none" : "",
             triggerHidden ? "pointer-events-none scale-95 opacity-0" : "",
-            !isOpen && isThinking ? styles.aiThinkingRing : "",
           )}
           data-testid="floating-ai-toggle"
         >
-          {isLoading
-            ? <LoaderCircle className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
-            : <Bot className="h-6 w-6" aria-hidden="true" />}
-          {!isOpen && unreadCount > 0 ? (
-            <Badge
-              className="absolute -right-1 -top-1 h-5 min-w-5 justify-center rounded-full bg-destructive px-1 text-xxs text-destructive-foreground"
-              data-testid="floating-ai-unread-badge"
-            >
-              {unreadCount > 99 ? "99+" : unreadCount}
+          <span className={styles.floatingBrandMark} data-floating-ai-artwork="true" aria-hidden="true">
+            {isLoading
+              ? <LoaderCircle className="h-6 w-6 motion-safe:animate-spin" aria-hidden="true" />
+              : <Suspense fallback={<StaticLauncherQ dotsHidden={showUnreadBadge} />}><LauncherAnimatedQ dotsHidden={showUnreadBadge} /></Suspense>}
+            <Badge className={styles.floatingUnreadBadge} data-active={showUnreadBadge} aria-hidden="true" data-testid="floating-ai-unread-badge">
+              {visibleUnreadCount > 99 ? "99+" : visibleUnreadCount}
             </Badge>
+          </span>
+          {showUnreadBadge ? (
+            <span id={unreadDescriptionId} className="sr-only">{unreadCount} mesej AI belum dibaca.</span>
           ) : null}
         </AIIconTooltipButton>
       </AIIconTooltip>

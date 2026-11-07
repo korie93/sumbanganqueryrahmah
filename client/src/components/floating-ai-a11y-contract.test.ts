@@ -86,7 +86,9 @@ test("floating AI dialog exposes boolean disclosure state and semantic heading",
   assert.match(triggerSource, /id=\{minimizedStatusId\}/);
   assert.match(triggerSource, /role="status"/);
   assert.match(triggerSource, /aria-live="polite"/);
-  assert.match(triggerSource, /persistentDescriptionId=\{showMinimizedStatus \? minimizedStatusId : undefined\}/);
+  assert.match(triggerSource, /persistentDescriptionId=\{triggerDescriptionId\}/);
+  assert.match(triggerSource, /showMinimizedStatus \? minimizedStatusId : undefined/);
+  assert.match(triggerSource, /showUnreadBadge \? unreadDescriptionId : undefined/);
   assert.match(panelSource, /Bantuan untuk koleksi dan rekod SQR\./);
   assert.match(source, /const modalDialogA11yProps = isMobile/);
   assert.match(focusSource, /onEscapeKeyDown: handleMinimize/);
@@ -169,7 +171,8 @@ test("floating AI motion and scroll styles include accessibility fallbacks", () 
     assert.ok(floatingCss.includes(`max-height: min(var(--floating-ai-panel-height, 460px), calc(100${unit} - 5rem));`));
   }
   assert.match(floatingCss, /height:\s*var\(--floating-ai-panel-height, 100vh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100svh\);[\s\S]*height:\s*var\(--floating-ai-panel-height, 100dvh\);/);
-  assert.match(floatingCss, /\.aiThinkingRing::after[\s\S]*animation:\s*none/);
+  assert.match(floatingCss, /\.floatingBrandMark\s*\{[\s\S]*transition:\s*none/);
+  assert.doesNotMatch(readComponentSource("FloatingAITrigger.tsx"), /aiThinkingRing/);
 });
 
 test("viewport fallback only reaches 100vh when dvh and svh are unsupported", () => {

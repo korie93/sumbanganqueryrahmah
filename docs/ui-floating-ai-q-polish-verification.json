@@ -1,0 +1,496 @@
+{
+  "date": "2026-11-07",
+  "baseCommit": "3ead9194552b3b9f581e69f0ea69effe7def0b1a",
+  "beforeBuild": "receipt-adaptive-build-d299f82aac3b",
+  "afterBuild": "receipt-adaptive-build-0688cdabf611",
+  "matchedClientFiles": 2013,
+  "policy": "Original transparent Q;36/40px;hover/focus artwork scales1.1 over220ms, unchanged48/56px click target. Unread ALWAYS visible while unread; dot group/counter crossfade180ms; original dots return after reading. Reduced motion keeps state without movement.",
+  "sourceFiles": [
+    {
+      "name": "client/src/components/AIIconTooltip.tsx",
+      "sha256": "d71697a03454d1e1bd9464c40ab38d41db69d3ca114a6e499360efae60476367"
+    },
+    {
+      "name": "client/src/components/FloatingAITrigger.tsx",
+      "sha256": "8710c1ac92394dea6ff82601492d07697b1ff19f6810e9e8344f59be389235bd"
+    },
+    {
+      "name": "client/src/components/FloatingAI.module.css",
+      "sha256": "2f7ae5e7db1439d9f2d4f1da16e2062aebf9a5e96a95a8620051ea90296f730e"
+    },
+    {
+      "name": "client/src/components/SidebarAnimatedQ.tsx",
+      "sha256": "352f3e06e049088e3080840164e4a0dd6ae5ac39f457bdec9178004e7e89c919"
+    },
+    {
+      "name": "client/src/components/SidebarAnimatedQ.css",
+      "sha256": "b0315c3c5e7a8be0fc4dfa460729ef54e540cf094a3074ba7ea9636078991160"
+    },
+    {
+      "name": "client/src/components/floating-ai-a11y-contract.test.ts",
+      "sha256": "f248e6e5d216a8bf6889f6a35dd1375cffd61193682bbd749691f73e6cf743e5"
+    },
+    {
+      "name": "client/src/components/navbar-a11y-contract.test.ts",
+      "sha256": "ff24a75bd9f1aaf925da3a16d89bc3328f4c269f527a82df124b717ce577107b"
+    },
+    {
+      "name": "tests/visual/floating-ai-launcher.spec.ts",
+      "sha256": "ef05699b8224192ac0a5ac4f9f317eeb46fba2298d80b115b1bd77548fbb8ac0"
+    },
+    {
+      "name": "tests/visual/floating-ai-motion-cascade.spec.ts",
+      "sha256": "4fe29a31cb215405692718338043d769eec0e347ec3ee71c0e6d65cbebf06d3a"
+    },
+    {
+      "name": "tests/visual/sidebar-animated-q.spec.ts",
+      "sha256": "7d166636d2e89861e60abb8d489aec5d6590f5080ed0f011b35a3153b5b880c0"
+    }
+  ],
+  "unitTests": {
+    "cancelled": 0,
+    "fail": 0,
+    "pass": 35,
+    "skipped": 0,
+    "suites": 0,
+    "tests": 35,
+    "todo": 0
+  },
+  "browserTests": 21,
+  "cspCases": 12,
+  "axeCases": 6,
+  "motion": [
+    {
+      "low": false,
+      "reduced": false,
+      "measured": {
+        "hover": "0.22s",
+        "dots": "0.18s",
+        "badge": "0.18s"
+      }
+    },
+    {
+      "low": true,
+      "reduced": false,
+      "measured": {
+        "hover": "0.22s",
+        "dots": "0.18s",
+        "badge": "0.18s"
+      }
+    }
+  ],
+  "runs": [
+    {
+      "args": [
+        "tests",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/brand-logo-a11y-contract.test.tsx",
+        "client/src/components/navbar-a11y-contract.test.ts",
+        "client/src/components/floating-ai-trigger-placement.test.ts",
+        "client/src/styles/global-motion-contract.test.ts",
+        "client/src/components/ai-chat-presentation-a11y.test.ts"
+      ],
+      "runId": "receipt-adaptive-tests-9ec6bd1ec351",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 35,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 35,
+        "todo": 0
+      }
+    },
+    {
+      "args": [
+        "lint",
+        "client/src/components/FloatingAITrigger.tsx",
+        "client/src/components/AIIconTooltip.tsx",
+        "client/src/components/SidebarAnimatedQ.tsx",
+        "client/src/components/navbar-a11y-contract.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "tests/visual/floating-ai-launcher.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-231f05cab080",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "types-focused",
+        "client/src/components/FloatingAITrigger.tsx",
+        "client/src/components/AIIconTooltip.tsx",
+        "client/src/components/SidebarAnimatedQ.tsx",
+        "client/src/components/navbar-a11y-contract.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "tests/visual/floating-ai-launcher.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-8481660cc2ff",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "build"
+      ],
+      "runId": "receipt-adaptive-build-0688cdabf611",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "composition-dark"
+      ],
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "q-light"
+      ],
+      "runId": "receipt-adaptive-tests-a67ec98f1a2e",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "q-dark"
+      ],
+      "runId": "receipt-adaptive-tests-478fa8e1cc09",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "q-fallback"
+      ],
+      "runId": "receipt-adaptive-tests-dc313c375c43",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "existing"
+      ],
+      "runId": "receipt-adaptive-tests-61f0dcdac541",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "composition-light"
+      ],
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "lint",
+        "tests/visual/floating-ai-launcher.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-ab9dba8e36cd",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "types-focused",
+        "tests/visual/floating-ai-launcher.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-fcd45d338dc3",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "browser",
+        "data",
+        "ai-float"
+      ],
+      "runId": "receipt-adaptive-tests-b65b9afc7141",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "lint",
+        "tests/visual/floating-ai-motion-cascade.spec.ts",
+        "tests/visual/sidebar-animated-q.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-fd06a654fd12",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "types-focused",
+        "tests/visual/floating-ai-motion-cascade.spec.ts",
+        "tests/visual/sidebar-animated-q.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-b75485b8ff3f",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "motion-cascade"
+      ],
+      "runId": "receipt-adaptive-tests-ae8b30bb773d",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "q-sidebar"
+      ],
+      "runId": "receipt-adaptive-tests-38a5f017e2e0",
+      "exitCode": 0,
+      "budgetFailure": null,
+      "counts": {}
+    }
+  ],
+  "before": [
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "composition-light"
+      ],
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 25.604,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-46c2e12be512"
+    },
+    {
+      "args": [
+        "e2e",
+        "launcher",
+        "composition-dark"
+      ],
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 24.2,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-8141ad2aaf0f"
+    }
+  ],
+  "screenshots": [
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-1366-idle.jpg",
+      "bytes": 1937,
+      "sha256": "9433103fc8e67b2f2a4e2085df2db0400e61b6288c6bff89eaa92693934da008"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-1366-unread.jpg",
+      "bytes": 2065,
+      "sha256": "da5c04a2bd9a0c9d0b762fdf4091744b56768d622e989c7b9ecc80f87c9407f2"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-1366-wide-count.jpg",
+      "bytes": 2189,
+      "sha256": "bd5439c62922eb68d6b74abc085b1a5f827f9d9b7b455fc7fd3b617712c2c068"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-375-idle.jpg",
+      "bytes": 1740,
+      "sha256": "93fd1cb5a6422b8c06faab240757c5e0dfc3826027baf86733d9df0b696176ca"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-375-unread.jpg",
+      "bytes": 1928,
+      "sha256": "3ae2e142b90227885b89f8b58971e6a2ff5ffcb1ccb6ef3e7e7e4aadeefc9bdd"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1862d6d1a537",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1862d6d1a537/ai-q-composition-dark-375-wide-count.jpg",
+      "bytes": 2067,
+      "sha256": "f0452b74a2920d38b78ece8a5d54a1268fbcdd274a68eb99c53e32eaab558e6e"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-1366-idle.jpg",
+      "bytes": 1963,
+      "sha256": "c1be93cffb954bca6c7a03e19669fc832a88c4290c0c7291ea1f16bd71d8c2e7"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-1366-unread.jpg",
+      "bytes": 2119,
+      "sha256": "e14095a5c0947e200ae81a42f9eb8205e1223e41afde9fc0c661ee341a079c7c"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-1366-wide-count.jpg",
+      "bytes": 2241,
+      "sha256": "cbdc1be4005ffce1bb6f3f50846fbd42b7eb7d2d618033eec93149f300bea590"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-375-idle.jpg",
+      "bytes": 1765,
+      "sha256": "3b1bf6378ffcc52dd327776a9b34ec99c047e648c2d42d136da225bcb873175c"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-375-unread.jpg",
+      "bytes": 1978,
+      "sha256": "b04c11711e932273fd4a1995249968f3148efc76dc0e3879c3e9d5051f9786de"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-b80fcf93cbad",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-b80fcf93cbad/ai-q-composition-light-375-wide-count.jpg",
+      "bytes": 2122,
+      "sha256": "87b0172d27b52a975597b3957d94bed3167da176dd876bd66742751e579f85c1"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-1366-idle.jpg",
+      "bytes": 1635,
+      "sha256": "b2b22458c1832410e44281f89dea57cf37db60215301ff7a5cffadbb4030f6be"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-1366-unread.jpg",
+      "bytes": 1947,
+      "sha256": "8dfaf18be8f5bb3aa3822e4c7be4e4497fb036237eeba9fc010f319c4115cce4"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-1366-wide-count.jpg",
+      "bytes": 2169,
+      "sha256": "9c473a124a681087a54ddc1a730c63408a4dfed99cf4502390df03a37aef1310"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-375-idle.jpg",
+      "bytes": 1684,
+      "sha256": "7ce991b664e78b307c3b80fcfa53698bb7b1568ea9034b59af7beb8b23dab809"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-375-unread.jpg",
+      "bytes": 1985,
+      "sha256": "08fa0832d448721bd4a5dcd640beaea0ad18465e0966aeb67c2bb441b6527591"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-46c2e12be512",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-46c2e12be512/ai-q-composition-light-375-wide-count.jpg",
+      "bytes": 2215,
+      "sha256": "1c48d658ed1b202c25d9a312d95caa7e51677ae3f23d1df334566f2315bdba30"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-1366-idle.jpg",
+      "bytes": 1607,
+      "sha256": "21726fcae51f19f14261f368326dc9ddeadb0aea7e6cee6079bb62c4031cc393"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-1366-unread.jpg",
+      "bytes": 1918,
+      "sha256": "1577416ae56cbf1f85ed5ac353f525969a4c86bbb6d9ca53e949f34403cb2f83"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-1366-wide-count.jpg",
+      "bytes": 2142,
+      "sha256": "a1599eeb1e5dbafaa5b846c80cb9dcd3b1778da524af6ce878392f9be3e5f58b"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-375-idle.jpg",
+      "bytes": 1661,
+      "sha256": "d9e2b48273dd2ad7a8ac5b06d284ae763dc0ef1d502d65549ca48abcf82b5fd9"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-375-unread.jpg",
+      "bytes": 1965,
+      "sha256": "adc9eb3992c5163de6d1c330f33f230144f6678edd0e4418c7911f2852e2b890"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-8141ad2aaf0f",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-8141ad2aaf0f/ai-q-composition-dark-375-wide-count.jpg",
+      "bytes": 2189,
+      "sha256": "69fd0d12d6a5b097033134c2605b29fd7c5b5b11d4ff7696e4901e5074f725c9"
+    }
+  ],
+  "diagnostics": [
+    {
+      "runId": "receipt-adaptive-tests-244a3c498cb5",
+      "issue": "99+ counter had27 visible-body samples inside the1.5px safety margin; moved counter2px upward, zero-overlap assertion retained."
+    },
+    {
+      "runId": "receipt-adaptive-tests-40659c1543e4",
+      "issue": "Sidebar fixture omitted navigator.onLine; production offline guard rejected mocked Collection-session fetch. Nativefalse confirmed by fresh probe; test-onlyonlineinit now passes all3 roles. Productionauth unchanged."
+    }
+  ],
+  "limits": "Synthetic same-origin frontend in unchanged bounded WSL bwrap. CPU4x/6x is emulation, not FPS/physical-device guarantee. Actual1-unread flow;99+ is labeled DOM presentation stress, not100 backend requests. Focused TypeScript, not full CI or full WCAG. No production data/credentials, backend/permissions/assets/dependencies/navigation changes. No commit/push/deploy."
+}

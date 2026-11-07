@@ -152,10 +152,111 @@
 }
 
 .floatingTriggerButton {
+  /* Only the original transparent Q is visible; the hit target stays full size. */
+  --floating-ai-trigger-bg: transparent;
+  --floating-ai-trigger-text: hsl(var(--foreground));
+  --floating-ai-trigger-border: transparent;
+  --floating-ai-trigger-shadow: none;
   color: var(--floating-ai-trigger-text, hsl(var(--primary-foreground)));
   background: var(--floating-ai-trigger-bg, hsl(var(--primary)));
   border-color: var(--floating-ai-trigger-border, hsl(var(--primary) / 0.72));
   box-shadow: var(--floating-ai-trigger-shadow, 0 18px 35px hsl(var(--primary) / 0.28));
+}
+
+.floatingBrandMark {
+  --floating-q-inset: 6px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  pointer-events: none;
+}
+
+.floatingBrandMark > :global(.sidebar-q-artwork),
+.floatingBrandImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .floatingBrandMark {
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    transform-origin: center;
+  }
+
+  /* One small compositor transform remains smooth in low-spec mode too. */
+  :global(.low-spec) .floatingBrandMark {
+    transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .floatingTriggerButton:focus-visible .floatingBrandMark {
+    transform: scale(1.1);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .floatingTriggerButton:hover .floatingBrandMark {
+      transform: scale(1.1);
+    }
+  }
+
+  .floatingTriggerButton:active .floatingBrandMark {
+    transform: scale(1.02);
+  }
+
+  .floatingUnreadBadge {
+    transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s 180ms;
+  }
+
+  :global(.low-spec) .floatingUnreadBadge {
+    transition: opacity 180ms ease-out, transform 180ms cubic-bezier(0.16, 1, 0.3, 1), visibility 0s 180ms !important;
+  }
+
+  .floatingUnreadBadge[data-active="true"] {
+    transition-delay: 0s;
+  }
+
+  :global(.low-spec) .floatingUnreadBadge[data-active="true"] {
+    transition-delay: 0s !important;
+  }
+}
+
+/* The count replaces the dot cluster, within the unchanged trigger footprint. */
+.floatingUnreadBadge {
+  position: absolute;
+  top: calc(-7px - var(--floating-q-inset));
+  right: calc(0px - var(--floating-q-inset));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 2px;
+  box-sizing: border-box;
+  border: 1px solid hsl(var(--background));
+  border-radius: 5px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: scale(0.9);
+  transform-origin: bottom right;
+}
+
+.floatingUnreadBadge[data-active="true"] {
+  opacity: 1;
+  visibility: visible;
+  transform: scale(1);
 }
 
 .floatingMobileBackdrop {
@@ -176,32 +277,24 @@
   }
 }
 
-.aiThinkingRing {
-  position: relative;
-  isolation: isolate;
-}
-
-.aiThinkingRing::after {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: inherit;
-  border: 2px solid var(--floating-ai-thinking-ring, hsl(var(--primary) / 0.22));
-  opacity: 0;
-  pointer-events: none;
-  transform: scale(0.92);
-  animation: pulseOutline 1.5s infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .aiThinkingRing::after {
-    animation: none;
-    opacity: 0.45;
+  .floatingBrandMark {
+    transition: none;
     transform: none;
+  }
+
+  .floatingUnreadBadge {
+    transition: none;
   }
 }
 
 @media (min-width: 768px) {
+  .floatingBrandMark {
+    --floating-q-inset: 8px;
+    width: 40px;
+    height: 40px;
+  }
+
   .floatingPanelShell {
     min-width: min(360px, calc(100% - (var(--floating-ai-edge-gap, 1.5rem) * 2)));
     /* The resolver already clamps height to available space on short screens. */
@@ -210,18 +303,5 @@
     max-height: min(var(--floating-ai-panel-height, 460px), calc(100vh - 6rem));
     max-height: min(var(--floating-ai-panel-height, 460px), calc(100svh - 6rem));
     max-height: min(var(--floating-ai-panel-height, 460px), calc(100dvh - 6rem));
-  }
-}
-
-@keyframes pulseOutline {
-  0% {
-    opacity: 0.72;
-    transform: scale(0.92);
-  }
-
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.14);
   }
 }

@@ -3,6 +3,14 @@ import { checkFixture, installFixture, nickname, openSave } from "./helpers/save
 
 test.use({ serviceWorkers: "block" });
 
+test.beforeEach(async ({ page }) => {
+  // Local HTTP fixtures model an available server even when the isolated
+  // loopback-only Chromium process reports its native connection as offline.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+  });
+});
+
 const onlineFavicon = "/brand/favicon-online-v2-32.png";
 const originalQ = "/brand/sidebar-q-static.png";
 
@@ -68,6 +76,7 @@ for (const role of ["admin", "user", "superuser"] as const) {
     const fixture = await installFixture(page, baseURL, { role });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/collection/save");
+    console.log("SIDEBAR_FIXTURE_NAVIGATOR_ONLINE=" + await page.evaluate(() => navigator.onLine));
     await readyRoleSave(page, role);
     const button = toggle(page);
     const preferenceKey = `sqr:desktop-sidebar:v1:id:guidance-${role}`;

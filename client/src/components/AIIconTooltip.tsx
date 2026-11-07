@@ -5,6 +5,7 @@ type AIIconTooltipProps = {
   label: string;
   children: ReactElement;
   side?: "top" | "bottom";
+  sideOffset?: number;
 };
 
 type AIIconTooltipButtonProps = ComponentPropsWithoutRef<"button"> & {
@@ -20,12 +21,12 @@ export const AIIconTooltipButton = forwardRef<HTMLButtonElement, AIIconTooltipBu
 );
 
 /** Explain icon controls on hover or keyboard focus without another layout box. */
-export function AIIconTooltip({ label, children, side = "top" }: AIIconTooltipProps) {
+export function AIIconTooltip({ label, children, side = "top", sideOffset = 4 }: AIIconTooltipProps) {
   return (
     <TooltipProvider delayDuration={350}>
       <Tooltip>
         <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent side={side} collisionPadding={8} className="motion-reduce:animate-none">
+        <TooltipContent side={side} sideOffset={sideOffset} collisionPadding={8} className="motion-reduce:animate-none">
           {label}
         </TooltipContent>
       </Tooltip>

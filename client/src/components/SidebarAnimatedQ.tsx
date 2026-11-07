@@ -4,8 +4,8 @@ import "./SidebarAnimatedQ.css";
 const LAYERS = ["body", "dot-1", "dot-2", "dot-3", "dot-4", "sheen"] as const;
 const ALL_LOADED = (1 << LAYERS.length) - 1;
 
-/** Mounted only for the collapsed desktop rail. Motion never drives React frames. */
-export function SidebarAnimatedQ() {
+/** Original compact artwork; motion never drives React frames. */
+export function SidebarAnimatedQ({ dotsHidden = false }: { dotsHidden?: boolean }) {
   const artworkRef = useRef<HTMLSpanElement>(null);
   const [loaded, setLoaded] = useState(0);
   const [failed, setFailed] = useState(false);
@@ -36,21 +36,26 @@ export function SidebarAnimatedQ() {
 
   const ready = loaded === ALL_LOADED && !failed;
   const state = !ready ? "static" : motion.reduced ? "reduced" : motion.visible ? "playing" : "paused";
+  const layerImages = !failed ? LAYERS.map((layer, index) => {
+    const image = <img key={layer} src={`/brand/sidebar-q-${layer}.png`} width={128} height={128}
+      className={layer.startsWith("dot") ? `sidebar-q-dot sidebar-q-${layer}` : `sidebar-q-${layer}`}
+      alt="" decoding="async" draggable={false}
+      onLoad={() => setLoaded(current => current | (1 << index))}
+      onError={() => setFailed(true)} />;
+    return layer === "sheen" ? <span key={layer} className="sidebar-q-sheen-clip">{image}</span> : image;
+  }) : [];
   return (
     <span ref={artworkRef} className="workspace-sidebar-toggle-logo sidebar-q-artwork"
-      aria-hidden="true" data-motion={state} data-ready={ready ? "true" : "false"}>
-      <img className="sidebar-q-static" src="/brand/sidebar-q-static.png"
-        width={128} height={128} alt="" decoding="async" draggable={false} />
+      aria-hidden="true" data-motion={state} data-ready={ready ? "true" : "false"} data-dots-hidden={dotsHidden}>
+      <img className="sidebar-q-static" src={dotsHidden ? "/brand/sidebar-q-body.png" : "/brand/sidebar-q-static.png"}
+        width={128} height={128} alt="" decoding="async" draggable={false}
+        onError={({ currentTarget }) => {
+          if (!currentTarget.src.endsWith("/brand/sidebar-q-static.png")) currentTarget.src = "/brand/sidebar-q-static.png";
+        }} />
       {!failed && <span className="sidebar-q-layers">
-        {LAYERS.map((layer, index) => {
-          const image = <img key={layer} src={`/brand/sidebar-q-${layer}.png`} width={128} height={128}
-            className={layer.startsWith("dot") ? `sidebar-q-dot sidebar-q-${layer}` : `sidebar-q-${layer}`}
-            alt="" decoding="async" draggable={false}
-            onLoad={() => setLoaded(current => current | (1 << index))}
-            onError={() => setFailed(true)} />;
-          return layer === "sheen" ? <span key={layer} className="sidebar-q-sheen-clip">{image}</span>
-            : image;
-        })}
+        {layerImages[0]}
+        <span className="sidebar-q-dot-cluster">{layerImages.slice(1, -1)}</span>
+        {layerImages[layerImages.length - 1]}
       </span>}
     </span>
   );
