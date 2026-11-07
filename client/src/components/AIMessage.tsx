@@ -196,6 +196,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
   });
 }
 
+/** Renders sanitized AI message text with the shared Markdown formatting. */
 export const AIMessageContent = memo(function AIMessageContent({ content }: { content: string }) {
   const safeContent = sanitizeAIMessageContentForDisplay(content);
   return <>{renderAIMessageMarkdown(safeContent)}</>;

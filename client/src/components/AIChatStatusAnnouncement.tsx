@@ -22,6 +22,7 @@ export function getAIChatStatusAnnouncement({ enabled, status, gateNotice, slowN
   return "";
 }
 
+/** Announces one concise AI request state in a visually hidden polite live region. */
 export function AIChatStatusAnnouncement(state: AIChatAnnouncementState) {
   return (
     <span className="sr-only" role="status" aria-label="Status AI SQR" aria-live="polite" aria-atomic="true" data-ai-status-announcement="true">

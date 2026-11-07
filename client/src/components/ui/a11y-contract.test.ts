@@ -198,12 +198,21 @@ test("tooltips stay keyboard accessible through Radix trigger/content primitives
 });
 
 test("AI chat dynamic status and message regions are announced politely", () => {
-  const aiChatSource = readSource("../AIChat.tsx");
+  const announcementSource = readSource("../AIChatStatusAnnouncement.tsx");
+  assert.match(announcementSource, /<span\b[^>]*role="status"[^>]*aria-live="polite"[^>]*aria-atomic="true"[^>]*>/);
+  assert.match(announcementSource, /aria-label="Status AI SQR"/);
+  assert.match(announcementSource, /\{getAIChatStatusAnnouncement\(state\)\}/);
 
-  assert.match(aiChatSource, /<span role="status" aria-live="polite" aria-atomic="true">/);
-  assert.match(aiChatSource, /role="log"/);
-  assert.match(aiChatSource, /aria-relevant="additions text"/);
-  assert.match(aiChatSource, /className="ai-notice" role="status" aria-live="polite" aria-atomic="true"/);
+  for (const relativePath of ["../AIChat.tsx", "../../pages/ai/AIConversationCard.tsx"]) {
+    const chatSource = readSource(relativePath);
+    assert.match(chatSource, /import \{ AIChatStatusAnnouncement \} from "@\/components\/AIChatStatusAnnouncement"/);
+    assert.equal((chatSource.match(/<AIChatStatusAnnouncement\b/g) ?? []).length, 1);
+    assert.match(chatSource, /<AIChatStatusAnnouncement enabled=\{aiEnabled\} status=\{aiStatus\} gateNotice=\{gateNotice\} slowNotice=\{slowNotice\} retryAvailable=\{retryAvailable\} \/>/);
+    assert.doesNotMatch(chatSource, /role="status"/);
+    assert.match(chatSource, /role="log"/);
+    assert.match(chatSource, /aria-live="polite"/);
+    assert.match(chatSource, /aria-relevant="additions text"/);
+  }
 });
 
 test("toast close controls keep an explicit accessible name", () => {
