@@ -55,9 +55,9 @@
 
   --floating-ai-header-border: hsl(214 20% 88% / 0.8);
 
-  --floating-ai-header-desktop-bg: hsl(var(--muted));
+  --floating-ai-header-desktop-bg: var(--ai-surface-bg);
 
-  --floating-ai-header-mobile-bg: hsl(var(--muted));
+  --floating-ai-header-mobile-bg: var(--ai-surface-bg);
 
   --floating-ai-header-mobile-text: hsl(var(--foreground));
 

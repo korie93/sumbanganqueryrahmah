@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 import type { AIChatStatus } from "@/components/AIChat";
+import { countNewAIChatAssistantMessages, getAIChatAssistantMessageIds } from "@/components/ai-chat-unread";
 import { useAIContext } from "@/context/AIContext";
 
 const AI_RESET_EVENT = "ai-chat-reset";
@@ -28,11 +29,11 @@ export function useFloatingAIBehaviorState({
     setUnreadCount,
     resetSession,
   } = useAIContext();
-  const assistantCount = useMemo(
-    () => messages.reduce((count, message) => (message.role === "assistant" ? count + 1 : count), 0),
+  const assistantMessageIds = useMemo(
+    () => getAIChatAssistantMessageIds(messages),
     [messages],
   );
-  const lastAssistantCountRef = useRef(assistantCount);
+  const lastAssistantMessageIdsRef = useRef(assistantMessageIds);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -76,14 +77,15 @@ export function useFloatingAIBehaviorState({
   }, [isOpen, setUnreadCount, unreadCount]);
 
   useEffect(() => {
-    const assistantCountSnapshot = assistantCount;
-    const previousAssistantCount = lastAssistantCountRef.current;
-    lastAssistantCountRef.current = assistantCountSnapshot;
+    const assistantMessageIdsSnapshot = assistantMessageIds;
+    const previousAssistantMessageIds = lastAssistantMessageIdsRef.current;
+    lastAssistantMessageIdsRef.current = assistantMessageIdsSnapshot;
+    const newAssistantMessages = countNewAIChatAssistantMessages(assistantMessageIdsSnapshot, previousAssistantMessageIds);
 
-    if (assistantCountSnapshot > previousAssistantCount && !isOpen) {
-      setUnreadCount((previous) => previous + (assistantCountSnapshot - previousAssistantCount));
+    if (newAssistantMessages > 0 && !isOpen) {
+      setUnreadCount((previous) => previous + newAssistantMessages);
     }
-  }, [assistantCount, isOpen, setUnreadCount]);
+  }, [assistantMessageIds, isOpen, setUnreadCount]);
 
   const handleMinimize = useCallback(() => {
     setIsOpenIfMounted(false);

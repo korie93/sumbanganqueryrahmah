@@ -23,12 +23,12 @@ test("first launcher activation seeds the open panel and only a changed route cl
   assert.match(componentSource, /useFloatingAIBehaviorState\(\{\s*activePage,\s*location,\s*initiallyOpen,\s*\}\)/);
 });
 
-test("useFloatingAIBehaviorState updates assistant count snapshots before unread state changes", () => {
+test("useFloatingAIBehaviorState seeds retained assistant IDs and updates snapshots before unread state changes", () => {
   const source = readBehaviorHookSource();
-  const snapshotIndex = source.indexOf("const assistantCountSnapshot = assistantCount;");
-  const previousIndex = source.indexOf("const previousAssistantCount = lastAssistantCountRef.current;");
-  const refUpdateIndex = source.indexOf("lastAssistantCountRef.current = assistantCountSnapshot;");
-  const unreadUpdateIndex = source.indexOf("setUnreadCount((previous) => previous + (assistantCountSnapshot - previousAssistantCount));");
+  const snapshotIndex = source.indexOf("const assistantMessageIdsSnapshot = assistantMessageIds;");
+  const previousIndex = source.indexOf("const previousAssistantMessageIds = lastAssistantMessageIdsRef.current;");
+  const refUpdateIndex = source.indexOf("lastAssistantMessageIdsRef.current = assistantMessageIdsSnapshot;");
+  const unreadUpdateIndex = source.indexOf("setUnreadCount((previous) => previous + newAssistantMessages);");
 
   assert.notEqual(snapshotIndex, -1);
   assert.notEqual(previousIndex, -1);
@@ -37,7 +37,9 @@ test("useFloatingAIBehaviorState updates assistant count snapshots before unread
   assert.ok(snapshotIndex < previousIndex);
   assert.ok(previousIndex < refUpdateIndex);
   assert.ok(refUpdateIndex < unreadUpdateIndex);
-  assert.doesNotMatch(source, /lastAssistantCountRef\.current = assistantCount;\s*}\s*, \[assistantCount, isOpen, setUnreadCount\]\);/);
+  assert.match(source, /const lastAssistantMessageIdsRef = useRef\(assistantMessageIds\);/);
+  assert.match(source, /const newAssistantMessages = countNewAIChatAssistantMessages\(assistantMessageIdsSnapshot, previousAssistantMessageIds\);\s*if \(newAssistantMessages > 0 && !isOpen\)/);
+  assert.doesNotMatch(source, /lastAssistantCountRef|assistantCountSnapshot/);
 });
 
 test("useFloatingAIBehaviorState guards exported state setters after unmount", () => {

@@ -1,0 +1,2508 @@
+{
+  "date": "2026-11-09",
+  "status": "complete-local",
+  "parentCommit": "8c656153c6cb5190a58d8b881ffc8265c84bd535",
+  "finalBuild": "receipt-adaptive-build-0ba7d87532bf",
+  "applicationDifferences": [
+    "client/src/components/ai-chat-unread.ts",
+    "client/src/components/useFloatingAIBehaviorState.ts",
+    "client/src/styles/tokens/colors/_ai.css"
+  ],
+  "sourceDifferences": [
+    "client/src/components/ai-chat-unread.test.ts",
+    "client/src/components/ai-chat-unread.ts",
+    "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+    "client/src/components/useFloatingAIBehaviorState.ts",
+    "client/src/styles/tokens/colors/_ai.css",
+    "tests/visual/ai-header-unity.spec.ts",
+    "tests/visual/ai-unread-cap.spec.ts"
+  ],
+  "clientHashesVerified": 2016,
+  "unitTests": 104,
+  "playwrightTests": 18,
+  "groups": {
+    "checks": [
+      {
+        "args": [
+          "lint",
+          "client/src/components/useFloatingAIBehaviorState.ts",
+          "client/src/components/ai-chat-unread.ts",
+          "client/src/components/ai-chat-unread.test.ts",
+          "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+          "tests/visual/ai-header-unity.spec.ts",
+          "tests/visual/ai-unread-cap.spec.ts"
+        ],
+        "runId": "receipt-adaptive-tests-869df5f51288",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 10.068,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-869df5f51288"
+      },
+      {
+        "args": [
+          "types-focused",
+          "client/src/components/useFloatingAIBehaviorState.ts",
+          "client/src/components/ai-chat-unread.ts",
+          "client/src/components/ai-chat-unread.test.ts",
+          "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+          "tests/visual/ai-header-unity.spec.ts",
+          "tests/visual/ai-unread-cap.spec.ts"
+        ],
+        "runId": "receipt-adaptive-tests-6b971a8c2905",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 7.135,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-6b971a8c2905"
+      }
+    ],
+    "unit": [
+      {
+        "args": [
+          "tests",
+          "client/src/components/ai-chat-unread.test.ts",
+          "client/src/components/useFloatingAIBehaviorState.contract.test.ts",
+          "client/src/components/ai-chat-utils.test.ts",
+          "client/src/components/floating-ai-visibility.test.ts",
+          "client/src/context/AIContext.contract.test.ts",
+          "client/src/components/ai-chat-manual-retry.test.ts",
+          "client/src/components/floating-ai-layout.test.ts",
+          "client/src/components/floating-ai-shell-placement.test.tsx",
+          "client/src/components/useFloatingAILayoutState.contract.test.ts",
+          "client/src/components/floating-ai-a11y-contract.test.ts",
+          "client/src/hooks/use-mobile-viewport-state.test.ts",
+          "client/src/hooks/ai-message-follow.test.ts",
+          "client/src/hooks/auto-grow-textarea.test.ts",
+          "client/src/components/ai-space-presentation.test.ts",
+          "client/src/components/public-component-jsdoc-contract.test.ts"
+        ],
+        "runId": "receipt-adaptive-tests-c05097f7ee4b",
+        "exitCode": 0,
+        "counts": {
+          "cancelled": 0,
+          "fail": 0,
+          "pass": 104,
+          "skipped": 0,
+          "suites": 0,
+          "tests": 104,
+          "todo": 0
+        },
+        "budgetFailure": null,
+        "seconds": 15.343,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-c05097f7ee4b"
+      }
+    ],
+    "cap": [
+      {
+        "args": [
+          "e2e",
+          "ai-unread"
+        ],
+        "runId": "receipt-adaptive-tests-9e3984ed27c3",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 32.723,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-9e3984ed27c3"
+      }
+    ],
+    "header": [
+      {
+        "args": [
+          "e2e",
+          "ai-header"
+        ],
+        "runId": "receipt-adaptive-tests-2295bb626d93",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 34.671,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-2295bb626d93"
+      }
+    ],
+    "regressions": [
+      {
+        "args": [
+          "e2e",
+          "ai-keyboard",
+          "behavior"
+        ],
+        "runId": "receipt-adaptive-tests-69986672e598",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 65.488,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-69986672e598"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-polish",
+          "input",
+          "full"
+        ],
+        "runId": "receipt-adaptive-tests-51d82af453b7",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 26.625,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-51d82af453b7"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-polish",
+          "input",
+          "floating"
+        ],
+        "runId": "receipt-adaptive-tests-e6ca600a977c",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 33.394,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-e6ca600a977c"
+      }
+    ],
+    "endurance": [
+      {
+        "args": [
+          "e2e",
+          "ai-endurance",
+          "floating",
+          "light",
+          "1"
+        ],
+        "runId": "receipt-adaptive-tests-db88c7e9568d",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 70.679,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-db88c7e9568d"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-endurance",
+          "floating",
+          "dark",
+          "6"
+        ],
+        "runId": "receipt-adaptive-tests-1950c2513843",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 81.42,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-1950c2513843"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-endurance",
+          "full",
+          "light",
+          "1"
+        ],
+        "runId": "receipt-adaptive-tests-650b711c5c98",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 51.654,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-650b711c5c98"
+      }
+    ]
+  },
+  "headerComparisons": [
+    {
+      "theme": "light",
+      "width": 375,
+      "before": {
+        "theme": "light",
+        "width": 375,
+        "header": {
+          "x": 7,
+          "y": 663.21875,
+          "width": 361,
+          "height": 56
+        },
+        "description": {
+          "x": 21,
+          "y": 694.71875,
+          "width": 281,
+          "height": 16
+        },
+        "panel": {
+          "x": 6,
+          "y": 648.21875,
+          "width": 363,
+          "height": 235.78125
+        },
+        "headerBackground": "rgb(242, 242, 243)",
+        "chatBackground": "rgb(250, 250, 250)",
+        "descriptionColor": "rgba(29, 29, 32, 0.75)",
+        "headerText": "rgb(29, 29, 32)"
+      },
+      "after": {
+        "theme": "light",
+        "width": 375,
+        "header": {
+          "x": 7,
+          "y": 663.21875,
+          "width": 361,
+          "height": 56
+        },
+        "description": {
+          "x": 21,
+          "y": 694.71875,
+          "width": 281,
+          "height": 16
+        },
+        "panel": {
+          "x": 6,
+          "y": 648.21875,
+          "width": 363,
+          "height": 235.78125
+        },
+        "headerBackground": "rgb(250, 250, 250)",
+        "chatBackground": "rgb(250, 250, 250)",
+        "descriptionColor": "rgba(29, 29, 32, 0.75)",
+        "headerText": "rgb(29, 29, 32)"
+      },
+      "descriptionContrast": 7.208241804073362
+    },
+    {
+      "theme": "light",
+      "width": 1366,
+      "before": {
+        "theme": "light",
+        "width": 1366,
+        "header": {
+          "x": 903,
+          "y": 643.21875,
+          "width": 438,
+          "height": 48
+        },
+        "description": {
+          "x": 919,
+          "y": 670.71875,
+          "width": 358,
+          "height": 16
+        },
+        "panel": {
+          "x": 902,
+          "y": 642.21875,
+          "width": 440,
+          "height": 233.78125
+        },
+        "headerBackground": "rgb(242, 242, 243)",
+        "chatBackground": "rgb(250, 250, 250)",
+        "descriptionColor": "rgba(29, 29, 32, 0.75)",
+        "headerText": "rgb(15, 23, 41)"
+      },
+      "after": {
+        "theme": "light",
+        "width": 1366,
+        "header": {
+          "x": 903,
+          "y": 643.21875,
+          "width": 438,
+          "height": 48
+        },
+        "description": {
+          "x": 919,
+          "y": 670.71875,
+          "width": 358,
+          "height": 16
+        },
+        "panel": {
+          "x": 902,
+          "y": 642.21875,
+          "width": 440,
+          "height": 233.78125
+        },
+        "headerBackground": "rgb(250, 250, 250)",
+        "chatBackground": "rgb(250, 250, 250)",
+        "descriptionColor": "rgba(29, 29, 32, 0.75)",
+        "headerText": "rgb(15, 23, 41)"
+      },
+      "descriptionContrast": 7.208241804073362
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "before": {
+        "theme": "dark",
+        "width": 375,
+        "header": {
+          "x": 7,
+          "y": 663.21875,
+          "width": 361,
+          "height": 56
+        },
+        "description": {
+          "x": 21,
+          "y": 694.71875,
+          "width": 281,
+          "height": 16
+        },
+        "panel": {
+          "x": 6,
+          "y": 648.21875,
+          "width": 363,
+          "height": 235.78125
+        },
+        "headerBackground": "rgb(35, 35, 35)",
+        "chatBackground": "rgb(27, 27, 27)",
+        "descriptionColor": "rgb(212, 212, 212)",
+        "headerText": "rgb(245, 245, 245)"
+      },
+      "after": {
+        "theme": "dark",
+        "width": 375,
+        "header": {
+          "x": 7,
+          "y": 663.21875,
+          "width": 361,
+          "height": 56
+        },
+        "description": {
+          "x": 21,
+          "y": 694.71875,
+          "width": 281,
+          "height": 16
+        },
+        "panel": {
+          "x": 6,
+          "y": 648.21875,
+          "width": 363,
+          "height": 235.78125
+        },
+        "headerBackground": "rgb(35, 35, 35)",
+        "chatBackground": "rgb(27, 27, 27)",
+        "descriptionColor": "rgb(212, 212, 212)",
+        "headerText": "rgb(245, 245, 245)"
+      },
+      "descriptionContrast": 10.60324267038483
+    },
+    {
+      "theme": "dark",
+      "width": 1366,
+      "before": {
+        "theme": "dark",
+        "width": 1366,
+        "header": {
+          "x": 903,
+          "y": 643.21875,
+          "width": 438,
+          "height": 48
+        },
+        "description": {
+          "x": 919,
+          "y": 670.71875,
+          "width": 358,
+          "height": 16
+        },
+        "panel": {
+          "x": 902,
+          "y": 642.21875,
+          "width": 440,
+          "height": 233.78125
+        },
+        "headerBackground": "rgb(35, 35, 35)",
+        "chatBackground": "rgb(27, 27, 27)",
+        "descriptionColor": "rgb(212, 212, 212)",
+        "headerText": "rgb(245, 245, 245)"
+      },
+      "after": {
+        "theme": "dark",
+        "width": 1366,
+        "header": {
+          "x": 903,
+          "y": 643.21875,
+          "width": 438,
+          "height": 48
+        },
+        "description": {
+          "x": 919,
+          "y": 670.71875,
+          "width": 358,
+          "height": 16
+        },
+        "panel": {
+          "x": 902,
+          "y": 642.21875,
+          "width": 440,
+          "height": 233.78125
+        },
+        "headerBackground": "rgb(35, 35, 35)",
+        "chatBackground": "rgb(27, 27, 27)",
+        "descriptionColor": "rgb(212, 212, 212)",
+        "headerText": "rgb(245, 245, 245)"
+      },
+      "descriptionContrast": 10.60324267038483
+    }
+  ],
+  "inputStability": [
+    {
+      "surface": "full",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "full",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "runId": "receipt-adaptive-tests-db88c7e9568d",
+      "kind": "synthetic-ai-endurance",
+      "instrumentation": "ai-endurance-v1",
+      "surface": "floating",
+      "theme": "light",
+      "cpuThrottlingRate": 1,
+      "subjectBuild": "receipt-adaptive-build-0ba7d87532bf",
+      "outcome": "completed",
+      "exchanges": 40,
+      "messageCap": 30,
+      "measurements": [
+        {
+          "phase": "empty",
+          "aiRequests": 0,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 7927060,
+            "JSHeapTotalSize": 8175616,
+            "TaskDuration": 0.035331,
+            "LayoutDuration": 0,
+            "LayoutCount": 0,
+            "RecalcStyleCount": 0
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 520,
+            "jsEventListeners": 284
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 0
+        },
+        {
+          "phase": "exchange-10",
+          "aiRequests": 10,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9039372,
+            "JSHeapTotalSize": 9748480,
+            "TaskDuration": 2.984424,
+            "LayoutDuration": 0.067088,
+            "LayoutCount": 177,
+            "RecalcStyleCount": 369
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 676,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 20
+        },
+        {
+          "phase": "exchange-20",
+          "aiRequests": 20,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9019036,
+            "JSHeapTotalSize": 10010624,
+            "TaskDuration": 5.434407,
+            "LayoutDuration": 0.156363,
+            "LayoutCount": 356,
+            "RecalcStyleCount": 741
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 751,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "exchange-30",
+          "aiRequests": 30,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9117740,
+            "JSHeapTotalSize": 10010624,
+            "TaskDuration": 8.133072,
+            "LayoutDuration": 0.218864,
+            "LayoutCount": 535,
+            "RecalcStyleCount": 1116
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 761,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "exchange-40",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9161440,
+            "JSHeapTotalSize": 10272768,
+            "TaskDuration": 10.402269,
+            "LayoutDuration": 0.285974,
+            "LayoutCount": 715,
+            "RecalcStyleCount": 1488
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 771,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "reopen-1",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9240472,
+            "JSHeapTotalSize": 10797056,
+            "TaskDuration": 10.956759,
+            "LayoutDuration": 0.28866,
+            "LayoutCount": 730,
+            "RecalcStyleCount": 1533
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 683,
+            "jsEventListeners": 416
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "reopen-4",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9392168,
+            "JSHeapTotalSize": 10797056,
+            "TaskDuration": 12.25085,
+            "LayoutDuration": 0.307288,
+            "LayoutCount": 775,
+            "RecalcStyleCount": 1686
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 683,
+            "jsEventListeners": 416
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "reopen-8",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9474996,
+            "JSHeapTotalSize": 10797056,
+            "TaskDuration": 13.86672,
+            "LayoutDuration": 0.325811,
+            "LayoutCount": 835,
+            "RecalcStyleCount": 1882
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 683,
+            "jsEventListeners": 416
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "reopen-12",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9627796,
+            "JSHeapTotalSize": 11059200,
+            "TaskDuration": 14.803907,
+            "LayoutDuration": 0.336434,
+            "LayoutCount": 881,
+            "RecalcStyleCount": 2053
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 683,
+            "jsEventListeners": 416
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "after-12-reopens",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9622880,
+            "JSHeapTotalSize": 11059200,
+            "TaskDuration": 14.84857,
+            "LayoutDuration": 0.336434,
+            "LayoutCount": 881,
+            "RecalcStyleCount": 2053
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 683,
+            "jsEventListeners": 416
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "after-4-route-cycles",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 11124072,
+            "JSHeapTotalSize": 12369920,
+            "TaskDuration": 18.814762,
+            "LayoutDuration": 0.375336,
+            "LayoutCount": 1002,
+            "RecalcStyleCount": 2540
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 714,
+            "jsEventListeners": 418
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        }
+      ],
+      "requests": [
+        {
+          "index": 1,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 2,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 3,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 4,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 5,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 6,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 7,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 8,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 9,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 10,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 11,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 12,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 13,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 14,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 15,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 16,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 17,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 18,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 19,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 20,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 21,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 22,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 23,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 24,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 25,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 26,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 27,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 28,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 29,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 30,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 31,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 32,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 33,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 34,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 35,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 36,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 37,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 38,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 39,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 40,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        }
+      ],
+      "cycles": [
+        {
+          "type": "minimize-reopen",
+          "count": 12,
+          "messagesRetained": 30
+        },
+        {
+          "type": "workspace-saved-viewer",
+          "count": 4,
+          "pageReloaded": false
+        }
+      ],
+      "errors": [],
+      "unexpected": [],
+      "closedCleanly": true,
+      "limits": [
+        "Short synthetic responses, 40 exchanges per run; not a multi-hour soak or physical device test.",
+        "CDP post-GC heap/DOM/listeners and active timer counts are descriptive; no arbitrary leak threshold makes this test pass.",
+        "Timer wrappers retain numeric active IDs only; instrumentation has overhead and does not attribute native/browser timers.",
+        "No production backend, credentials, real AI, external network, heap snapshots or browser-process RSS measured."
+      ],
+      "environment": {
+        "lowSpecClass": false,
+        "perfMode": "high",
+        "reducedMotion": false,
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        }
+      }
+    },
+    {
+      "runId": "receipt-adaptive-tests-1950c2513843",
+      "kind": "synthetic-ai-endurance",
+      "instrumentation": "ai-endurance-v1",
+      "surface": "floating",
+      "theme": "dark",
+      "cpuThrottlingRate": 6,
+      "subjectBuild": "receipt-adaptive-build-0ba7d87532bf",
+      "outcome": "completed",
+      "exchanges": 40,
+      "messageCap": 30,
+      "measurements": [
+        {
+          "phase": "empty",
+          "aiRequests": 0,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 7929596,
+            "JSHeapTotalSize": 8437760,
+            "TaskDuration": 0.179136,
+            "LayoutDuration": 0,
+            "LayoutCount": 0,
+            "RecalcStyleCount": 0
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 528,
+            "jsEventListeners": 284
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 0
+        },
+        {
+          "phase": "exchange-10",
+          "aiRequests": 10,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9031488,
+            "JSHeapTotalSize": 9748480,
+            "TaskDuration": 14.312035,
+            "LayoutDuration": 0.370838,
+            "LayoutCount": 142,
+            "RecalcStyleCount": 284
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 684,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 20
+        },
+        {
+          "phase": "exchange-20",
+          "aiRequests": 20,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9328336,
+            "JSHeapTotalSize": 10534912,
+            "TaskDuration": 29.451217,
+            "LayoutDuration": 0.755684,
+            "LayoutCount": 267,
+            "RecalcStyleCount": 559
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 759,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "exchange-30",
+          "aiRequests": 30,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9209880,
+            "JSHeapTotalSize": 10010624,
+            "TaskDuration": 46.318699,
+            "LayoutDuration": 1.292795,
+            "LayoutCount": 389,
+            "RecalcStyleCount": 822
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 769,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        },
+        {
+          "phase": "exchange-40",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 9258224,
+            "JSHeapTotalSize": 10272768,
+            "TaskDuration": 60.669371,
+            "LayoutDuration": 1.653889,
+            "LayoutCount": 524,
+            "RecalcStyleCount": 1089
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 779,
+            "jsEventListeners": 285
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 30
+        }
+      ],
+      "requests": [
+        {
+          "index": 1,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 2,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 3,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 4,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 5,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 6,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 7,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 8,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 9,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 10,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 11,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 12,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 13,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 14,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 15,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 16,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 17,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 18,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 19,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 20,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 21,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 22,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 23,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 24,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 25,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 26,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 27,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 28,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 29,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 30,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 31,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 32,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 33,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 34,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 35,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 36,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 37,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 38,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 39,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 40,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        }
+      ],
+      "cycles": [],
+      "errors": [],
+      "unexpected": [],
+      "closedCleanly": true,
+      "limits": [
+        "Short synthetic responses, 40 exchanges per run; not a multi-hour soak or physical device test.",
+        "CDP post-GC heap/DOM/listeners and active timer counts are descriptive; no arbitrary leak threshold makes this test pass.",
+        "Timer wrappers retain numeric active IDs only; instrumentation has overhead and does not attribute native/browser timers.",
+        "No production backend, credentials, real AI, external network, heap snapshots or browser-process RSS measured."
+      ],
+      "environment": {
+        "lowSpecClass": false,
+        "perfMode": "high",
+        "reducedMotion": false,
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        }
+      }
+    },
+    {
+      "runId": "receipt-adaptive-tests-650b711c5c98",
+      "kind": "synthetic-ai-endurance",
+      "instrumentation": "ai-endurance-v1",
+      "surface": "full",
+      "theme": "light",
+      "cpuThrottlingRate": 1,
+      "subjectBuild": "receipt-adaptive-build-0ba7d87532bf",
+      "outcome": "completed",
+      "exchanges": 40,
+      "messageCap": 50,
+      "measurements": [
+        {
+          "phase": "empty",
+          "aiRequests": 0,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 7089408,
+            "JSHeapTotalSize": 7651328,
+            "TaskDuration": 0.0379,
+            "LayoutDuration": 0,
+            "LayoutCount": 0,
+            "RecalcStyleCount": 0
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 412,
+            "jsEventListeners": 232
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 0
+        },
+        {
+          "phase": "exchange-10",
+          "aiRequests": 10,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 8135144,
+            "JSHeapTotalSize": 8962048,
+            "TaskDuration": 1.888756,
+            "LayoutDuration": 0.058105,
+            "LayoutCount": 160,
+            "RecalcStyleCount": 366
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 569,
+            "jsEventListeners": 233
+          },
+          "timers": {
+            "activeTimeouts": 4,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 20
+        },
+        {
+          "phase": "exchange-20",
+          "aiRequests": 20,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 8429784,
+            "JSHeapTotalSize": 9224192,
+            "TaskDuration": 4.167677,
+            "LayoutDuration": 0.112508,
+            "LayoutCount": 320,
+            "RecalcStyleCount": 716
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 709,
+            "jsEventListeners": 233
+          },
+          "timers": {
+            "activeTimeouts": 4,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 40
+        },
+        {
+          "phase": "exchange-30",
+          "aiRequests": 30,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 8626816,
+            "JSHeapTotalSize": 9486336,
+            "TaskDuration": 6.806985,
+            "LayoutDuration": 0.24367,
+            "LayoutCount": 480,
+            "RecalcStyleCount": 1063
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 784,
+            "jsEventListeners": 233
+          },
+          "timers": {
+            "activeTimeouts": 4,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 50
+        },
+        {
+          "phase": "exchange-40",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 8484264,
+            "JSHeapTotalSize": 9486336,
+            "TaskDuration": 8.85459,
+            "LayoutDuration": 0.300461,
+            "LayoutCount": 640,
+            "RecalcStyleCount": 1400
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 794,
+            "jsEventListeners": 233
+          },
+          "timers": {
+            "activeTimeouts": 4,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 50
+        },
+        {
+          "phase": "after-reset",
+          "aiRequests": 40,
+          "inFlightAI": 0,
+          "cdp": {
+            "JSHeapUsedSize": 8345400,
+            "JSHeapTotalSize": 9224192,
+            "TaskDuration": 8.95955,
+            "LayoutDuration": 0.300648,
+            "LayoutCount": 641,
+            "RecalcStyleCount": 1406
+          },
+          "dom": {
+            "documents": 2,
+            "nodes": 465,
+            "jsEventListeners": 232
+          },
+          "timers": {
+            "activeTimeouts": 3,
+            "activeIntervals": 1,
+            "unsupportedStringCallbacks": 0
+          },
+          "visibleMessages": 0
+        }
+      ],
+      "requests": [
+        {
+          "index": 1,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 2,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 3,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 4,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 5,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 6,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 7,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 8,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 9,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 10,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 11,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 12,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 13,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 14,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 15,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 16,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 17,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 18,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 19,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 20,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 21,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 22,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 23,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 24,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 25,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 26,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 27,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 28,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 29,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 30,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 31,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 32,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 33,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 34,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 35,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 36,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 37,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 38,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 39,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        },
+        {
+          "index": 40,
+          "method": "POST",
+          "path": "/api/ai/search",
+          "answerCharacters": 29
+        }
+      ],
+      "cycles": [
+        {
+          "type": "reset-full-chat",
+          "count": 1
+        }
+      ],
+      "errors": [],
+      "unexpected": [],
+      "closedCleanly": true,
+      "limits": [
+        "Short synthetic responses, 40 exchanges per run; not a multi-hour soak or physical device test.",
+        "CDP post-GC heap/DOM/listeners and active timer counts are descriptive; no arbitrary leak threshold makes this test pass.",
+        "Timer wrappers retain numeric active IDs only; instrumentation has overhead and does not attribute native/browser timers.",
+        "No production backend, credentials, real AI, external network, heap snapshots or browser-process RSS measured."
+      ],
+      "environment": {
+        "lowSpecClass": false,
+        "perfMode": "high",
+        "reducedMotion": false,
+        "viewport": {
+          "width": 1366,
+          "height": 900
+        }
+      }
+    }
+  ],
+  "baselineProfile": {
+    "runId": "receipt-adaptive-tests-d49347bc3f69",
+    "kind": "synthetic-ai-endurance",
+    "instrumentation": "ai-endurance-v1",
+    "surface": "floating",
+    "theme": "light",
+    "cpuThrottlingRate": 1,
+    "subjectBuild": "receipt-adaptive-build-a7371356d798",
+    "outcome": "completed",
+    "exchanges": 40,
+    "messageCap": 30,
+    "measurements": [
+      {
+        "phase": "empty",
+        "aiRequests": 0,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 7937572,
+          "JSHeapTotalSize": 8699904,
+          "TaskDuration": 0.034765,
+          "LayoutDuration": 0,
+          "LayoutCount": 0,
+          "RecalcStyleCount": 0
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 520,
+          "jsEventListeners": 284
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 0
+      },
+      {
+        "phase": "exchange-10",
+        "aiRequests": 10,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 8851348,
+          "JSHeapTotalSize": 9748480,
+          "TaskDuration": 2.494775,
+          "LayoutDuration": 0.046922,
+          "LayoutCount": 178,
+          "RecalcStyleCount": 371
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 676,
+          "jsEventListeners": 285
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 20
+      },
+      {
+        "phase": "exchange-20",
+        "aiRequests": 20,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9033540,
+          "JSHeapTotalSize": 10010624,
+          "TaskDuration": 5.001228,
+          "LayoutDuration": 0.097166,
+          "LayoutCount": 358,
+          "RecalcStyleCount": 745
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 751,
+          "jsEventListeners": 285
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "exchange-30",
+        "aiRequests": 30,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9130836,
+          "JSHeapTotalSize": 10272768,
+          "TaskDuration": 7.109912,
+          "LayoutDuration": 0.156448,
+          "LayoutCount": 538,
+          "RecalcStyleCount": 1122
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 761,
+          "jsEventListeners": 285
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "exchange-40",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9171352,
+          "JSHeapTotalSize": 10534912,
+          "TaskDuration": 9.285331,
+          "LayoutDuration": 0.211333,
+          "LayoutCount": 718,
+          "RecalcStyleCount": 1500
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 771,
+          "jsEventListeners": 285
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "reopen-1",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9253888,
+          "JSHeapTotalSize": 10534912,
+          "TaskDuration": 9.865851,
+          "LayoutDuration": 0.231553,
+          "LayoutCount": 730,
+          "RecalcStyleCount": 1545
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 683,
+          "jsEventListeners": 416
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "reopen-4",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9399856,
+          "JSHeapTotalSize": 10272768,
+          "TaskDuration": 10.611389,
+          "LayoutDuration": 0.238091,
+          "LayoutCount": 764,
+          "RecalcStyleCount": 1675
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 683,
+          "jsEventListeners": 416
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "reopen-8",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9476996,
+          "JSHeapTotalSize": 10797056,
+          "TaskDuration": 11.580455,
+          "LayoutDuration": 0.247272,
+          "LayoutCount": 810,
+          "RecalcStyleCount": 1856
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 683,
+          "jsEventListeners": 416
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "reopen-12",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9545012,
+          "JSHeapTotalSize": 10534912,
+          "TaskDuration": 12.500089,
+          "LayoutDuration": 0.255411,
+          "LayoutCount": 851,
+          "RecalcStyleCount": 2019
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 678,
+          "jsEventListeners": 416
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "after-12-reopens",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 9550488,
+          "JSHeapTotalSize": 10797056,
+          "TaskDuration": 12.545284,
+          "LayoutDuration": 0.255411,
+          "LayoutCount": 851,
+          "RecalcStyleCount": 2019
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 678,
+          "jsEventListeners": 416
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      },
+      {
+        "phase": "after-4-route-cycles",
+        "aiRequests": 40,
+        "inFlightAI": 0,
+        "cdp": {
+          "JSHeapUsedSize": 11144612,
+          "JSHeapTotalSize": 12632064,
+          "TaskDuration": 17.304132,
+          "LayoutDuration": 0.297526,
+          "LayoutCount": 979,
+          "RecalcStyleCount": 2491
+        },
+        "dom": {
+          "documents": 2,
+          "nodes": 714,
+          "jsEventListeners": 418
+        },
+        "timers": {
+          "activeTimeouts": 3,
+          "activeIntervals": 1,
+          "unsupportedStringCallbacks": 0
+        },
+        "visibleMessages": 30
+      }
+    ],
+    "requests": [
+      {
+        "index": 1,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 2,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 3,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 4,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 5,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 6,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 7,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 8,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 9,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 10,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 11,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 12,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 13,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 14,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 15,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 16,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 17,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 18,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 19,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 20,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 21,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 22,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 23,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 24,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 25,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 26,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 27,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 28,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 29,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 30,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 31,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 32,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 33,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 34,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 35,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 36,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 37,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 38,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 39,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      },
+      {
+        "index": 40,
+        "method": "POST",
+        "path": "/api/ai/search",
+        "answerCharacters": 29
+      }
+    ],
+    "cycles": [
+      {
+        "type": "minimize-reopen",
+        "count": 12,
+        "messagesRetained": 30
+      },
+      {
+        "type": "workspace-saved-viewer",
+        "count": 4,
+        "pageReloaded": false
+      }
+    ],
+    "errors": [],
+    "unexpected": [],
+    "closedCleanly": true,
+    "limits": [
+      "Short synthetic responses, 40 exchanges per run; not a multi-hour soak or physical device test.",
+      "CDP post-GC heap/DOM/listeners and active timer counts are descriptive; no arbitrary leak threshold makes this test pass.",
+      "Timer wrappers retain numeric active IDs only; instrumentation has overhead and does not attribute native/browser timers.",
+      "No production backend, credentials, real AI, external network, heap snapshots or browser-process RSS measured."
+    ],
+    "environment": {
+      "lowSpecClass": false,
+      "perfMode": "high",
+      "reducedMotion": false,
+      "viewport": {
+        "width": 1366,
+        "height": 900
+      }
+    }
+  },
+  "profileAttempts": 7,
+  "completedProfiles": 4,
+  "failedProfileAttempts": 3,
+  "retainedFailures": [
+    {
+      "runId": "receipt-adaptive-tests-7474119d162f",
+      "reason": "Probe awal gagal pada butang Back browser kerana navigasi menggunakan replaceState. Sebanyak 40 pertukaran dan 12 kali buka semula selesai, tetapi keseluruhan cubaan gagal. Harness dibetulkan supaya menggunakan menu sebenar.",
+      "exitCode": 1,
+      "budgetFailure": null,
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-6bedc47cb4ed",
+      "reason": "Regresi merah aplikasi: pada had 30 mesej dengan 15 balasan pembantu, balasan ke-16 selesai ketika panel dikecilkan tetapi badge kekal tersembunyi.",
+      "exitCode": 1,
+      "budgetFailure": null,
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-17515d4212f0",
+      "reason": "Ujian header tersangkut pada tooltip fokus awal sebelum pengukuran warna. Hanya ujian dibetulkan: input difokuskan, kemudian fokus dialihkan sebelum tangkapan skrin.",
+      "exitCode": 1,
+      "budgetFailure": null,
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-d0623b77ce4f",
+      "reason": "Profil akhir pertama gagal memuatkan Viewer dalam tempoh bootstrap 10 s, sebelum sebarang pertukaran mesej; punca muktamad belum disahkan. Ulangan menggunakan had dan timeout sama, dengan diagnostik kegagalan tambahan sahaja.",
+      "exitCode": 1,
+      "budgetFailure": null,
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-e6325c7299e1",
+      "reason": "Profil gabungan CPU 6× dihentikan oleh had CPU cgroup 120 s selepas log checkpoint 40. Tiada JSON akhir; bukan lulus. Ulangan mengasingkan 40 pertukaran CPU 6× daripada kitaran buka semula/navigasi yang telah diuji pada CPU 1×; had tidak dinaikkan.",
+      "exitCode": 241,
+      "budgetFailure": "aggregate cgroup CPU budget reached",
+      "retained": true
+    }
+  ],
+  "snapshots": [
+    {
+      "runId": "receipt-adaptive-tests-dcd938e1197a",
+      "name": "ai-header-light-375.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-dcd938e1197a/ai-header-light-375.jpg",
+      "sha256": "ec361f1b9299f6f7041dff11ef065636433461b7f9dd9edcdab56fe89b2d9ccd"
+    },
+    {
+      "runId": "receipt-adaptive-tests-2295bb626d93",
+      "name": "ai-header-light-375.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-2295bb626d93/ai-header-light-375.jpg",
+      "sha256": "2d5b9c357aec04ed95528cd35af13c0a53c0c0a18edb7359009c126c09293a1d"
+    },
+    {
+      "runId": "receipt-adaptive-tests-dcd938e1197a",
+      "name": "ai-header-light-1366.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-dcd938e1197a/ai-header-light-1366.jpg",
+      "sha256": "81f0cf1fd810140078c9767658ff13b95b2791bc8a41e03eae2c0d33bfd43067"
+    },
+    {
+      "runId": "receipt-adaptive-tests-2295bb626d93",
+      "name": "ai-header-light-1366.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-2295bb626d93/ai-header-light-1366.jpg",
+      "sha256": "8e3d899d0fc5ef711f840cffd0b2159383e85220b03c319d5ac784370baf0a2a"
+    },
+    {
+      "runId": "receipt-adaptive-tests-dcd938e1197a",
+      "name": "ai-header-dark-375.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-dcd938e1197a/ai-header-dark-375.jpg",
+      "sha256": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c"
+    },
+    {
+      "runId": "receipt-adaptive-tests-2295bb626d93",
+      "name": "ai-header-dark-375.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-2295bb626d93/ai-header-dark-375.jpg",
+      "sha256": "c85bd41e9d10946a5d4bc593d4546066c94eb6519d8df5393e4be5f0c1c9dba8"
+    },
+    {
+      "runId": "receipt-adaptive-tests-dcd938e1197a",
+      "name": "ai-header-dark-1366.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-dcd938e1197a/ai-header-dark-1366.jpg",
+      "sha256": "b211873bbe9f3f6bd2167784696b89b1600c124ff963e99c6305373c0e7e3116"
+    },
+    {
+      "runId": "receipt-adaptive-tests-2295bb626d93",
+      "name": "ai-header-dark-1366.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-2295bb626d93/ai-header-dark-1366.jpg",
+      "sha256": "296f29b8965fdd1558cac623950d32ee8518b1bf3a8b0e6a181aa8864a1203df"
+    }
+  ],
+  "limits": [
+    "Profil menggunakan Chromium headless dan data sintetik, dengan simulasi CPU pada kadar 1× dan 6×. Ia tidak menguji perkakasan fizikal, FPS, penggunaan berjam-jam atau keseluruhan proses browser.",
+    "JSHeapUsedSize selepas kutipan sampah paksa (GC) mengukur heap halaman, bukan penggunaan keseluruhan tab dalam Chrome Task Manager. Bacaan pengguna 150–178 MB tidak diukur semula melalui kaedah yang sama.",
+    "Heap, nod, listener dan timer ialah ukuran deskriptif. Tiada ambang kebocoran rekaan digunakan. Pertumbuhan kecil sahaja tidak membuktikan kebocoran atau ketiadaannya.",
+    "TaskDuration/LayoutCount/RecalcStyleCount ialah pembilang kerja kumulatif; kenaikannya tidak membuktikan penggunaan CPU ketika melahu atau kebocoran.",
+    "Pembalut timer menambah kos pengukuran dan hanya menjejak timer JavaScript halaman, bukan timer natif atau browser. Set pembalut hanya menyimpan ID angka.",
+    "Navigasi pertama memuatkan modul Saved. Kestabilan selepas banyak kumpulan navigasi berulang dengan modul yang sudah dimuatkan belum diukur. Chat halaman penuh diuji dengan 40 pertukaran dan reset, tanpa cuba pergi dan kembali melalui menu AI yang tidak wujud.",
+    "Pemulaan snapshot pemilik diuji sebagai fungsi tulen. Ujian browser hanya memasang semula AIChat, bukan menguji log masuk, log keluar atau pemasangan semula provider. Susunan StrictMode disemak melalui sumber dan kontrak, bukan pelaksanaan React StrictMode dalam mod pembangunan.",
+    "Ujian tidak mengakses production, data sebenar atau servis AI sebenar. Ia tidak meliputi pengesahan backend atau permission baharu, TypeScript seluruh projek atau keseluruhan CI."
+  ]
+}
