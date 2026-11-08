@@ -20,6 +20,7 @@ type FloatingAIPanelProps = {
   handlePanelMinimizeClick: MouseEventHandler<HTMLButtonElement>;
   handleReset: () => void;
   isMobile: boolean;
+  keyboardOpen?: boolean;
   isOpen: boolean;
   isThinking: boolean;
   layoutState: FloatingAiLayout;
@@ -49,6 +50,7 @@ export function FloatingAIPanel({
   handlePanelMinimizeClick,
   handleReset,
   isMobile,
+  keyboardOpen = false,
   isOpen,
   isThinking,
   layoutState,
@@ -102,6 +104,8 @@ export function FloatingAIPanel({
         aria-describedby={panelDescriptionId}
         data-floating-ai-dialog="true"
         data-floating-ai-panel-mode={layoutState.panel.mode}
+        data-floating-ai-keyboard={keyboardOpen || undefined}
+        data-compact-viewport={isMobile && layoutState.panel.height <= 320 || undefined}
         tabIndex={-1}
         {...modalDialogA11yProps}
       >
@@ -109,6 +113,7 @@ export function FloatingAIPanel({
           <div
             className={cn(
               "flex shrink-0 justify-center",
+              styles.floatingPanelHandle,
               layoutState.panel.mode === "fullscreen" ? "pt-3" : "pt-2",
             )}
           >
@@ -126,7 +131,7 @@ export function FloatingAIPanel({
               ? "min-h-16 px-4"
               : isMobile
                 ? "min-h-14 px-3.5"
-                : "h-14 px-4",
+                : "h-12 px-4",
           )}
         >
           <div className="min-w-0 flex-1">
@@ -142,7 +147,7 @@ export function FloatingAIPanel({
             </h2>
             <p
               id={panelDescriptionId}
-              className={cn("truncate text-xs leading-4", styles.floatingPanelDescription)}
+              className={!isMobile && (messagesLength > 0 || isThinking) ? "sr-only" : cn("truncate text-xs leading-4", styles.floatingPanelDescription)}
             >
               {FLOATING_AI_PANEL_DESCRIPTION}
             </p>
@@ -156,7 +161,7 @@ export function FloatingAIPanel({
                   variant="ghost"
                   className={cn(
                     styles.floatingHeaderButton,
-                    isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
+                    isMobile ? "h-11 w-11 p-0" : "h-10 w-10 p-0",
                   )}
                   onClick={handleReset}
                   disabled={messagesLength === 0 && !isThinking}
@@ -173,7 +178,7 @@ export function FloatingAIPanel({
                 variant="ghost"
                 className={cn(
                   styles.floatingHeaderButton,
-                  isMobile ? "h-11 w-11 p-0" : "h-8 w-8 p-0",
+                  isMobile ? "h-11 w-11 p-0" : "h-10 w-10 p-0",
                 )}
                 onClick={handlePanelMinimizeClick}
                 aria-label={`Kecilkan panel ${assistantLabel}`}
@@ -186,6 +191,7 @@ export function FloatingAIPanel({
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+            styles.floatingPanelBody,
             layoutState.panel.mode === "fullscreen"
               ? "p-3"
               : isMobile
@@ -215,6 +221,7 @@ export function FloatingAIPanel({
                   aiEnabled={aiEnabled}
                   assistantLabel={assistantLabel}
                   compactMode={preferCompactPanel}
+                  panelHeight={layoutState.panel.height}
                   onStatusChange={setAiStatus}
                   onCancelAISearchReady={registerCancelAISearch}
                 />

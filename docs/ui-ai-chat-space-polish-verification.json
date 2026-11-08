@@ -1,0 +1,711 @@
+{
+  "date": "2026-11-08",
+  "baseCommit": "d51edd99c764b78264967d8600f408d0394c1b35",
+  "beforeBuild": "receipt-adaptive-build-911dcf1e43c8",
+  "afterBuild": "receipt-adaptive-build-2e514a2ae3d2",
+  "matchedClientFiles": 2014,
+  "unitTests": 80,
+  "browserTests": 45,
+  "cspCases": 24,
+  "axeCases": 12,
+  "comparison": [
+    {
+      "surface": "full",
+      "theme": "light",
+      "width": 1366,
+      "beforeLogHeight": 521.40625,
+      "afterLogHeight": 569.40625,
+      "gain": 48,
+      "beforeInputY": 814,
+      "afterInputY": 814,
+      "recoveredDocumentHeight": 0,
+      "beforeHeader": null,
+      "afterHeader": null
+    },
+    {
+      "surface": "full",
+      "theme": "dark",
+      "width": 375,
+      "beforeLogHeight": 384,
+      "afterLogHeight": 384,
+      "gain": 0,
+      "beforeInputY": 669.796875,
+      "afterInputY": 613.796875,
+      "recoveredDocumentHeight": 56,
+      "beforeHeader": null,
+      "afterHeader": null
+    },
+    {
+      "surface": "floating",
+      "theme": "light",
+      "width": 1366,
+      "beforeLogHeight": 335,
+      "afterLogHeight": 387,
+      "gain": 52,
+      "beforeInputY": 805,
+      "afterInputY": 805,
+      "recoveredDocumentHeight": 0,
+      "beforeHeader": 56,
+      "afterHeader": 48
+    },
+    {
+      "surface": "floating",
+      "theme": "dark",
+      "width": 375,
+      "beforeLogHeight": 539,
+      "afterLogHeight": 591,
+      "gain": 52,
+      "beforeInputY": 817,
+      "afterInputY": 817,
+      "recoveredDocumentHeight": 0,
+      "beforeHeader": 56,
+      "afterHeader": 56
+    }
+  ],
+  "cases": [
+    {
+      "phase": "before",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-27e302d0bfeb",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "before",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-ca57f13591a0",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "before",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-452bb7c5db6a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "before",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-24a41cb56d99",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "tests",
+        "client/src/components/ai-space-presentation.test.ts",
+        "client/src/components/ai-chat-presentation-a11y.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/components/ui/a11y-contract.test.ts",
+        "client/src/components/public-component-jsdoc-contract.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/pages/ai/ai-conversation-card-a11y-contract.test.ts",
+        "client/src/app/scroll-fade-contract.test.ts",
+        "client/src/components/floating-ai-layout.test.ts",
+        "client/src/hooks/ai-message-follow.test.ts",
+        "client/src/components/ai-chat-manual-retry.test.ts"
+      ],
+      "runId": "receipt-adaptive-tests-03b0e96dd0af",
+      "exitCode": 0,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 80,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 80,
+        "todo": 0
+      },
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "lint",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIJumpToLatestButton.tsx",
+        "client/src/components/FloatingAIPanel.tsx",
+        "client/src/components/ui/a11y-contract.test.ts",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/components/ai-space-presentation.test.ts",
+        "tests/visual/ai-space-polish.spec.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-7392c03d790a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "types-focused",
+        "client/src/components/AIChat.tsx",
+        "client/src/components/AIJumpToLatestButton.tsx",
+        "client/src/components/FloatingAIPanel.tsx",
+        "client/src/components/ui/a11y-contract.test.ts",
+        "client/src/pages/ai/AIConversationCard.tsx",
+        "client/src/components/ai-space-presentation.test.ts",
+        "tests/visual/ai-space-polish.spec.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "runId": "receipt-adaptive-tests-9b1bbb6202db",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "floating",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-6123ad20c1b1",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "floating",
+        "light",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-27d9a6bc9f05",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "floating",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-bf5957b39b8a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "floating",
+        "dark",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-394744eefa44",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "full",
+        "light",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-31a9e418ea44",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "full",
+        "light",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-24baec46c605",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "full",
+        "dark",
+        "small"
+      ],
+      "runId": "receipt-adaptive-tests-008a131f7db7",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "full",
+        "dark",
+        "large"
+      ],
+      "runId": "receipt-adaptive-tests-9e0fdae08885",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-full",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-6c9d7ef34d4d",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-floating",
+        "reading"
+      ],
+      "runId": "receipt-adaptive-tests-3a769a9e31d6",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-polish",
+        "extremes",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-fd284bc7fe3e",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-polish",
+        "extremes",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-c373867d1440",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-polish",
+        "crowded",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-b5595a0d71b9",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-polish",
+        "status",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-0d6d97bfd672",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-polish",
+        "status",
+        "floating"
+      ],
+      "runId": "receipt-adaptive-tests-6c26d18d6130",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-retry",
+        "full"
+      ],
+      "runId": "receipt-adaptive-tests-58f9a023ba19",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-retry",
+        "floating"
+      ],
+      "runId": "receipt-adaptive-tests-711491cc620e",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "browser",
+        "data",
+        "ai-full"
+      ],
+      "runId": "receipt-adaptive-tests-8d550753a72a",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "browser",
+        "data",
+        "ai-float"
+      ],
+      "runId": "receipt-adaptive-tests-6659fb84776d",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-a1a3cf422ccf",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-1b054f50d132",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "light"
+      ],
+      "runId": "receipt-adaptive-tests-545d993d34ac",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    },
+    {
+      "phase": "after",
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "dark"
+      ],
+      "runId": "receipt-adaptive-tests-05dce3b006c5",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null
+    }
+  ],
+  "screenshots": [
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-27e302d0bfeb",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-27e302d0bfeb/ai-space-floating-light-1366-empty.jpg",
+      "bytes": 8918,
+      "sha256": "a08b2ccf1e2370c1dcd492d4d4b70a9052e92cb9f29ce5fde56acd2df7e400c6"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-27e302d0bfeb",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-27e302d0bfeb/ai-space-floating-light-1366-queue.jpg",
+      "bytes": 14351,
+      "sha256": "4928956315161f0873c6b88823b1f2787b968aa46b51b5e7de8325c5e3064d14"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-27e302d0bfeb",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-27e302d0bfeb/ai-space-floating-light-1366-reading.jpg",
+      "bytes": 23905,
+      "sha256": "3bb9c924690854294e5752e3f4bf624d3787b8fae426dec59f7a0366fb182e06"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-ca57f13591a0",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-ca57f13591a0/ai-space-floating-dark-375-empty.jpg",
+      "bytes": 9529,
+      "sha256": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-ca57f13591a0",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-ca57f13591a0/ai-space-floating-dark-375-queue.jpg",
+      "bytes": 12663,
+      "sha256": "89ca1d1209a44f12209bf990a3601d070cd38cb29b39413ccf2ec211959cc0bf"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-ca57f13591a0",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-ca57f13591a0/ai-space-floating-dark-375-reading.jpg",
+      "bytes": 35901,
+      "sha256": "cb3113f710415cf65bde8886f4d713fc79d96777a0dce1b8cb25eb343e066c4c"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-452bb7c5db6a",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-452bb7c5db6a/ai-space-full-light-1366-empty.jpg",
+      "bytes": 16454,
+      "sha256": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-452bb7c5db6a",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-452bb7c5db6a/ai-space-full-light-1366-queue.jpg",
+      "bytes": 26303,
+      "sha256": "71306e2f00ff432a9b85dbfad96ad34c5407fe3848584a8a9f710e310baef261"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-452bb7c5db6a",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-452bb7c5db6a/ai-space-full-light-1366-reading.jpg",
+      "bytes": 68052,
+      "sha256": "ae692d802384355b38a3c6fa7296542e45af4ad175d4070fa1e90b1fa17ca346"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-24a41cb56d99",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-24a41cb56d99/ai-space-full-dark-375-empty.jpg",
+      "bytes": 10591,
+      "sha256": "e8ea4c0d3acd0b5b008dd5fa146b4e495ac971202ab2ede8fac63094b4fa24e8"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-24a41cb56d99",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-24a41cb56d99/ai-space-full-dark-375-queue.jpg",
+      "bytes": 18441,
+      "sha256": "b48f79f1af8cfb67ebd38cd1de032add18c6a0176d9b9f0279bb5029079433a4"
+    },
+    {
+      "phase": "before",
+      "runId": "receipt-adaptive-tests-24a41cb56d99",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-24a41cb56d99/ai-space-full-dark-375-reading.jpg",
+      "bytes": 27071,
+      "sha256": "1c181ecf8ff961012cfd3946c3e1d9d596de2ca6c38d5e514963186a8ea222e9"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-a1a3cf422ccf",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-a1a3cf422ccf/ai-space-floating-light-1366-empty.jpg",
+      "bytes": 8866,
+      "sha256": "81f0cf1fd810140078c9767658ff13b95b2791bc8a41e03eae2c0d33bfd43067"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-a1a3cf422ccf",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-a1a3cf422ccf/ai-space-floating-light-1366-queue.jpg",
+      "bytes": 10706,
+      "sha256": "a2d7e21f6d897bb80d9cd1077575ded635adbe2a0eadfb76d3d80e66a54bcbf2"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-a1a3cf422ccf",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-a1a3cf422ccf/ai-space-floating-light-1366-reading.jpg",
+      "bytes": 25005,
+      "sha256": "cd19595058f571fdc34296181dd2a4d472a5fa87dd9735a4f06c86990df8d12c"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1b054f50d132",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1b054f50d132/ai-space-floating-dark-375-empty.jpg",
+      "bytes": 9529,
+      "sha256": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1b054f50d132",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1b054f50d132/ai-space-floating-dark-375-queue.jpg",
+      "bytes": 9951,
+      "sha256": "51dfbec606af0438adeb3aaf1537ac89f1694512319884d9e313767f7efaaba7"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-1b054f50d132",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-1b054f50d132/ai-space-floating-dark-375-reading.jpg",
+      "bytes": 38510,
+      "sha256": "1d6af56eed2ebb37e39fb8d13e7d9073a16268f947391444898840a4d651c1ac"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-545d993d34ac",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-545d993d34ac/ai-space-full-light-1366-empty.jpg",
+      "bytes": 16454,
+      "sha256": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-545d993d34ac",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-545d993d34ac/ai-space-full-light-1366-queue.jpg",
+      "bytes": 22370,
+      "sha256": "1e285fad31c73daea0db25550434bc2e85c3e1146b15683a8b2a35fa07d90c8c"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-545d993d34ac",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-545d993d34ac/ai-space-full-light-1366-reading.jpg",
+      "bytes": 73174,
+      "sha256": "6a949df4dba34f8cdec9faf8854a67d9858ed364673baf37e31a389c13a28a6e"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-05dce3b006c5",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-05dce3b006c5/ai-space-full-dark-375-empty.jpg",
+      "bytes": 10591,
+      "sha256": "e8ea4c0d3acd0b5b008dd5fa146b4e495ac971202ab2ede8fac63094b4fa24e8"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-05dce3b006c5",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-05dce3b006c5/ai-space-full-dark-375-queue.jpg",
+      "bytes": 16363,
+      "sha256": "28863c2e0a812b2040f246ed9364fa37acf8e3cfdccc1e63c8a3922193f931f3"
+    },
+    {
+      "phase": "after",
+      "runId": "receipt-adaptive-tests-05dce3b006c5",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-05dce3b006c5/ai-space-full-dark-375-reading.jpg",
+      "bytes": 26956,
+      "sha256": "7d02872820c1a3aef863e07c0f8bd7534f17ef6c4673f728c1a1672b86bff42f"
+    }
+  ],
+  "files": [
+    {
+      "name": "client/src/components/AIChat.tsx",
+      "sha256": "cd7a67b3b266ab92cc2550db3eb20480c0fc12f7e1a50922287eb40d20e1672b"
+    },
+    {
+      "name": "client/src/components/AIJumpToLatestButton.tsx",
+      "sha256": "e8003b6526dc740c25d9be8dae8d71b17d71b90d2b86f5d87746fe522f7edb04"
+    },
+    {
+      "name": "client/src/components/FloatingAIPanel.tsx",
+      "sha256": "d501823ebdf61ea33e3e8fdd28fa95868f6bbd5fcda0d62a1991de7c3226e0c7"
+    },
+    {
+      "name": "client/src/components/ui/a11y-contract.test.ts",
+      "sha256": "043aaaa8a533abee937781c8ffee5e69bf0a912d7e0249d5e80d32ff39845323"
+    },
+    {
+      "name": "client/src/pages/ai/AIConversationCard.tsx",
+      "sha256": "7bea851dfb8fd6b2a300ae3e627ce39ddaffdc2a598a2611ddc04f969282dbfe"
+    },
+    {
+      "name": "client/src/styles/ai.css",
+      "sha256": "df553746ce96763f6d56ffacc0febc80d90af1c06c64794d867e9fd5238edd08"
+    },
+    {
+      "name": "client/src/components/ai-space-presentation.test.ts",
+      "sha256": "5989487bcd7794d16a722367cf8499c936f64d79a26511ec962d7618554ed0b5"
+    },
+    {
+      "name": "tests/visual/ai-space-polish.spec.ts",
+      "sha256": "bf01681705a3af3a2177b10055e9194ebd335ccc56cb57168a5ce0f736a8a047"
+    },
+    {
+      "name": "tests/visual/ai-reading-polish.spec.ts",
+      "sha256": "b10ed1990230142acfbe6260ca27393988d6e62c5c3d359fded7a41e6606d00a"
+    }
+  ],
+  "detector": "Five UI sources scanned;[]/exit0",
+  "limits": "Synthetic local Chromium and bounded WSL bwrap; CPU4x/6x at375/1366 interaction is emulation. Text2x is CSS scale, not native zoom. FocusedTypeScript; nofullCI, physicalhardware, Safari/Firefox or actual screenreader speech claim. No production/commit/deploy inthis task."
+}

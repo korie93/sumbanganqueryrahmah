@@ -11,36 +11,17 @@ type AIMessageMarkdownBlock =
   | { type: "list"; ordered: boolean; start: number; items: string[] }
   | { type: "paragraph"; lines: string[] };
 
-function hashAIMessageKey(value: string) {
-  let hash = 5381;
-  for (const character of value) {
-    hash = (hash * 33) ^ character.charCodeAt(0);
-  }
-  return (hash >>> 0).toString(36);
-}
-
 function createAIMessageContentKeyFactory() {
-  const seenKeys = new Map<string, number>();
+  const occurrences = new Map<string, number>();
 
-  return (scope: string, value: string) => {
-    const baseKey = `${scope}:${hashAIMessageKey(value)}`;
-    const seenCount = seenKeys.get(baseKey) ?? 0;
-    seenKeys.set(baseKey, seenCount + 1);
-
-    return seenCount === 0 ? baseKey : `${baseKey}:repeat-${seenCount}`;
+  // A message grows by appending text. Its structural slots must retain their
+  // DOM identity while a paragraph, line or list item is still being revealed.
+  // Counts are local to each parent scope, so repeated content stays distinct.
+  return (scope: string) => {
+    const occurrence = occurrences.get(scope) ?? 0;
+    occurrences.set(scope, occurrence + 1);
+    return `${scope}:${occurrence}`;
   };
-}
-
-function getAIMessageBlockSeed(block: AIMessageMarkdownBlock) {
-  if (block.type === "code") {
-    // An open fence grows during reveal. Keep its DOM identity (and keyboard
-    // focus/scroll); the key factory distinguishes repeated fences of a language.
-    return block.language ?? "";
-  }
-  if (block.type === "list") {
-    return `${block.ordered ? `ordered:${block.start}` : "unordered"}\n${block.items.join("\n")}`;
-  }
-  return block.lines.join("\n");
 }
 
 function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[] {
@@ -141,7 +122,7 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
 function renderParagraphLines(
   lines: string[],
   blockKey: string,
-  getContentKey: (scope: string, value: string) => string,
+  getContentKey: (scope: string) => string,
 ) {
   let isFirstLine = true;
 
@@ -150,7 +131,7 @@ function renderParagraphLines(
     isFirstLine = false;
 
     return (
-      <span key={getContentKey(`${blockKey}:line`, line)}>
+      <span key={getContentKey(`${blockKey}:line`)}>
         {needsLineBreak ? <br /> : null}
       {line}
       </span>
@@ -167,7 +148,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
   const getContentKey = createAIMessageContentKeyFactory();
 
   return blocks.map((block) => {
-    const blockKey = getContentKey(`block:${block.type}`, getAIMessageBlockSeed(block));
+    const blockKey = getContentKey(`block:${block.type}`);
 
     if (block.type === "code") {
       return (
@@ -182,7 +163,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
       return (
         <ListTag key={blockKey} className="ai-markdown-list" start={block.ordered && block.start !== 1 ? block.start : undefined}>
           {block.items.map((item) => (
-            <li key={getContentKey(`${blockKey}:item`, item)}>{item}</li>
+            <li key={getContentKey(`${blockKey}:item`)}>{item}</li>
           ))}
         </ListTag>
       );

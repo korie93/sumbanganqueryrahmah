@@ -46,11 +46,13 @@
   --floating-ai-edge-gap: 6px;
 }
 
-.floatingPanelShellFullscreen {
+.floatingPanelShell.floatingPanelShellFullscreen {
   left: 0;
   right: 0;
   bottom: var(--floating-ai-panel-bottom, 0px);
   width: auto;
+  min-width: 0;
+  min-height: 0;
   height: var(--floating-ai-panel-height, 100vh);
   height: var(--floating-ai-panel-height, 100svh);
   height: var(--floating-ai-panel-height, 100dvh);
@@ -70,6 +72,35 @@
   border-bottom: 0;
   padding-top: var(--safe-area-inset-top);
   padding-bottom: var(--safe-area-inset-bottom);
+  padding-left: var(--safe-area-inset-left);
+  padding-right: var(--safe-area-inset-right);
+}
+
+/* Reserve the reported safe area on the surface once, not in the composer too. */
+.floatingPanelSurface[data-floating-ai-keyboard='true'] :global(.ai-input-container) {
+  padding-bottom: 10px;
+}
+
+/* Keep long drafts scrollable within the actual panel, rather than the layout
+   viewport hidden behind an on-screen keyboard. Normal-height panels keep 5 rows. */
+.floatingPanelFullscreenSurface[data-compact-viewport='true'] :global(.ai-input) {
+  max-height: max(46px, min(142px, calc(var(--floating-ai-panel-height, 600px) * 0.25)));
+}
+
+.floatingPanelSurface[data-compact-viewport='true'] .floatingPanelHeaderMobile {
+  min-height: 56px;
+}
+
+.floatingPanelSurface[data-compact-viewport='true'] .floatingPanelHandle {
+  padding-top: 4px;
+}
+
+.floatingPanelSurface[data-compact-viewport='true'] .floatingPanelBody {
+  padding: 8px;
+}
+
+.floatingPanelSurface[data-compact-viewport='true'] :global(.ai-input-container) {
+  padding: 8px;
 }
 
 .floatingPanelSurface {

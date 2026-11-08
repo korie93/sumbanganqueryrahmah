@@ -2,7 +2,7 @@ import { useId, useRef, type RefObject } from "react";
 import { AIMessageContent } from "@/components/AIMessage";
 import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
 import { AIIconTooltip } from "@/components/AIIconTooltip";
-import { AIChatStatusAnnouncement } from "@/components/AIChatStatusAnnouncement";
+import { AIChatStatusAnnouncement, getAIChatStatusAnnouncement } from "@/components/AIChatStatusAnnouncement";
 import { RotateCcw, SendHorizonal, Square, SquarePen } from "lucide-react";
 import { handleAIQueryKeyDown } from "@/components/ai-query-keyboard";
 import {
@@ -91,6 +91,8 @@ export function AIConversationCard({
     awaitingFirstToken,
     AI_PROCESSING_INDICATOR_DELAY_MS,
   );
+  const feedbackText = getAIChatStatusAnnouncement({ enabled: aiEnabled, status: aiStatus, gateNotice, slowNotice, retryAvailable });
+  const feedbackIsNotice = Boolean(gateNotice || retryAvailable || (slowNotice && (aiStatus === "SEARCHING" || aiStatus === "PROCESSING")));
   const chatControls = showResetButton && canReset ? (
     <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
       <AIIconTooltip label="Sembang Baharu">
@@ -112,83 +114,73 @@ export function AIConversationCard({
           </div>
         ) : null}
 
-        {(aiEnabled && aiStatus !== "IDLE") || chatControls ? (
+        {feedbackText || chatControls ? (
           <div className="ai-conversation-toolbar flex items-center justify-between gap-2">
-            {aiEnabled && aiStatus !== "IDLE" ? (
+            {feedbackText ? (
               <div
-                className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-xs leading-5 ${statusContent.className}`}
+                className={`flex min-w-0 items-center gap-2 rounded-lg px-2 py-1 text-xs leading-5 ${feedbackIsNotice ? "text-amber-700 dark:text-amber-300" : statusContent.className}`}
+                data-ai-feedback="true"
               >
                 <statusContent.icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                <span>{statusContent.text}</span>
+                <span className="min-w-0 break-words">{feedbackText}</span>
               </div>
             ) : null}
             {chatControls}
           </div>
         ) : null}
 
-        {aiEnabled && gateNotice ? (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-            {gateNotice}
-          </div>
-        ) : null}
-
-        {aiEnabled && slowNotice ? (
-          <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
-            <p className="font-medium">Sistem sedang memproses data.</p>
-            <p>Jawapan mengambil masa lebih lama daripada biasa.</p>
-          </div>
-        ) : null}
-
-        <div
-          ref={messagesContainerRef}
-          id={messagesId}
-          className={`${chatHeightClass} overflow-y-auto space-y-4 pr-2`}
-          role="log"
-          tabIndex={0}
-          aria-live="polite"
-          aria-relevant="additions text"
-          aria-busy={canStop}
-          aria-label={`Perbualan ${assistantLabel}`}
-        >
-          {messages.length === 0 ? (
-            <div className="text-sm text-muted-foreground">
-              Taip nama, nombor IC atau nombor akaun untuk bermula.
-            </div>
-          ) : null}
-
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`ai-page-message-row ${
-                message.role === "user"
-                  ? "ml-auto" : "mr-auto"
-              }`}
-              role="article"
-              aria-label={message.role === "user" ? "Mesej pengguna" : "Mesej pembantu AI"}
-            >
-              <div className={`ai-page-bubble whitespace-pre-wrap rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                <AIMessageContent content={message.content} />
+        <div className="ai-message-viewport">
+          <div
+            ref={messagesContainerRef}
+            id={messagesId}
+            className={`${chatHeightClass} overflow-y-auto space-y-4 pr-2`}
+            role="log"
+            tabIndex={0}
+            aria-live="polite"
+            aria-relevant="additions text"
+            aria-busy={canStop}
+            aria-label={`Perbualan ${assistantLabel}`}
+          >
+            {messages.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                Taip nama, nombor IC atau nombor akaun untuk bermula.
               </div>
-            </div>
-          ))}
+            ) : null}
 
-          {streamingText ? (
-            <div
-              key={`streaming-${streamingTimestamp}`}
-              className="ai-page-bubble mr-auto whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-foreground"
-              role="article"
-              aria-label="Mesej pembantu AI"
-            >
-              <AIMessageContent content={streamingText} />
-            </div>
-          ) : null}
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`ai-page-message-row ${
+                  message.role === "user"
+                    ? "ml-auto" : "mr-auto"
+                }`}
+                role="article"
+                aria-label={message.role === "user" ? "Mesej pengguna" : "Mesej pembantu AI"}
+              >
+                <div className={`ai-page-bubble whitespace-pre-wrap rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
+                  <AIMessageContent content={message.content} />
+                </div>
+              </div>
+            ))}
 
-          {showProcessingIndicator ? (
-            <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
-          ) : null}
+            {streamingText ? (
+              <div
+                key={`streaming-${streamingTimestamp}`}
+                className="ai-page-bubble mr-auto whitespace-pre-wrap rounded-2xl bg-muted px-4 py-3 text-foreground"
+                role="article"
+                aria-label="Mesej pembantu AI"
+              >
+                <AIMessageContent content={streamingText} />
+              </div>
+            ) : null}
+
+            {showProcessingIndicator ? (
+              <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
+            ) : null}
+          </div>
+
+          {onJumpToLatest ? <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={onJumpToLatest} /> : null}
         </div>
-
-        {onJumpToLatest ? <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={onJumpToLatest} /> : null}
         <div className="ai-composer-row flex items-end gap-2">
           <label htmlFor="ai-conversation-query" className="sr-only">
             Taip soalan kepada {assistantLabel}

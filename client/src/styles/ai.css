@@ -30,8 +30,43 @@
 }
 
 .ai-status-icon {
+  flex: none;
   width: 14px;
   height: 14px;
+}
+
+.ai-status-bar > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-message-viewport {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ai-jump-to-latest {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.ai-jump-to-latest > button {
+  pointer-events: auto;
+  background: var(--ai-surface-bg, hsl(var(--background)));
+}
+
+/* A focused jump stays mounted after activation. Keep the final line clear of
+   its footprint without reserving another row above the composer. */
+.ai-message-viewport:has(.ai-jump-to-latest) > [role="log"] {
+  padding-bottom: 64px;
+  scroll-padding-bottom: 64px;
 }
 
 .ai-notice {
@@ -331,6 +366,11 @@ ol.ai-markdown-list {
 
   .ai-page-workspace .ai-conversation-content > * {
     flex: none;
+  }
+
+  .ai-page-workspace .ai-message-viewport {
+    flex: 0 1 auto;
+    min-height: 0;
   }
 
   .ai-page-workspace .ai-page-message-log {

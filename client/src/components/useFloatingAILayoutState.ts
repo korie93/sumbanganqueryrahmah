@@ -47,7 +47,7 @@ export function useFloatingAILayoutState({
     keyboardOpen,
     bottomInset: viewportBottomInset,
     viewportHeight: mobileViewportHeight,
-  } = useMobileViewportState();
+  } = useMobileViewportState({ trackAllWidths: isMobile && isOpen });
   const [hasFocusedEditable, setHasFocusedEditable] = useState(false);
   const [hasFocusedAiEditable, setHasFocusedAiEditable] = useState(false);
   const [layoutState, setLayoutState] = useState<FloatingAiLayout>(() =>
@@ -181,8 +181,8 @@ export function useFloatingAILayoutState({
     const state = syncInputsRef.current;
     if (state.hiddenForAiPage || typeof window === "undefined") return;
     const effectiveViewportHeight =
-      state.isMobile && state.mobileViewportHeight > 0 && !state.keyboardOpen
-        ? state.mobileViewportHeight
+      state.isMobile && state.mobileViewportHeight > 0
+        ? state.mobileViewportHeight + (state.keyboardOpen ? state.viewportBottomInset : 0)
         : window.innerHeight;
     const domSnapshot = state.shouldTrackObstacleLayout
       ? collectFloatingAiDomSnapshot(obstacleQuery ?? queryFloatingAiObstacleElements(document, state.saveCollectionRoute, state.savedMobileRoute, state.guardedWorkspaceRoute))
@@ -392,5 +392,6 @@ export function useFloatingAILayoutState({
     hasFocusedEditable,
     layoutState,
     preferCompactPanel,
+    keyboardOpen,
   };
 }

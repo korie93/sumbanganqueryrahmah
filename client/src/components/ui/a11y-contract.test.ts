@@ -205,7 +205,7 @@ test("AI chat dynamic status and message regions are announced politely", () => 
 
   for (const relativePath of ["../AIChat.tsx", "../../pages/ai/AIConversationCard.tsx"]) {
     const chatSource = readSource(relativePath);
-    assert.match(chatSource, /import \{ AIChatStatusAnnouncement \} from "@\/components\/AIChatStatusAnnouncement"/);
+    assert.match(chatSource, /import \{ AIChatStatusAnnouncement, getAIChatStatusAnnouncement \} from "@\/components\/AIChatStatusAnnouncement"/);
     assert.equal((chatSource.match(/<AIChatStatusAnnouncement\b/g) ?? []).length, 1);
     assert.match(chatSource, /<AIChatStatusAnnouncement enabled=\{aiEnabled\} status=\{aiStatus\} gateNotice=\{gateNotice\} slowNotice=\{slowNotice\} retryAvailable=\{retryAvailable\} \/>/);
     assert.doesNotMatch(chatSource, /role="status"/);

@@ -1,0 +1,943 @@
+{
+  "date": "2026-11-08",
+  "status": "complete-local",
+  "beforeBuild": "receipt-adaptive-build-320a602dac40",
+  "afterBuild": "receipt-adaptive-build-9ce944157f66",
+  "applicationDifferences": [
+    "client/src/components/AIChat.tsx",
+    "client/src/components/FloatingAI.module.css",
+    "client/src/components/FloatingAI.tsx",
+    "client/src/components/FloatingAIPanel.tsx",
+    "client/src/components/useFloatingAILayoutState.ts",
+    "client/src/hooks/useAIMessageFollow.ts",
+    "client/src/hooks/useAutoGrowTextarea.ts"
+  ],
+  "sourceDifferences": [
+    "client/src/components/AIChat.tsx",
+    "client/src/components/FloatingAI.module.css",
+    "client/src/components/FloatingAI.tsx",
+    "client/src/components/FloatingAIPanel.tsx",
+    "client/src/components/useFloatingAILayoutState.ts",
+    "client/src/hooks/useAIMessageFollow.ts",
+    "client/src/hooks/useAutoGrowTextarea.ts",
+    "tests/visual/ai-keyboard-viewport.spec.ts"
+  ],
+  "clientHashesVerified": 2014,
+  "unitTests": 68,
+  "playwrightTests": 22,
+  "groups": {
+    "behavior": [
+      {
+        "args": [
+          "e2e",
+          "ai-keyboard",
+          "behavior"
+        ],
+        "runId": "receipt-adaptive-tests-bc070cc68c81",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 64.547,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-bc070cc68c81"
+      }
+    ],
+    "after": [
+      {
+        "args": [
+          "e2e",
+          "ai-keyboard",
+          "evidence"
+        ],
+        "runId": "receipt-adaptive-tests-79f0a691d996",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 37.587,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-79f0a691d996"
+      }
+    ],
+    "regressions": [
+      {
+        "args": [
+          "e2e",
+          "ai-full",
+          "reading"
+        ],
+        "runId": "receipt-adaptive-tests-4806833b7807",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 15.595,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-4806833b7807"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-floating",
+          "reading"
+        ],
+        "runId": "receipt-adaptive-tests-13d51ee544f7",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 16.922,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-13d51ee544f7"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-polish",
+          "input",
+          "full"
+        ],
+        "runId": "receipt-adaptive-tests-faa73fcf083d",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 23.526,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-faa73fcf083d"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-polish",
+          "input",
+          "floating"
+        ],
+        "runId": "receipt-adaptive-tests-f8ea982cb500",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 26.182,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-f8ea982cb500"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-space",
+          "behavior",
+          "floating",
+          "dark",
+          "small"
+        ],
+        "runId": "receipt-adaptive-tests-b4ac14fc32d1",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 23.859,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-b4ac14fc32d1"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-space",
+          "evidence",
+          "full",
+          "light"
+        ],
+        "runId": "receipt-adaptive-tests-190f2a2fb35a",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 13.803,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-190f2a2fb35a"
+      },
+      {
+        "args": [
+          "e2e",
+          "ai-space",
+          "evidence",
+          "floating",
+          "dark"
+        ],
+        "runId": "receipt-adaptive-tests-6a1eca3b684a",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 14.165,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-6a1eca3b684a"
+      }
+    ],
+    "unit": [
+      {
+        "args": [
+          "tests",
+          "client/src/components/floating-ai-layout.test.ts",
+          "client/src/components/floating-ai-shell-placement.test.tsx",
+          "client/src/components/useFloatingAILayoutState.contract.test.ts",
+          "client/src/components/floating-ai-a11y-contract.test.ts",
+          "client/src/hooks/use-mobile-viewport-state.test.ts",
+          "client/src/hooks/ai-message-follow.test.ts",
+          "client/src/hooks/auto-grow-textarea.test.ts",
+          "client/src/components/ai-space-presentation.test.ts",
+          "client/src/components/public-component-jsdoc-contract.test.ts"
+        ],
+        "runId": "receipt-adaptive-tests-b355d22bc99d",
+        "exitCode": 0,
+        "counts": {
+          "cancelled": 0,
+          "fail": 0,
+          "pass": 68,
+          "skipped": 0,
+          "suites": 0,
+          "tests": 68,
+          "todo": 0
+        },
+        "budgetFailure": null,
+        "seconds": 8.954,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-b355d22bc99d"
+      }
+    ],
+    "checks": [
+      {
+        "args": [
+          "lint",
+          "client/src/components/AIChat.tsx",
+          "client/src/components/FloatingAI.tsx",
+          "client/src/components/FloatingAIPanel.tsx",
+          "client/src/components/useFloatingAILayoutState.ts",
+          "client/src/hooks/useAIMessageFollow.ts",
+          "client/src/hooks/useAutoGrowTextarea.ts",
+          "tests/visual/ai-keyboard-viewport.spec.ts"
+        ],
+        "runId": "receipt-adaptive-tests-a53c92cdab8b",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 5.774,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-a53c92cdab8b"
+      },
+      {
+        "args": [
+          "types-focused",
+          "client/src/components/AIChat.tsx",
+          "client/src/components/FloatingAI.tsx",
+          "client/src/components/FloatingAIPanel.tsx",
+          "client/src/components/useFloatingAILayoutState.ts",
+          "client/src/hooks/useAIMessageFollow.ts",
+          "client/src/hooks/useAutoGrowTextarea.ts",
+          "tests/visual/ai-keyboard-viewport.spec.ts"
+        ],
+        "runId": "receipt-adaptive-tests-3a49292eae99",
+        "exitCode": 0,
+        "counts": {},
+        "budgetFailure": null,
+        "seconds": 6.569,
+        "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-3a49292eae99"
+      }
+    ]
+  },
+  "geometry": [
+    {
+      "scenario": "portrait",
+      "before": {
+        "layout": {
+          "width": 375,
+          "height": 844
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 464,
+          "height": 464
+        },
+        "panel": {
+          "left": 0,
+          "right": 375,
+          "top": 0,
+          "bottom": 464,
+          "width": 375,
+          "height": 464
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 375,
+          "top": 19,
+          "bottom": 83,
+          "width": 375,
+          "height": 64
+        },
+        "input": {
+          "left": 22,
+          "right": 297,
+          "top": 396,
+          "bottom": 442,
+          "width": 275,
+          "height": 46
+        },
+        "send": {
+          "left": 305,
+          "right": 353,
+          "top": 394,
+          "bottom": 442,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 12,
+          "right": 363,
+          "top": 95,
+          "bottom": 383,
+          "width": 351,
+          "height": 288
+        },
+        "gap": 191,
+        "scrollTop": 5801,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      },
+      "after": {
+        "layout": {
+          "width": 375,
+          "height": 844
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 464,
+          "height": 464
+        },
+        "panel": {
+          "left": 0,
+          "right": 375,
+          "top": 0,
+          "bottom": 464,
+          "width": 375,
+          "height": 464
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 375,
+          "top": 19,
+          "bottom": 83,
+          "width": 375,
+          "height": 64
+        },
+        "input": {
+          "left": 22,
+          "right": 297,
+          "top": 396,
+          "bottom": 442,
+          "width": 275,
+          "height": 46
+        },
+        "send": {
+          "left": 305,
+          "right": 353,
+          "top": 394,
+          "bottom": 442,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 12,
+          "right": 363,
+          "top": 95,
+          "bottom": 383,
+          "width": 351,
+          "height": 288
+        },
+        "gap": 0,
+        "scrollTop": 5992,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      }
+    },
+    {
+      "scenario": "panned",
+      "before": {
+        "layout": {
+          "width": 375,
+          "height": 844
+        },
+        "visible": {
+          "top": 160,
+          "bottom": 520,
+          "height": 360
+        },
+        "panel": {
+          "left": 0,
+          "right": 375,
+          "top": 0,
+          "bottom": 520,
+          "width": 375,
+          "height": 520
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 375,
+          "top": 19,
+          "bottom": 83,
+          "width": 375,
+          "height": 64
+        },
+        "input": {
+          "left": 22,
+          "right": 297,
+          "top": 452,
+          "bottom": 498,
+          "width": 275,
+          "height": 46
+        },
+        "send": {
+          "left": 305,
+          "right": 353,
+          "top": 450,
+          "bottom": 498,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 12,
+          "right": 363,
+          "top": 95,
+          "bottom": 439,
+          "width": 351,
+          "height": 344
+        },
+        "gap": 135,
+        "scrollTop": 5801,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      },
+      "after": {
+        "layout": {
+          "width": 375,
+          "height": 844
+        },
+        "visible": {
+          "top": 160,
+          "bottom": 520,
+          "height": 360
+        },
+        "panel": {
+          "left": 0,
+          "right": 375,
+          "top": 160,
+          "bottom": 520,
+          "width": 375,
+          "height": 360
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 375,
+          "top": 179,
+          "bottom": 243,
+          "width": 375,
+          "height": 64
+        },
+        "input": {
+          "left": 22,
+          "right": 297,
+          "top": 452,
+          "bottom": 498,
+          "width": 275,
+          "height": 46
+        },
+        "send": {
+          "left": 305,
+          "right": 353,
+          "top": 450,
+          "bottom": 498,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 12,
+          "right": 363,
+          "top": 255,
+          "bottom": 439,
+          "width": 351,
+          "height": 184
+        },
+        "gap": 0,
+        "scrollTop": 6096,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      }
+    },
+    {
+      "scenario": "short",
+      "before": {
+        "layout": {
+          "width": 320,
+          "height": 640
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 220,
+          "height": 220
+        },
+        "panel": {
+          "left": 0,
+          "right": 320,
+          "top": 0,
+          "bottom": 220,
+          "width": 320,
+          "height": 220
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 320,
+          "top": 19,
+          "bottom": 83,
+          "width": 320,
+          "height": 64
+        },
+        "input": {
+          "left": 22,
+          "right": 242,
+          "top": 106,
+          "bottom": 248,
+          "width": 220,
+          "height": 142
+        },
+        "send": {
+          "left": 250,
+          "right": 298,
+          "top": 200,
+          "bottom": 248,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 12,
+          "right": 308,
+          "top": 95,
+          "bottom": 117,
+          "width": 296,
+          "height": 22
+        },
+        "gap": 348,
+        "scrollTop": 5935,
+        "draft": "Baris draf 1: 000123.\nBaris draf 2: 000123.\nBaris draf 3: 000123.\nBaris draf 4: 000123.\nBaris draf 5: 000123.\nBaris draf 6: 000123.\nBaris draf 7: 000123.\nBaris draf 8: 000123.\nBaris draf 9: 000123.\nBaris draf 10: 000123.\nBaris draf 11: 000123.\nBaris draf 12: 000123.",
+        "focused": true,
+        "coarse": true
+      },
+      "after": {
+        "layout": {
+          "width": 320,
+          "height": 640
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 220,
+          "height": 220
+        },
+        "panel": {
+          "left": 0,
+          "right": 320,
+          "top": 0,
+          "bottom": 220,
+          "width": 320,
+          "height": 220
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 320,
+          "top": 11,
+          "bottom": 67,
+          "width": 320,
+          "height": 56
+        },
+        "input": {
+          "left": 16,
+          "right": 248,
+          "top": 149,
+          "bottom": 204,
+          "width": 232,
+          "height": 55
+        },
+        "send": {
+          "left": 256,
+          "right": 304,
+          "top": 156,
+          "bottom": 204,
+          "width": 48,
+          "height": 48
+        },
+        "log": {
+          "left": 8,
+          "right": 312,
+          "top": 75,
+          "bottom": 140,
+          "width": 304,
+          "height": 65
+        },
+        "gap": 0,
+        "scrollTop": 6240,
+        "draft": "Baris draf 1: 000123.\nBaris draf 2: 000123.\nBaris draf 3: 000123.\nBaris draf 4: 000123.\nBaris draf 5: 000123.\nBaris draf 6: 000123.\nBaris draf 7: 000123.\nBaris draf 8: 000123.\nBaris draf 9: 000123.\nBaris draf 10: 000123.\nBaris draf 11: 000123.\nBaris draf 12: 000123.",
+        "focused": true,
+        "coarse": true
+      }
+    },
+    {
+      "scenario": "landscape",
+      "before": {
+        "layout": {
+          "width": 844,
+          "height": 390
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 190,
+          "height": 190
+        },
+        "panel": {
+          "left": 428,
+          "right": 820,
+          "top": 72,
+          "bottom": 366,
+          "width": 392,
+          "height": 294
+        },
+        "mode": "dock",
+        "header": {
+          "left": 429,
+          "right": 819,
+          "top": 73,
+          "bottom": 121,
+          "width": 390,
+          "height": 48
+        },
+        "input": {
+          "left": 453,
+          "right": 743,
+          "top": 295,
+          "bottom": 341,
+          "width": 290,
+          "height": 46
+        },
+        "send": {
+          "left": 751,
+          "right": 795,
+          "top": 297,
+          "bottom": 341,
+          "width": 44,
+          "height": 44
+        },
+        "log": {
+          "left": 441,
+          "right": 807,
+          "top": 133,
+          "bottom": 282,
+          "width": 366,
+          "height": 149
+        },
+        "gap": 0,
+        "scrollTop": 6145,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      },
+      "after": {
+        "layout": {
+          "width": 844,
+          "height": 390
+        },
+        "visible": {
+          "top": 0,
+          "bottom": 190,
+          "height": 190
+        },
+        "panel": {
+          "left": 0,
+          "right": 844,
+          "top": 0,
+          "bottom": 190,
+          "width": 844,
+          "height": 190
+        },
+        "mode": "fullscreen",
+        "header": {
+          "left": 0,
+          "right": 844,
+          "top": 11,
+          "bottom": 67,
+          "width": 844,
+          "height": 56
+        },
+        "input": {
+          "left": 16,
+          "right": 776,
+          "top": 128,
+          "bottom": 174,
+          "width": 760,
+          "height": 46
+        },
+        "send": {
+          "left": 784,
+          "right": 828,
+          "top": 130,
+          "bottom": 174,
+          "width": 44,
+          "height": 44
+        },
+        "log": {
+          "left": 8,
+          "right": 836,
+          "top": 75,
+          "bottom": 119,
+          "width": 828,
+          "height": 44
+        },
+        "gap": 0,
+        "scrollTop": 2147,
+        "draft": "Draf 000123 belum dihantar",
+        "focused": true,
+        "coarse": true
+      }
+    }
+  ],
+  "inputStability": [
+    {
+      "surface": "full",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "full",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    }
+  ],
+  "normalVisualPairs": [
+    {
+      "name": "ai-space-full-light-1366-empty.jpg",
+      "baselineRun": "receipt-adaptive-tests-c56befc792b2",
+      "finalRun": "receipt-adaptive-tests-190f2a2fb35a",
+      "beforeSha": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30",
+      "afterSha": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30",
+      "identical": true
+    },
+    {
+      "name": "ai-space-full-light-1366-queue.jpg",
+      "baselineRun": "receipt-adaptive-tests-c56befc792b2",
+      "finalRun": "receipt-adaptive-tests-190f2a2fb35a",
+      "beforeSha": "1e285fad31c73daea0db25550434bc2e85c3e1146b15683a8b2a35fa07d90c8c",
+      "afterSha": "1e285fad31c73daea0db25550434bc2e85c3e1146b15683a8b2a35fa07d90c8c",
+      "identical": true
+    },
+    {
+      "name": "ai-space-full-light-1366-reading.jpg",
+      "baselineRun": "receipt-adaptive-tests-c56befc792b2",
+      "finalRun": "receipt-adaptive-tests-190f2a2fb35a",
+      "beforeSha": "6a949df4dba34f8cdec9faf8854a67d9858ed364673baf37e31a389c13a28a6e",
+      "afterSha": "6a949df4dba34f8cdec9faf8854a67d9858ed364673baf37e31a389c13a28a6e",
+      "identical": true
+    },
+    {
+      "name": "ai-space-floating-dark-375-empty.jpg",
+      "baselineRun": "receipt-adaptive-tests-558bd60bf9c2",
+      "finalRun": "receipt-adaptive-tests-6a1eca3b684a",
+      "beforeSha": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c",
+      "afterSha": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c",
+      "identical": true
+    },
+    {
+      "name": "ai-space-floating-dark-375-queue.jpg",
+      "baselineRun": "receipt-adaptive-tests-558bd60bf9c2",
+      "finalRun": "receipt-adaptive-tests-6a1eca3b684a",
+      "beforeSha": "51dfbec606af0438adeb3aaf1537ac89f1694512319884d9e313767f7efaaba7",
+      "afterSha": "51dfbec606af0438adeb3aaf1537ac89f1694512319884d9e313767f7efaaba7",
+      "identical": true
+    },
+    {
+      "name": "ai-space-floating-dark-375-reading.jpg",
+      "baselineRun": "receipt-adaptive-tests-558bd60bf9c2",
+      "finalRun": "receipt-adaptive-tests-6a1eca3b684a",
+      "beforeSha": "1d6af56eed2ebb37e39fb8d13e7d9073a16268f947391444898840a4d651c1ac",
+      "afterSha": "1d6af56eed2ebb37e39fb8d13e7d9073a16268f947391444898840a4d651c1ac",
+      "identical": true
+    }
+  ],
+  "captures": [
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-landscape-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-landscape-closed.jpg",
+      "sha256": "1f77ce683b8628a3816502aa0e38554bf88ce36c7a42d4de60a3f872d7c2f6f0"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-landscape-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-landscape-open.jpg",
+      "sha256": "93f8fdde22c51261fa3e1e927227c7b6158420a811e74d5352e9be51f0d52a6f"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-panned-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-panned-closed.jpg",
+      "sha256": "5c3a948537055c112c29d49d8f364097df5f54d3159f428a5d9937809f95fd08"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-panned-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-panned-open.jpg",
+      "sha256": "cf716178fd22a7d5b9a879c04639d794b6087ea8ae0858d376115871668abe3d"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-portrait-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-portrait-closed.jpg",
+      "sha256": "f4495c6091a2444b71c21c6294c679cfe65772c42dd3bdf9a06ad2d578474ee1"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-portrait-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-portrait-open.jpg",
+      "sha256": "aec2adc1e37a38b62a97769d565e6c973b1742e6faa949a91794ba02c5636a0f"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-short-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-short-closed.jpg",
+      "sha256": "27c1acfe7641f38c92481abd49f74a280d0747010ab3ccfefe8cf76d02134cb8"
+    },
+    {
+      "runId": "receipt-adaptive-tests-c7cd945f819b",
+      "name": "ai-keyboard-short-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-c7cd945f819b/ai-keyboard-short-open.jpg",
+      "sha256": "c449215b34de54a3264b099eba52ebdd7897a86bc3af574effb9276ceb933350"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-landscape-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-landscape-closed.jpg",
+      "sha256": "fb8d46c95336cfaf452af433a463e9975023dbeaeffce0fa67b5f03c28d1cb4b"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-landscape-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-landscape-open.jpg",
+      "sha256": "aa42f7218698831becccb7e9d072dc3c2fb48d3304c0c4260f752dff175090a2"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-panned-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-panned-closed.jpg",
+      "sha256": "5c3a948537055c112c29d49d8f364097df5f54d3159f428a5d9937809f95fd08"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-panned-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-panned-open.jpg",
+      "sha256": "fb2d3bee8970907a14b3aabd12395274f01d03a9c6f63c94b10fd72c98872d8d"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-portrait-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-portrait-closed.jpg",
+      "sha256": "f4495c6091a2444b71c21c6294c679cfe65772c42dd3bdf9a06ad2d578474ee1"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-portrait-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-portrait-open.jpg",
+      "sha256": "1d5af3aeff45ccc5113a75eb8f5b906ebef16cb2c9012e9d6c09f33e747fb7f6"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-short-closed.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-short-closed.jpg",
+      "sha256": "27c1acfe7641f38c92481abd49f74a280d0747010ab3ccfefe8cf76d02134cb8"
+    },
+    {
+      "runId": "receipt-adaptive-tests-79f0a691d996",
+      "name": "ai-keyboard-short-open.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-79f0a691d996/ai-keyboard-short-open.jpg",
+      "sha256": "0e3467876900227272d2d6080d9c4e8ed6549841004a5371204aff68e1e5c66d"
+    },
+    {
+      "runId": "receipt-adaptive-tests-bc070cc68c81",
+      "name": "ai-keyboard-safe-landscape.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-bc070cc68c81/ai-keyboard-safe-landscape.jpg",
+      "sha256": "39fd955ac9256b98da8ab65a3377ee05d48f43a2a3ae907bfcdb646c3dd32a7b"
+    },
+    {
+      "runId": "receipt-adaptive-tests-bc070cc68c81",
+      "name": "ai-keyboard-safe-short.jpg",
+      "path": "C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/ui-layout-20261105/evidence/receipt-adaptive-tests-bc070cc68c81/ai-keyboard-safe-short.jpg",
+      "sha256": "a298080e22ecb0304a352238781bd1b558710d1fd4982feec140a9b8449eee80"
+    }
+  ],
+  "retainedFailures": [
+    {
+      "runId": "receipt-adaptive-tests-c7b85b94067a",
+      "reason": "Header berada di luar visual viewport yang dianjak sebelum perubahan kod.",
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-fac3abb49fb3",
+      "reason": "Iterasi awal: putaran kembali ke potret menyebabkan kehilangan fokus, dan CSS desktop mengehadkan paparan skrin penuh.",
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-1d5210a90fb4",
+      "reason": "Apabila had tinggi mengecil, overflow kekal hidden sebelum pembetulan pengukuran selepas React menerapkan perubahan parent pada DOM.",
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-63fbd7db988e",
+      "reason": "Guard sementara lulus semakan overflow; Ctrl+End pada caret yang sudah di hujung tidak menggerakkan caret dalam probe asal.",
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-dbf428f512c6",
+      "reason": "Home/End membuktikan skrol berfungsi; penambahan had tinggi masih tidak membesarkan kotak input.",
+      "retained": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-1a037384c206",
+      "reason": "TypeScript terfokus menemui jenis Locator bagi selectionStart/selectionEnd dalam ujian; cast textarea diperbetulkan.",
+      "retained": true
+    }
+  ],
+  "limits": [
+    "Chromium headless setempat dengan data sintetik; height/offsetTop VisualViewport disimulasikan. Ini tidak menguji papan kekunci OS, anjakan viewport asli browser atau telefon fizikal.",
+    "Viewport yang diuji: 320 × 640, 375 × 844, 844 × 390 dan desktop fine-pointer 1366 × 900. Regresi biasa turut meliputi lebar 320/375 px dalam tema gelap dan chat penuh 1366 px dalam tema cerah.",
+    "Safe inset bawah 34 px dan kiri/kanan 44 px disuntik sebagai token dalam jalur viewport kelihatan; ini bukan bukti tingkah laku asli Safari/Android.",
+    "Bacaan di tengah sejarah disahkan pada lebar sama dengan anchor Baris 35. Putaran lebar mengesahkan awal sejarah/scrollTop 0; semua anchor selepas teks berbalut semula tidak dijamin.",
+    "Fixture keyboard menggunakan perf_mode low/reduced-motion. Tiada profil FPS, ujian perkakasan spesifikasi rendah/sederhana/tinggi yang baharu, zoom/pinch atau pembaca skrin sebenar dijalankan.",
+    "Tiada akses produksi, data sebenar, AI sebenar atau backend diuji. Semakan TypeScript seluruh projek dan keseluruhan CI tidak dijalankan; skop semakan ialah binaan frontend, lint dan TypeScript terfokus.",
+    "Browser Codex tidak boleh mencapai loopback sandbox; paparan diperiksa melalui tangkapan skrin Chromium setempat yang telah diluluskan."
+  ]
+}

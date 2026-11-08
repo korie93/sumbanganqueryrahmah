@@ -1,11 +1,11 @@
-import { memo, useCallback, useId, useRef, type KeyboardEvent, type MouseEvent } from "react";
+import { memo, useCallback, useId, useRef, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from "react";
 import { useLocation, useSearch } from "wouter";
 import {
   FloatingRootContainer,
 } from "@/components/FloatingAIShell";
 import { FloatingAIPanel } from "@/components/FloatingAIPanel";
 import { FloatingAITrigger } from "@/components/FloatingAITrigger";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { MOBILE_MEDIA_QUERY } from "@/lib/responsive";
 import { resolveFloatingAIMinimizedStatus } from "@/components/floating-ai-status";
 import {
   shouldKeepFloatingAiPanelMounted,
@@ -28,13 +28,26 @@ export type FloatingAIProps = {
 };
 
 const DEFAULT_FLOATING_AI_SYSTEM_NAME = "SQR";
+const CHAT_MOBILE_QUERY = `${MOBILE_MEDIA_QUERY}, (pointer: coarse) and (max-width: 1023px) and (max-height: 560px) and (orientation: landscape)`;
+
+function subscribeChatViewport(onChange: () => void) {
+  const query = window.matchMedia(CHAT_MOBILE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function isChatMobileViewport() {
+  return typeof window !== "undefined" && window.matchMedia(CHAT_MOBILE_QUERY).matches;
+}
 
 function resolveFloatingAiSystemName(systemName: string | undefined) {
   return systemName?.trim() || DEFAULT_FLOATING_AI_SYSTEM_NAME;
 }
 
 function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpen = false }: FloatingAIProps) {
-  const isMobile = useIsMobile();
+  // A rotated phone can exceed the global navigation breakpoint. Keep this
+  // adaptation in one snapshot so rotation cannot briefly release modal focus.
+  const isMobile = useSyncExternalStore(subscribeChatViewport, isChatMobileViewport, () => false);
   const [location] = useLocation();
   const search = useSearch();
   const hiddenForAiPage = activePage === "ai" || location.toLowerCase() === "/ai";
@@ -63,6 +76,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpe
     hasFocusedEditable,
     layoutState,
     preferCompactPanel,
+    keyboardOpen,
   } = useFloatingAILayoutState({
     activePage,
     location,
@@ -164,6 +178,7 @@ function FloatingAI({ timeoutMs, aiEnabled, activePage, systemName, initiallyOpe
         handlePanelMinimizeClick={handlePanelMinimizeClick}
         handleReset={handleReset}
         isMobile={isMobile}
+        keyboardOpen={keyboardOpen}
         isOpen={isOpen}
         isThinking={isThinking}
         layoutState={layoutState}

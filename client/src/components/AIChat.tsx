@@ -12,7 +12,7 @@ import { useAutoGrowTextarea } from "@/hooks/useAutoGrowTextarea";
 import AIMessage from "@/components/AIMessage";
 import { AIJumpToLatestButton } from "@/components/AIJumpToLatestButton";
 import { AIIconTooltip } from "@/components/AIIconTooltip";
-import { AIChatStatusAnnouncement } from "@/components/AIChatStatusAnnouncement";
+import { AIChatStatusAnnouncement, getAIChatStatusAnnouncement } from "@/components/AIChatStatusAnnouncement";
 import { type AIChatStatus as SharedAIChatStatus } from "@/lib/ai-chat";
 import "@/styles/ai.css";
 import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
@@ -27,6 +27,7 @@ type AIChatProps = {
   aiEnabled: boolean;
   assistantLabel?: string;
   compactMode?: boolean;
+  panelHeight?: number;
   onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
 };
@@ -41,6 +42,7 @@ export default function AIChat({
   aiEnabled,
   assistantLabel = "AI SQR",
   compactMode = false,
+  panelHeight,
   onCancelAISearchReady,
   onStatusChange,
 }: AIChatProps) {
@@ -75,7 +77,7 @@ export default function AIChat({
     onStatusChange,
     timeoutMs,
   });
-  useAutoGrowTextarea(textareaRef, query, { minRows: 1, maxRows: 5 });
+  useAutoGrowTextarea(textareaRef, query, { minRows: 1, maxRows: 5, layoutKey: panelHeight });
   const remainingCharacters = getAIChatRemainingCharacterCount(query);
   const showCharacterLimit = remainingCharacters <= 200;
   const canStop = isProcessing || isTyping;
@@ -86,65 +88,56 @@ export default function AIChat({
     awaitingFirstToken,
     AI_PROCESSING_INDICATOR_DELAY_MS,
   );
+  const feedbackText = getAIChatStatusAnnouncement({ enabled: aiEnabled, status: aiStatus, gateNotice, slowNotice, retryAvailable });
 
   return (
     <div className="ai-chat-container" data-compact={compactMode ? "true" : "false"}>
       <AIChatStatusAnnouncement enabled={aiEnabled} status={aiStatus} gateNotice={gateNotice} slowNotice={slowNotice} retryAvailable={retryAvailable} />
-      {aiStatus !== "IDLE" ? <div className="ai-status-bar">
+      {feedbackText ? <div className="ai-status-bar" data-ai-feedback="true">
         <statusMeta.icon className="ai-status-icon" aria-hidden="true" />
         <span>
-          {statusMeta.text}
+          {feedbackText}
         </span>
       </div> : null}
 
-      {slowNotice ? (
-        <div className="ai-notice">
-          <p className="ai-notice-title">Sistem sedang memproses data.</p>
-          <p>Jawapan mengambil masa lebih lama daripada biasa.</p>
+      <div className="ai-message-viewport">
+        <div
+          ref={messagesRef}
+          id={messagesId}
+          className="ai-messages"
+          role="log"
+          tabIndex={0}
+          aria-live="polite"
+          aria-relevant="additions text"
+          aria-atomic="false"
+          aria-busy={canStop}
+          aria-label={`Perbualan ${assistantLabel}`}
+        >
+          {messages.length === 0 ? (
+            <div className="ai-empty-hint">
+              Taip nama, nombor IC atau nombor akaun untuk bermula.
+            </div>
+          ) : null}
+
+          {messages.map((msg) => (
+            <AIMessage
+              key={msg.id}
+              messageRole={msg.role}
+              content={msg.content}
+            />
+          ))}
+
+          {showProcessingIndicator ? (
+            <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
+          ) : null}
+
+          {isTyping && streamingText ? (
+            <AIMessage messageRole="assistant" content={streamingText} />
+          ) : null}
         </div>
-      ) : null}
-      {gateNotice ? (
-        <div className="ai-notice">
-          {gateNotice}
-        </div>
-      ) : null}
 
-      <div
-        ref={messagesRef}
-        id={messagesId}
-        className="ai-messages"
-        role="log"
-        tabIndex={0}
-        aria-live="polite"
-        aria-relevant="additions text"
-        aria-atomic="false"
-        aria-busy={canStop}
-        aria-label={`Perbualan ${assistantLabel}`}
-      >
-        {messages.length === 0 ? (
-          <div className="ai-empty-hint">
-            Taip nama, nombor IC atau nombor akaun untuk bermula.
-          </div>
-        ) : null}
-
-        {messages.map((msg) => (
-          <AIMessage
-            key={msg.id}
-            messageRole={msg.role}
-            content={msg.content}
-          />
-        ))}
-
-        {showProcessingIndicator ? (
-          <AILoadingSkeleton label={`${assistantLabel} sedang menyediakan jawapan...`} />
-        ) : null}
-
-        {isTyping && streamingText ? (
-          <AIMessage messageRole="assistant" content={streamingText} />
-        ) : null}
+        <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={jumpToLatest} />
       </div>
-
-      <AIJumpToLatestButton controlsId={messagesId} visible={showJumpToLatest} onJump={jumpToLatest} className="px-3 pb-2" />
       <div className="ai-input-container">
         <label htmlFor={queryInputId} className="sr-only">
           Taip soalan kepada {assistantLabel}

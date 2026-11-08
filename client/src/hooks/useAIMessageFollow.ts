@@ -39,6 +39,18 @@ export function useAIMessageFollow({ containerRef, messages, streamingText, acti
   }, [containerRef, setFollowing]);
 
   useEffect(() => {
+    const element = containerRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      // Keyboard/rotation changes the log's height without changing messages.
+      // Readers who scrolled back retain their position and the jump control.
+      if (followingRef.current) jumpToLatest();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [containerRef, jumpToLatest]);
+
+  useEffect(() => {
     if (messages.length === 0 && !streamingText) setFollowing(true);
     if (followingRef.current) jumpToLatest();
   }, [activityKey, jumpToLatest, messages, setFollowing, streamingText]);

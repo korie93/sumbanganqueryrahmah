@@ -1,0 +1,1139 @@
+{
+  "date": "2026-11-08",
+  "status": "complete-local",
+  "beforeBuild": "receipt-adaptive-build-20ff4df5f6db",
+  "afterBuild": "receipt-adaptive-build-320a602dac40",
+  "applicationDifferences": [
+    "client/src/hooks/useAutoGrowTextarea.ts"
+  ],
+  "clientHashesVerified": 2014,
+  "sourceDifferences": [
+    "client/src/hooks/useAutoGrowTextarea.ts",
+    "tests/visual/ai-reading-polish.spec.ts"
+  ],
+  "red": "receipt-adaptive-tests-1f285590ddaf",
+  "diagnosisV2": "receipt-adaptive-tests-70f96b5e137c",
+  "unitTests": 42,
+  "playwrightTests": 10,
+  "inputProfileRuns": 16,
+  "profileAttempts": 17,
+  "incompleteAttempts": [
+    {
+      "runId": "receipt-adaptive-tests-291191b7f34c",
+      "exitCode": 1,
+      "seconds": 166.056,
+      "reason": "Outer subprocess timeout165s before runtime JSON export; definitive cause unconfirmed.",
+      "retained": true,
+      "retryCompleted": true,
+      "retryRunId": "receipt-adaptive-tests-77b904af1f4a"
+    }
+  ],
+  "probeScenarios": 32,
+  "measurements": [
+    {
+      "runId": "receipt-adaptive-tests-e5158ed0aecb",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 6144.917,
+      "layoutMs": 486.344,
+      "keyboardEventP95Ms": 208,
+      "keyP95ProxyMs": 870,
+      "inputP95ProxyMs": 810
+    },
+    {
+      "runId": "receipt-adaptive-tests-e5158ed0aecb",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 5787.613,
+      "layoutMs": 468.6799999999999,
+      "keyboardEventP95Ms": 192,
+      "keyP95ProxyMs": 1243,
+      "inputP95ProxyMs": 1217
+    },
+    {
+      "runId": "receipt-adaptive-tests-5c8a4b64a3a0",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5472.599,
+      "layoutMs": 186.46399999999997,
+      "keyboardEventP95Ms": 168,
+      "keyP95ProxyMs": 1013,
+      "inputP95ProxyMs": 979
+    },
+    {
+      "runId": "receipt-adaptive-tests-5c8a4b64a3a0",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5535.129,
+      "layoutMs": 393.08799999999997,
+      "keyboardEventP95Ms": 184,
+      "keyP95ProxyMs": 2530,
+      "inputP95ProxyMs": 2503
+    },
+    {
+      "runId": "receipt-adaptive-tests-2a224d8d83f3",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5486.038,
+      "layoutMs": 341.52,
+      "keyboardEventP95Ms": 184,
+      "keyP95ProxyMs": 1380,
+      "inputP95ProxyMs": 1311
+    },
+    {
+      "runId": "receipt-adaptive-tests-2a224d8d83f3",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5462.883,
+      "layoutMs": 430.648,
+      "keyboardEventP95Ms": 224,
+      "keyP95ProxyMs": 2712,
+      "inputP95ProxyMs": 2618
+    },
+    {
+      "runId": "receipt-adaptive-tests-fb6ec10c6baa",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 7721.594,
+      "layoutMs": 581.0500000000001,
+      "keyboardEventP95Ms": 304,
+      "keyP95ProxyMs": 2174,
+      "inputP95ProxyMs": 2096
+    },
+    {
+      "runId": "receipt-adaptive-tests-fb6ec10c6baa",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 6363.331999999999,
+      "layoutMs": 351.18000000000006,
+      "keyboardEventP95Ms": 296,
+      "keyP95ProxyMs": 1056,
+      "inputP95ProxyMs": 1022
+    },
+    {
+      "runId": "receipt-adaptive-tests-dc1b09ccfdf6",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 6304.371,
+      "layoutMs": 355.91999999999996,
+      "keyboardEventP95Ms": 296,
+      "keyP95ProxyMs": 834,
+      "inputP95ProxyMs": 809
+    },
+    {
+      "runId": "receipt-adaptive-tests-dc1b09ccfdf6",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 5861.0509999999995,
+      "layoutMs": 547.9150000000001,
+      "keyboardEventP95Ms": 184,
+      "keyP95ProxyMs": 719,
+      "inputP95ProxyMs": 658
+    },
+    {
+      "runId": "receipt-adaptive-tests-881a06325a07",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5695.582999999999,
+      "layoutMs": 345.34800000000007,
+      "keyboardEventP95Ms": 200,
+      "keyP95ProxyMs": 1545,
+      "inputP95ProxyMs": 1504
+    },
+    {
+      "runId": "receipt-adaptive-tests-881a06325a07",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 5627.588999999999,
+      "layoutMs": 372.345,
+      "keyboardEventP95Ms": 184,
+      "keyP95ProxyMs": 1192,
+      "inputP95ProxyMs": 1154
+    },
+    {
+      "runId": "receipt-adaptive-tests-038ab2c02c8e",
+      "before": true,
+      "surface": "floating",
+      "cpu": 1,
+      "phase": "empty-transcript",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 727.7390000000006,
+      "layoutMs": 36.46000000000001,
+      "keyboardEventP95Ms": 56,
+      "keyP95ProxyMs": 51,
+      "inputP95ProxyMs": 47
+    },
+    {
+      "runId": "receipt-adaptive-tests-038ab2c02c8e",
+      "before": true,
+      "surface": "floating",
+      "cpu": 1,
+      "phase": "after-20k-answer",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 816.8889999999998,
+      "layoutMs": 40.13899999999998,
+      "keyboardEventP95Ms": 24,
+      "keyP95ProxyMs": 21,
+      "inputP95ProxyMs": 17
+    },
+    {
+      "runId": "receipt-adaptive-tests-a4a64013d845",
+      "before": false,
+      "surface": "floating",
+      "cpu": 1,
+      "phase": "empty-transcript",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 818.3569999999997,
+      "layoutMs": 30.930000000000014,
+      "keyboardEventP95Ms": 24,
+      "keyP95ProxyMs": 48,
+      "inputP95ProxyMs": 40
+    },
+    {
+      "runId": "receipt-adaptive-tests-a4a64013d845",
+      "before": false,
+      "surface": "floating",
+      "cpu": 1,
+      "phase": "after-20k-answer",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 748.9119999999998,
+      "layoutMs": 42.955999999999996,
+      "keyboardEventP95Ms": 24,
+      "keyP95ProxyMs": 21,
+      "inputP95ProxyMs": 17
+    },
+    {
+      "runId": "receipt-adaptive-tests-b4b7410c9f23",
+      "before": true,
+      "surface": "full",
+      "cpu": 4,
+      "phase": "empty-transcript",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 4194.196,
+      "layoutMs": 178.557,
+      "keyboardEventP95Ms": 120,
+      "keyP95ProxyMs": 647,
+      "inputP95ProxyMs": 632
+    },
+    {
+      "runId": "receipt-adaptive-tests-b4b7410c9f23",
+      "before": true,
+      "surface": "full",
+      "cpu": 4,
+      "phase": "after-20k-answer",
+      "heightZero": 33,
+      "styleMutations": 66,
+      "scrollHeightReads": 99,
+      "layoutCount": 133,
+      "taskMs": 4430.586,
+      "layoutMs": 338.521,
+      "keyboardEventP95Ms": 128,
+      "keyP95ProxyMs": 347,
+      "inputP95ProxyMs": 310
+    },
+    {
+      "runId": "receipt-adaptive-tests-2e5441f0a06f",
+      "before": false,
+      "surface": "full",
+      "cpu": 4,
+      "phase": "empty-transcript",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 3829.253,
+      "layoutMs": 99.40599999999999,
+      "keyboardEventP95Ms": 120,
+      "keyP95ProxyMs": 319,
+      "inputP95ProxyMs": 305
+    },
+    {
+      "runId": "receipt-adaptive-tests-2e5441f0a06f",
+      "before": false,
+      "surface": "full",
+      "cpu": 4,
+      "phase": "after-20k-answer",
+      "heightZero": 0,
+      "styleMutations": 0,
+      "scrollHeightReads": 33,
+      "layoutCount": 67,
+      "taskMs": 3977.860999999999,
+      "layoutMs": 211.63500000000002,
+      "keyboardEventP95Ms": 128,
+      "keyP95ProxyMs": 231,
+      "inputP95ProxyMs": 209
+    }
+  ],
+  "comparisons": [
+    {
+      "group": "floating/6/empty-transcript",
+      "samplesPerBuild": 3,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 486.344,
+          "after": 341.52,
+          "changePercent": -29.77809945223957
+        },
+        "taskMs": {
+          "before": 6304.371,
+          "after": 5486.038,
+          "changePercent": -12.980406768573749
+        },
+        "keyboardEventP95Ms": {
+          "before": 296,
+          "after": 184,
+          "changePercent": -37.83783783783784
+        },
+        "keyP95ProxyMs": {
+          "before": 870,
+          "after": 1380,
+          "changePercent": 58.620689655172406
+        }
+      }
+    },
+    {
+      "group": "floating/6/after-20k-answer",
+      "samplesPerBuild": 3,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 468.6799999999999,
+          "after": 393.08799999999997,
+          "changePercent": -16.12870188614832
+        },
+        "taskMs": {
+          "before": 5861.0509999999995,
+          "after": 5535.129,
+          "changePercent": -5.560811533631078
+        },
+        "keyboardEventP95Ms": {
+          "before": 192,
+          "after": 184,
+          "changePercent": -4.166666666666666
+        },
+        "keyP95ProxyMs": {
+          "before": 1056,
+          "after": 2530,
+          "changePercent": 139.58333333333331
+        }
+      }
+    },
+    {
+      "group": "floating/1/empty-transcript",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 36.46000000000001,
+          "after": 30.930000000000014,
+          "changePercent": -15.16730663741084
+        },
+        "taskMs": {
+          "before": 727.7390000000006,
+          "after": 818.3569999999997,
+          "changePercent": 12.451991716810431
+        },
+        "keyboardEventP95Ms": {
+          "before": 56,
+          "after": 24,
+          "changePercent": -57.14285714285714
+        },
+        "keyP95ProxyMs": {
+          "before": 51,
+          "after": 48,
+          "changePercent": -5.88235294117647
+        }
+      }
+    },
+    {
+      "group": "floating/1/after-20k-answer",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 40.13899999999998,
+          "after": 42.955999999999996,
+          "changePercent": 7.01811206058949
+        },
+        "taskMs": {
+          "before": 816.8889999999998,
+          "after": 748.9119999999998,
+          "changePercent": -8.321448813731118
+        },
+        "keyboardEventP95Ms": {
+          "before": 24,
+          "after": 24,
+          "changePercent": 0
+        },
+        "keyP95ProxyMs": {
+          "before": 21,
+          "after": 21,
+          "changePercent": 0
+        }
+      }
+    },
+    {
+      "group": "full/4/empty-transcript",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 178.557,
+          "after": 99.40599999999999,
+          "changePercent": -44.32814171385048
+        },
+        "taskMs": {
+          "before": 4194.196,
+          "after": 3829.253,
+          "changePercent": -8.701143198839533
+        },
+        "keyboardEventP95Ms": {
+          "before": 120,
+          "after": 120,
+          "changePercent": 0
+        },
+        "keyP95ProxyMs": {
+          "before": 647,
+          "after": 319,
+          "changePercent": -50.695517774343124
+        }
+      }
+    },
+    {
+      "group": "full/4/after-20k-answer",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "heightZero": {
+          "before": 33,
+          "after": 0,
+          "changePercent": -100
+        },
+        "styleMutations": {
+          "before": 66,
+          "after": 0,
+          "changePercent": -100
+        },
+        "scrollHeightReads": {
+          "before": 99,
+          "after": 33,
+          "changePercent": -66.66666666666666
+        },
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 338.521,
+          "after": 211.63500000000002,
+          "changePercent": -37.48246046774055
+        },
+        "taskMs": {
+          "before": 4430.586,
+          "after": 3977.860999999999,
+          "changePercent": -10.218174300194178
+        },
+        "keyboardEventP95Ms": {
+          "before": 128,
+          "after": 128,
+          "changePercent": 0
+        },
+        "keyP95ProxyMs": {
+          "before": 347,
+          "after": 231,
+          "changePercent": -33.429394812680115
+        }
+      }
+    }
+  ],
+  "quietMeasurements": [
+    {
+      "runId": "receipt-adaptive-tests-88205a7844fe",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 133,
+      "layoutMs": 191.56400000000008,
+      "taskMs": 4789.200000000001,
+      "keyboardEventP95Ms": 152,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 296,
+      "inputP95ProxyMs": 231
+    },
+    {
+      "runId": "receipt-adaptive-tests-88205a7844fe",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 133,
+      "layoutMs": 197.6490000000001,
+      "taskMs": 4476.711,
+      "keyboardEventP95Ms": 184,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 329,
+      "inputP95ProxyMs": 304
+    },
+    {
+      "runId": "receipt-adaptive-tests-02f1073d7e69",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 67,
+      "layoutMs": 92.41200000000002,
+      "taskMs": 3836.6800000000003,
+      "keyboardEventP95Ms": 168,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 884,
+      "inputP95ProxyMs": 861
+    },
+    {
+      "runId": "receipt-adaptive-tests-02f1073d7e69",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 67,
+      "layoutMs": 93.28000000000003,
+      "taskMs": 3746.3610000000003,
+      "keyboardEventP95Ms": 120,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 325,
+      "inputP95ProxyMs": 308
+    },
+    {
+      "runId": "receipt-adaptive-tests-dc141487947e",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 67,
+      "layoutMs": 79.81599999999997,
+      "taskMs": 3968.8680000000004,
+      "keyboardEventP95Ms": 136,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 274,
+      "inputP95ProxyMs": 216
+    },
+    {
+      "runId": "receipt-adaptive-tests-dc141487947e",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 67,
+      "layoutMs": 144.60999999999996,
+      "taskMs": 3729.239999999999,
+      "keyboardEventP95Ms": 120,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 450,
+      "inputP95ProxyMs": 445
+    },
+    {
+      "runId": "receipt-adaptive-tests-cc9aeb4856a3",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 133,
+      "layoutMs": 211.19800000000004,
+      "taskMs": 4627.455999999999,
+      "keyboardEventP95Ms": 192,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 554,
+      "inputP95ProxyMs": 484
+    },
+    {
+      "runId": "receipt-adaptive-tests-cc9aeb4856a3",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 133,
+      "layoutMs": 124.263,
+      "taskMs": 4163.273,
+      "keyboardEventP95Ms": 144,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 327,
+      "inputP95ProxyMs": 307
+    },
+    {
+      "runId": "receipt-adaptive-tests-77b904af1f4a",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 133,
+      "layoutMs": 229.689,
+      "taskMs": 4456.494,
+      "keyboardEventP95Ms": 152,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 797,
+      "inputP95ProxyMs": 770
+    },
+    {
+      "runId": "receipt-adaptive-tests-77b904af1f4a",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 133,
+      "layoutMs": 131.4989999999999,
+      "taskMs": 4117.375000000001,
+      "keyboardEventP95Ms": 176,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 295,
+      "inputP95ProxyMs": 277
+    },
+    {
+      "runId": "receipt-adaptive-tests-10c61542133c",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "empty-transcript",
+      "layoutCount": 67,
+      "layoutMs": 134.63599999999997,
+      "taskMs": 3792.3410000000003,
+      "keyboardEventP95Ms": 104,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 555,
+      "inputP95ProxyMs": 523
+    },
+    {
+      "runId": "receipt-adaptive-tests-10c61542133c",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "phase": "after-20k-answer",
+      "layoutCount": 67,
+      "layoutMs": 88.85500000000002,
+      "taskMs": 3961.549,
+      "keyboardEventP95Ms": 184,
+      "keyboardEntries": 33,
+      "keyP95ProxyMs": 200,
+      "inputP95ProxyMs": 186
+    }
+  ],
+  "quietComparisons": [
+    {
+      "group": "floating/6/empty-transcript",
+      "samplesPerBuild": 3,
+      "metrics": {
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 211.19800000000004,
+          "after": 92.41200000000002,
+          "changePercent": -56.24390382484682
+        },
+        "taskMs": {
+          "before": 4627.455999999999,
+          "after": 3836.6800000000003,
+          "changePercent": -17.08878485284353
+        },
+        "keyboardEventP95Ms": {
+          "before": 152,
+          "after": 136,
+          "changePercent": -10.526315789473683
+        },
+        "keyP95ProxyMs": {
+          "before": 554,
+          "after": 555,
+          "changePercent": 0.18050541516245489
+        }
+      }
+    },
+    {
+      "group": "floating/6/after-20k-answer",
+      "samplesPerBuild": 3,
+      "metrics": {
+        "layoutCount": {
+          "before": 133,
+          "after": 67,
+          "changePercent": -49.62406015037594
+        },
+        "layoutMs": {
+          "before": 131.4989999999999,
+          "after": 93.28000000000003,
+          "changePercent": -29.064099346763022
+        },
+        "taskMs": {
+          "before": 4163.273,
+          "after": 3746.3610000000003,
+          "changePercent": -10.014044238751573
+        },
+        "keyboardEventP95Ms": {
+          "before": 176,
+          "after": 120,
+          "changePercent": -31.818181818181817
+        },
+        "keyP95ProxyMs": {
+          "before": 327,
+          "after": 325,
+          "changePercent": -0.6116207951070336
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "args": [
+        "tests",
+        "client/src/hooks/auto-grow-textarea.test.ts",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/lib/ai-response-reveal.test.ts",
+        "client/src/hooks/ai-message-follow.test.ts",
+        "client/src/components/useAIChatTypingAction.contract.test.ts",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/public-component-jsdoc-contract.test.ts",
+        "client/src/components/ai-space-presentation.test.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-35764d033f46",
+      "exitCode": 0,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 42,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 42,
+        "todo": 0
+      },
+      "budgetFailure": null,
+      "seconds": 12.317,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-35764d033f46"
+    },
+    {
+      "args": [
+        "lint",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-d774d7f9cb96",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 5.471,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-d774d7f9cb96"
+    },
+    {
+      "args": [
+        "types-focused",
+        "client/src/hooks/useAutoGrowTextarea.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-1561d7920dbb",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 7.799,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-1561d7920dbb"
+    }
+  ],
+  "behavior": [
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "input",
+        "full"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-adc7c527b5c1",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 30.925,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-adc7c527b5c1"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "input",
+        "floating"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-ba2928ae2c88",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 31.893,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-ba2928ae2c88"
+    }
+  ],
+  "regressions": [
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "reading"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-09661fe75b85",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 24.177,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-09661fe75b85"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "reading"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-5d33bb5363d7",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 20.008,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-5d33bb5363d7"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-space",
+        "behavior",
+        "floating",
+        "dark",
+        "small"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-0f1a1e990cd3",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 28.453,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-0f1a1e990cd3"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "light"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-c56befc792b2",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 14.217,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-c56befc792b2"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "dark"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-558bd60bf9c2",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 14.288,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-558bd60bf9c2"
+    }
+  ],
+  "observedBehavior": [
+    {
+      "surface": "full",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "full",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "light",
+      "width": 1366,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    },
+    {
+      "surface": "floating",
+      "theme": "dark",
+      "width": 375,
+      "restingHeight": 46,
+      "shortTyping": {
+        "styleMutations": 0,
+        "zeroHeightStates": 0
+      }
+    }
+  ],
+  "visualPairs": [
+    {
+      "runId": "receipt-adaptive-tests-c56befc792b2",
+      "name": "ai-space-full-light-1366-empty.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-c56befc792b2/ai-space-full-light-1366-empty.jpg",
+      "beforeRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30",
+      "identical": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-c56befc792b2",
+      "name": "ai-space-full-light-1366-queue.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-c56befc792b2/ai-space-full-light-1366-queue.jpg",
+      "beforeRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "1e285fad31c73daea0db25550434bc2e85c3e1146b15683a8b2a35fa07d90c8c",
+      "identical": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-c56befc792b2",
+      "name": "ai-space-full-light-1366-reading.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-c56befc792b2/ai-space-full-light-1366-reading.jpg",
+      "beforeRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "6a949df4dba34f8cdec9faf8854a67d9858ed364673baf37e31a389c13a28a6e",
+      "identical": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-558bd60bf9c2",
+      "name": "ai-space-floating-dark-375-empty.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-558bd60bf9c2/ai-space-floating-dark-375-empty.jpg",
+      "beforeRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c",
+      "identical": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-558bd60bf9c2",
+      "name": "ai-space-floating-dark-375-queue.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-558bd60bf9c2/ai-space-floating-dark-375-queue.jpg",
+      "beforeRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "51dfbec606af0438adeb3aaf1537ac89f1694512319884d9e313767f7efaaba7",
+      "identical": true
+    },
+    {
+      "runId": "receipt-adaptive-tests-558bd60bf9c2",
+      "name": "ai-space-floating-dark-375-reading.jpg",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-558bd60bf9c2/ai-space-floating-dark-375-reading.jpg",
+      "beforeRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "1d6af56eed2ebb37e39fb8d13e7d9073a16268f947391444898840a4d651c1ac",
+      "identical": true
+    }
+  ],
+  "limits": [
+    "Chromium headless, GPU dimatikan, cerah1366x900, perf_mode high dengan simulasi CPU1/4/6; tiada hardware fizikal diuji.",
+    "Respons20k disediakan padaCPU1 sebelum probe input; setiap probe33keys diuji pada CPU yang dipilih.",
+    "Trace, getter wrappers dan observer mempunyai overhead sama dalam kedua-dua binaan; angka tidak dibandingkan terus dengan393ms laporan terdahulu.",
+    "Keyboard EventTiming P95 ialah P95 bersyarat bagi entri yang direkod melepasi ambang16ms, bukan semua33keys; null bukan0ms. Ia bukan field INP.",
+    "Key/input-to-post-frame ialah proxy, bukan INP. Jumlah nested trace event tidak digunakan sebagai jumlah CPU; TaskDuration CDP dilaporkan.",
+    "Tiga pasangan floating6 dan satu pasangan floating1/full4: hasil deskriptif, bukan jaminan semua peranti atau browser.",
+    "Probe kosong sentiasa dahulu; bandingkan sebelum/selepas dalam fasa sama, bukan kesan sejarah semata-mata. Kos instrumentasi serta warmup/JIT/GC terlibat.",
+    "Observer sekunder menggunakan tail150ms sebelum disconnect tanpa takeRecords; hanya entri yang sempat dihantar direkod.",
+    "Tiada production, data sebenar, AI service sebenar, full-project TypeScript atau keseluruhan CI diakses/dijalankan."
+  ]
+}

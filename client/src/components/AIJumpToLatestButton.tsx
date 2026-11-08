@@ -17,7 +17,7 @@ export function AIJumpToLatestButton({ controlsId, visible, onJump, className }:
   // A keyboard-activated button stays mounted until focus leaves it.
   if (!visible && !focused) return null;
   return (
-    <div className={cn("flex justify-end", className)}>
+    <div className={cn("ai-jump-to-latest", className)}>
       <AIIconTooltip label="Ke mesej terkini">
         <Button type="button" variant="outline" size="sm" className="h-11 w-11 min-h-11 p-0 md:h-9 md:w-9 md:min-h-9"
           aria-label="Ke mesej terkini" aria-controls={controlsId} onClick={onJump}

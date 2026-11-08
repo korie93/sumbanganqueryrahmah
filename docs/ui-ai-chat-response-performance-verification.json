@@ -1,0 +1,575 @@
+{
+  "date": "2026-11-08",
+  "status": "complete-local",
+  "beforeBuild": "receipt-adaptive-build-2e514a2ae3d2",
+  "afterBuild": "receipt-adaptive-build-20ff4df5f6db",
+  "clientHashesVerified": 2014,
+  "applicationDifferences": [
+    "client/src/components/AIMessage.tsx"
+  ],
+  "sourceDifferences": [
+    "client/src/components/AIMessage.tsx",
+    "client/src/components/floating-ai-a11y-contract.test.ts",
+    "tests/visual/ai-reading-polish.spec.ts",
+    "tests/visual/ai-space-polish.spec.ts"
+  ],
+  "regressionRed": "receipt-adaptive-tests-0cd68adf8d0d",
+  "unitTests": 35,
+  "playwrightTests": 20,
+  "measurements": [
+    {
+      "runId": "receipt-adaptive-tests-e2ef862bcf72",
+      "before": true,
+      "surface": "full",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 5024,
+      "longTasksMs": 2375,
+      "taskMs": 4965.397,
+      "layoutMs": 333.262,
+      "paragraphRemoved": 10,
+      "characterDataMutations": 0,
+      "observedUpdates": 12,
+      "inputP95ProxyMs": 569,
+      "inputMaxProxyMs": 675
+    },
+    {
+      "runId": "receipt-adaptive-tests-3acbbc77d327",
+      "before": false,
+      "surface": "full",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 4733,
+      "longTasksMs": 2025,
+      "taskMs": 4580.090999999999,
+      "layoutMs": 271.42900000000003,
+      "paragraphRemoved": 0,
+      "characterDataMutations": 16,
+      "observedUpdates": 18,
+      "inputP95ProxyMs": 291,
+      "inputMaxProxyMs": 371
+    },
+    {
+      "runId": "receipt-adaptive-tests-e31acf9165db",
+      "before": false,
+      "surface": "full",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 4670,
+      "longTasksMs": 1693,
+      "taskMs": 4537.473999999999,
+      "layoutMs": 300.65500000000003,
+      "paragraphRemoved": 0,
+      "characterDataMutations": 21,
+      "observedUpdates": 24,
+      "inputP95ProxyMs": 298,
+      "inputMaxProxyMs": 314
+    },
+    {
+      "runId": "receipt-adaptive-tests-11735c74c10f",
+      "before": true,
+      "surface": "full",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 4992,
+      "longTasksMs": 2220,
+      "taskMs": 5062.12,
+      "layoutMs": 405.968,
+      "paragraphRemoved": 17,
+      "characterDataMutations": 0,
+      "observedUpdates": 19,
+      "inputP95ProxyMs": 592,
+      "inputMaxProxyMs": 626
+    },
+    {
+      "runId": "receipt-adaptive-tests-71768a460706",
+      "before": true,
+      "surface": "full",
+      "cpu": 4,
+      "shape": "multiline-prose",
+      "finalMs": 4083,
+      "longTasksMs": 1740,
+      "taskMs": 4180.988000000001,
+      "layoutMs": 329.74199999999996,
+      "paragraphRemoved": 28,
+      "characterDataMutations": 0,
+      "observedUpdates": 30,
+      "inputP95ProxyMs": 108,
+      "inputMaxProxyMs": 136
+    },
+    {
+      "runId": "receipt-adaptive-tests-82b985cdfe2d",
+      "before": false,
+      "surface": "full",
+      "cpu": 4,
+      "shape": "multiline-prose",
+      "finalMs": 4266,
+      "longTasksMs": 1368,
+      "taskMs": 4026.3210000000004,
+      "layoutMs": 170.419,
+      "paragraphRemoved": 0,
+      "characterDataMutations": 34,
+      "observedUpdates": 36,
+      "inputP95ProxyMs": 114,
+      "inputMaxProxyMs": 120
+    },
+    {
+      "runId": "receipt-adaptive-tests-64a675a9db14",
+      "before": true,
+      "surface": "floating",
+      "cpu": 1,
+      "shape": "spaced-prose",
+      "finalMs": 3101,
+      "longTasksMs": 63,
+      "taskMs": 1337.821,
+      "layoutMs": 178.083,
+      "paragraphRemoved": 58,
+      "characterDataMutations": 0,
+      "observedUpdates": 60,
+      "inputP95ProxyMs": 19,
+      "inputMaxProxyMs": 25
+    },
+    {
+      "runId": "receipt-adaptive-tests-092ce4a9e33c",
+      "before": false,
+      "surface": "floating",
+      "cpu": 1,
+      "shape": "spaced-prose",
+      "finalMs": 2746,
+      "longTasksMs": 0,
+      "taskMs": 1066.7530000000004,
+      "layoutMs": 147.84500000000003,
+      "paragraphRemoved": 0,
+      "characterDataMutations": 58,
+      "observedUpdates": 60,
+      "inputP95ProxyMs": 17,
+      "inputMaxProxyMs": 18
+    },
+    {
+      "runId": "receipt-adaptive-tests-b391fc5b4055",
+      "before": true,
+      "surface": "floating",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 5464,
+      "longTasksMs": 2457,
+      "taskMs": 5467.091000000001,
+      "layoutMs": 578.425,
+      "paragraphRemoved": 13,
+      "characterDataMutations": 0,
+      "observedUpdates": 15,
+      "inputP95ProxyMs": 336,
+      "inputMaxProxyMs": 373
+    },
+    {
+      "runId": "receipt-adaptive-tests-9f6a7cefde8e",
+      "before": false,
+      "surface": "floating",
+      "cpu": 6,
+      "shape": "multiline-prose",
+      "finalMs": 5183,
+      "longTasksMs": 1801,
+      "taskMs": 5358.402,
+      "layoutMs": 382.15199999999993,
+      "paragraphRemoved": 0,
+      "characterDataMutations": 21,
+      "observedUpdates": 23,
+      "inputP95ProxyMs": 393,
+      "inputMaxProxyMs": 450
+    }
+  ],
+  "comparisons": [
+    {
+      "group": "full/6/multiline-prose",
+      "samplesPerBuild": 2,
+      "metrics": {
+        "finalMs": {
+          "before": 5008,
+          "after": 4701.5,
+          "changePercent": -6.12020766773163
+        },
+        "longTasksMs": {
+          "before": 2297.5,
+          "after": 1859,
+          "changePercent": -19.085963003264418
+        },
+        "taskMs": {
+          "before": 5013.7585,
+          "after": 4558.782499999999,
+          "changePercent": -9.074549561970338
+        },
+        "layoutMs": {
+          "before": 369.615,
+          "after": 286.04200000000003,
+          "changePercent": -22.610824777132958
+        },
+        "inputP95ProxyMs": {
+          "before": 580.5,
+          "after": 294.5,
+          "changePercent": -49.26787252368648
+        }
+      }
+    },
+    {
+      "group": "full/4/multiline-prose",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "finalMs": {
+          "before": 4083,
+          "after": 4266,
+          "changePercent": 4.481998530492285
+        },
+        "longTasksMs": {
+          "before": 1740,
+          "after": 1368,
+          "changePercent": -21.379310344827587
+        },
+        "taskMs": {
+          "before": 4180.988000000001,
+          "after": 4026.3210000000004,
+          "changePercent": -3.6992930857491286
+        },
+        "layoutMs": {
+          "before": 329.74199999999996,
+          "after": 170.419,
+          "changePercent": -48.31747244815643
+        },
+        "inputP95ProxyMs": {
+          "before": 108,
+          "after": 114,
+          "changePercent": 5.555555555555555
+        }
+      }
+    },
+    {
+      "group": "floating/1/spaced-prose",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "finalMs": {
+          "before": 3101,
+          "after": 2746,
+          "changePercent": -11.44792002579813
+        },
+        "longTasksMs": {
+          "before": 63,
+          "after": 0,
+          "changePercent": -100
+        },
+        "taskMs": {
+          "before": 1337.821,
+          "after": 1066.7530000000004,
+          "changePercent": -20.26190349830056
+        },
+        "layoutMs": {
+          "before": 178.083,
+          "after": 147.84500000000003,
+          "changePercent": -16.979722938180494
+        },
+        "inputP95ProxyMs": {
+          "before": 19,
+          "after": 17,
+          "changePercent": -10.526315789473683
+        }
+      }
+    },
+    {
+      "group": "floating/6/multiline-prose",
+      "samplesPerBuild": 1,
+      "metrics": {
+        "finalMs": {
+          "before": 5464,
+          "after": 5183,
+          "changePercent": -5.142752562225476
+        },
+        "longTasksMs": {
+          "before": 2457,
+          "after": 1801,
+          "changePercent": -26.699226699226696
+        },
+        "taskMs": {
+          "before": 5467.091000000001,
+          "after": 5358.402,
+          "changePercent": -1.9880590976078722
+        },
+        "layoutMs": {
+          "before": 578.425,
+          "after": 382.15199999999993,
+          "changePercent": -33.9323162034836
+        },
+        "inputP95ProxyMs": {
+          "before": 336,
+          "after": 393,
+          "changePercent": 16.964285714285715
+        }
+      }
+    }
+  ],
+  "checks": [
+    {
+      "args": [
+        "tests",
+        "client/src/components/ai-message-formatting.test.ts",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "client/src/lib/ai-response-reveal.test.ts",
+        "client/src/hooks/ai-message-follow.test.ts",
+        "client/src/components/useAIChatTypingAction.contract.test.ts",
+        "client/src/components/ai-chat-manual-retry.test.ts",
+        "client/src/components/public-component-jsdoc-contract.test.ts",
+        "client/src/components/ai-space-presentation.test.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-661424e018ff",
+      "exitCode": 0,
+      "counts": {
+        "cancelled": 0,
+        "fail": 0,
+        "pass": 35,
+        "skipped": 0,
+        "suites": 0,
+        "tests": 35,
+        "todo": 0
+      },
+      "budgetFailure": null,
+      "seconds": 13.907,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-661424e018ff"
+    },
+    {
+      "args": [
+        "lint",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-138d2c91e2a4",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 21.62,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-138d2c91e2a4"
+    },
+    {
+      "args": [
+        "types-focused",
+        "client/src/components/AIMessage.tsx",
+        "client/src/components/floating-ai-a11y-contract.test.ts",
+        "tests/visual/ai-reading-polish.spec.ts"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-b5ccec181246",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 13.716,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-b5ccec181246"
+    }
+  ],
+  "stability": [
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "stability",
+        "full"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-ac6709f30289",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 22.859,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-ac6709f30289"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-polish",
+        "stability",
+        "floating"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-4469d1505307",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 27.552,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-4469d1505307"
+    }
+  ],
+  "regressions": [
+    {
+      "args": [
+        "e2e",
+        "ai-full",
+        "reading"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-3f67f0cec165",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 17.26,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-3f67f0cec165"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-floating",
+        "reading"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-5fac5fc2f183",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 17.064,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-5fac5fc2f183"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-retry",
+        "full"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-92730dbf77f3",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 49.667,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-92730dbf77f3"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-retry",
+        "floating"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-8c7f7192b9a6",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 51.211,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-8c7f7192b9a6"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "full",
+        "light"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-161cbf436124",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 11.168,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-161cbf436124"
+    },
+    {
+      "args": [
+        "e2e",
+        "ai-space",
+        "evidence",
+        "floating",
+        "dark"
+      ],
+      "baseline": false,
+      "runId": "receipt-adaptive-tests-fb2c5445db5d",
+      "exitCode": 0,
+      "counts": {},
+      "budgetFailure": null,
+      "seconds": 12.616,
+      "artifacts": "/opt/sqr-audit/artifacts/receipt-adaptive-tests-fb2c5445db5d"
+    }
+  ],
+  "renderEvidence": [
+    {
+      "runId": "receipt-adaptive-tests-161cbf436124",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-161cbf436124/ai-space-full-light-1366-empty.jpg"
+    },
+    {
+      "runId": "receipt-adaptive-tests-161cbf436124",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-161cbf436124/ai-space-full-light-1366-queue.jpg"
+    },
+    {
+      "runId": "receipt-adaptive-tests-161cbf436124",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-161cbf436124/ai-space-full-light-1366-reading.jpg"
+    },
+    {
+      "runId": "receipt-adaptive-tests-fb2c5445db5d",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-fb2c5445db5d/ai-space-floating-dark-375-empty.jpg"
+    },
+    {
+      "runId": "receipt-adaptive-tests-fb2c5445db5d",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-fb2c5445db5d/ai-space-floating-dark-375-queue.jpg"
+    },
+    {
+      "runId": "receipt-adaptive-tests-fb2c5445db5d",
+      "path": "C:\\Users\\Administrator\\security-audit-skill\\sumbanganqueryrahmah\\ui-layout-20261105/evidence/receipt-adaptive-tests-fb2c5445db5d/ai-space-floating-dark-375-reading.jpg"
+    }
+  ],
+  "visualPairs": [
+    {
+      "surface": "full-light-1366",
+      "state": "empty",
+      "beforeRun": "receipt-adaptive-tests-545d993d34ac",
+      "afterRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "81288934bbd7e530c9374c4b38153af85203d8ca2904c5af797208ef9f7d5c30",
+      "identical": true
+    },
+    {
+      "surface": "full-light-1366",
+      "state": "queue",
+      "beforeRun": "receipt-adaptive-tests-545d993d34ac",
+      "afterRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "1e285fad31c73daea0db25550434bc2e85c3e1146b15683a8b2a35fa07d90c8c",
+      "identical": true
+    },
+    {
+      "surface": "full-light-1366",
+      "state": "reading",
+      "beforeRun": "receipt-adaptive-tests-545d993d34ac",
+      "afterRun": "receipt-adaptive-tests-161cbf436124",
+      "sha256": "6a949df4dba34f8cdec9faf8854a67d9858ed364673baf37e31a389c13a28a6e",
+      "identical": true
+    },
+    {
+      "surface": "floating-dark-375",
+      "state": "empty",
+      "beforeRun": "receipt-adaptive-tests-1b054f50d132",
+      "afterRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "fe2fabdaacf719d1559754e5887b0e8d38342d8615aeea11c9abc5f29c2afc3c",
+      "identical": true
+    },
+    {
+      "surface": "floating-dark-375",
+      "state": "queue",
+      "beforeRun": "receipt-adaptive-tests-1b054f50d132",
+      "afterRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "51dfbec606af0438adeb3aaf1537ac89f1694512319884d9e313767f7efaaba7",
+      "identical": true
+    },
+    {
+      "surface": "floating-dark-375",
+      "state": "reading",
+      "beforeRun": "receipt-adaptive-tests-1b054f50d132",
+      "afterRun": "receipt-adaptive-tests-fb2c5445db5d",
+      "sha256": "1d6af56eed2ebb37e39fb8d13e7d9073a16268f947391444898840a4d651c1ac",
+      "identical": true
+    }
+  ],
+  "visualReview": "Root inspected matched reading captures and final queue captures. All six matching empty/queue/reading JPEG files are byte-identical; no visual regression in these captures. Not an all-browser/all-viewport audit.",
+  "scope": "Frontend rendering keys only; no backend/auth/AI API/sanitizer/parser/scheduler/CSS/dependency change.",
+  "limits": [
+    "Profil menggunakan Chromium headless sintetik, GPU dimatikan, cerah1366x900 dan perf_mode high dengan simulasi CPU1/4/6.",
+    "Ujian kestabilan DOM berasingan menggunakan perf_mode low, full cerah1366 dan floating gelap375, animasi diaktifkan.",
+    "Overhead observer/profiler disertakan pada kedua-dua binaan; kiraan penggantian DOM bukan React commits.",
+    "Pemasa siap merangkumi persediaan/click; ia tidak mengasingkan latency rangkaian atau server.",
+    "Proxy keyboard dipercayai→selepas frame diukur selepas completion; ia bukan INP atau latency input semasa reveal.",
+    "Sampel pasangan kecil dan bersifat deskriptif; tiada jaminan peranti fizikal, production, AI sebenar atau keseluruhan CI."
+  ]
+}
