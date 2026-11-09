@@ -7,6 +7,7 @@ export function getAIQueryLimitAnnouncement(remaining: number): string {
   return "";
 }
 
+/** Renders the query limit description, exact counter and thresholded polite announcement. */
 export function AIQueryLimit({ value, descriptionId, className }: {
   value: string;
   descriptionId: string;

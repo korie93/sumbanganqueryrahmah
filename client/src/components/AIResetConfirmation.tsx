@@ -31,6 +31,7 @@ export function useAIResetConfirmation({ hasDraft, isActive, onReset, fallbackFo
   return { open, onOpenChange: setOpen, requestReset, confirmReset, restoreFocus };
 }
 
+/** Renders the shared reset confirmation with accessible actions and close-focus restoration. */
 export function AIResetConfirmation({ open, onOpenChange, confirmReset, restoreFocus }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
