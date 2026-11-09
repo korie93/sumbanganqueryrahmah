@@ -124,7 +124,11 @@ for (const surface of ["full", "floating"] as const) for (const theme of ["light
       await input.fill(Array.from({ length: 5 }, (_, i) => `Draf baris ${i + 1}`).join("\n"));
       expect((await input.boundingBox())!.height).toBeLessThanOrEqual(144);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-      await reset.click(); await expect(input).toHaveValue("");
+      await reset.click();
+      const resetConfirmation = page.getByRole("alertdialog", { name: "Mulakan sembang baharu?", exact: true });
+      await expect(resetConfirmation).toBeVisible();
+      await resetConfirmation.getByRole("button", { name: "Sembang Baharu", exact: true }).click();
+      await expect(resetConfirmation).toHaveCount(0); await expect(input).toHaveValue("");
       expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
     } finally { release(); }
   });

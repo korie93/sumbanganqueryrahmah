@@ -58,6 +58,11 @@ const FLOATING_AI_FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(", ");
 
+export function hasAIResetConfirmationFocus(activeElement: unknown): boolean {
+  const element = activeElement as { closest?: (selector: string) => unknown } | null;
+  return Boolean(element?.closest?.('[data-ai-reset-confirmation="true"]'));
+}
+
 function isTrapFocusableElement(element: FloatingAiFocusableElement): boolean {
   if (element.getAttribute("disabled") !== null) {
     return false;
@@ -148,6 +153,8 @@ export function trapFloatingAiDialogFocus(
 
   const handleKeyDown = (eventLike: unknown) => {
     const event = eventLike as FloatingAiKeydownLike;
+    // The nested Radix confirmation owns Escape/Tab until it closes.
+    if (hasAIResetConfirmationFocus(documentObject.activeElement)) return;
     if (event.key === "Escape" && onEscapeKeyDown) {
       event.preventDefault();
       onEscapeKeyDown();
@@ -187,6 +194,7 @@ export function trapFloatingAiDialogFocus(
 
   const handleFocusIn = () => {
     const activeElement = documentObject.activeElement;
+    if (hasAIResetConfirmationFocus(activeElement)) return;
     if (activeElement && !dialogElement.contains(activeElement)) {
       focusFloatingAiDialogElement(dialogElement);
     }

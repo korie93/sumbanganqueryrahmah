@@ -141,26 +141,46 @@ for (const surface of ["full", "floating"] as const) {
     expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
   });
 
-  test(`Impeccable AI ${surface} cancels an old reveal before a fresh answer and retains prior history`, async ({ page, baseURL }) => {
+  test(`Impeccable AI ${surface} stops an old reveal, retains its visible prefix and accepts a fresh answer`, async ({ page, baseURL }) => {
     let requests = 0;
+    const cancelledAnswer = "Cancelled answer chunk. ".repeat(500);
     await page.route((url) => url.pathname === "/api/ai/search", (route) => {
       requests += 1;
-      return route.fulfill({ json: { ai_explanation: requests === 1 ? "Cancelled answer chunk. ".repeat(500) : "Fresh answer delivered." } });
+      return route.fulfill({ json: { ai_explanation: requests === 1 ? cancelledAnswer : "Fresh answer delivered." } });
     });
     const { fixture, root, input, log, send } = await openAI(page, baseURL, surface);
     await input.fill("First synthetic question"); await send.click();
     await expect(log).toContainText("Cancelled answer chunk.");
-    await root.getByRole("button", { name: "Hentikan AI SQR", exact: true }).click();
-    await expect(input).toBeEnabled();
-    await input.fill("Second synthetic question"); await send.click();
-    await expect(input).toBeEnabled({ timeout: 6000 });
-    await expect(log).toContainText("Fresh answer delivered.");
-    await page.waitForTimeout(2600);
-    await expect(log).not.toContainText("Cancelled answer chunk.");
-    await expect(log).toContainText("First synthetic question");
-    await expect(log).toContainText("Second synthetic question");
-    expect(requests).toBe(2);
-    expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
+    const stop = root.getByRole("button", { name: "Hentikan AI SQR", exact: true });
+    const clickEvidence = await stop.evaluateHandle((button) => {
+      const evidence = { text: "", captured: false };
+      const listener = () => {
+        const articles = button.ownerDocument.querySelectorAll('[role="log"][aria-label="Perbualan AI SQR"] [role="article"][aria-label="Mesej pembantu AI"]');
+        evidence.text = articles[articles.length - 1]?.textContent ?? ""; evidence.captured = true;
+      };
+      button.addEventListener("click", listener, { capture: true, once: true });
+      return { evidence, dispose: () => button.removeEventListener("click", listener, true) };
+    });
+    try {
+      await stop.click();
+      const clicked = await clickEvidence.evaluate(({ evidence }) => ({ ...evidence }));
+      expect(clicked.captured).toBe(true); expect(clicked.text.length).toBeGreaterThan(0);
+      expect(clicked.text.length).toBeLessThan(cancelledAnswer.length);
+      const assistants = log.getByRole("article", { name: "Mesej pembantu AI", exact: true });
+      await expect(input).toBeEnabled(); await expect(log).toHaveAttribute("aria-busy", "false");
+      await expect(assistants).toHaveCount(1); expect(await assistants.first().textContent()).toBe(clicked.text);
+      await input.fill("Second synthetic question"); await send.click();
+      await expect(input).toBeEnabled({ timeout: 6000 });
+      await expect(log).toContainText("Fresh answer delivered.");
+      await page.waitForTimeout(2600);
+      await expect(assistants).toHaveCount(2); expect(await assistants.first().textContent()).toBe(clicked.text);
+      await expect(assistants.last()).toHaveText("Fresh answer delivered.");
+      await expect(log).not.toContainText(cancelledAnswer);
+      await expect(log).toContainText("First synthetic question");
+      await expect(log).toContainText("Second synthetic question");
+      expect(requests).toBe(2);
+      expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
+    } finally { await clickEvidence.evaluate((probe) => probe.dispose()); await clickEvidence.dispose(); }
   });
 
   test(`Impeccable AI ${surface} retains queued retry and reset behavior`, async ({ page, baseURL }) => {

@@ -13,6 +13,7 @@ import { searchAI } from "@/lib/api";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { resolveAiErrorMessage } from "@/lib/ai-error";
 import { isRetryableAIChatFailure, takeAIChatFailedQuery, type AIChatFailedQuery } from "@/components/ai-chat-manual-retry";
+import { stopAIChatResponse } from "@/components/ai-chat-stop-response";
 
 import {
   AI_PAGE_MAX_RETRIES,
@@ -26,6 +27,7 @@ import { useAIPageTypingAction } from "./useAIPageTypingAction";
 type UseAIPageActionsOptions = {
   aiEnabled: boolean;
   query: string;
+  streamingText: string;
   resetSession: () => void;
   runtimeRefs: AIPageRuntimeRefs;
   setAiStatus: Dispatch<SetStateAction<AIChatStatus>>;
@@ -46,6 +48,7 @@ type UseAIPageActionsOptions = {
 export function useAIPageActions({
   aiEnabled,
   query,
+  streamingText,
   resetSession,
   runtimeRefs,
   setAiStatus,
@@ -131,6 +134,10 @@ export function useAIPageActions({
     stopProcessingState,
     stopTyping,
   ]);
+
+  const stopAIResponse = useCallback(() => {
+    stopAIChatResponse({ appendMessage, cancelResponse: cancelAI, isMountedRef, processingRef, streamingText });
+  }, [appendMessage, cancelAI, isMountedRef, processingRef, streamingText]);
 
   const resetChat = useCallback(() => {
     cancelAI();
@@ -366,6 +373,7 @@ export function useAIPageActions({
 
   return {
     cancelAI,
+    stopAIResponse,
     handleSend,
     resetChat,
     retryLastQuery,

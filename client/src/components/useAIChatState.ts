@@ -23,10 +23,12 @@ import { useAIChatRequestExecutor } from "./useAIChatRequestExecutor";
 import { useAIChatRuntimeRefs } from "./useAIChatRuntimeRefs";
 import { useAIChatTypingAction } from "./useAIChatTypingAction";
 import { takeAIChatFailedQuery, type AIChatFailedQuery } from "./ai-chat-manual-retry";
+import { stopAIChatResponse } from "./ai-chat-stop-response";
 
 type UseAIChatStateOptions = {
   aiEnabled: boolean;
   isMobile: boolean;
+  isVisible?: boolean;
   timeoutMs: number;
   onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
@@ -99,11 +101,12 @@ function aiChatLocalStateReducer(
 export function useAIChatState({
   aiEnabled,
   isMobile,
+  isVisible = true,
   timeoutMs,
   onCancelAISearchReady,
   onStatusChange,
 }: UseAIChatStateOptions) {
-  const { messages, setMessages, setIsThinking } = useAIContext();
+  const { messages, setMessages, setIsThinking, floatingReadingBookmark } = useAIContext();
 
   const isLowSpecMode =
     typeof document !== "undefined"
@@ -216,6 +219,11 @@ export function useAIChatState({
     stopTyping,
   ]);
 
+  const stopAIResponse = useCallback(() => {
+    stopAIChatResponse({ appendMessage, cancelResponse: () => cancelAISearch(true),
+      isMountedRef, processingRef, streamingText });
+  }, [appendMessage, cancelAISearch, isMountedRef, processingRef, streamingText]);
+
   useEffect(() => {
     if (!aiEnabled) cancelAISearch(true);
   }, [aiEnabled, cancelAISearch]);
@@ -233,10 +241,11 @@ export function useAIChatState({
   }, [gateNotice, setGateNotice, setQuery]);
 
   const resetSession = useCallback(() => {
+    floatingReadingBookmark.clear();
     cancelAISearch(true);
     setMessages([]);
     setQuery("");
-  }, [cancelAISearch, setMessages]);
+  }, [cancelAISearch, floatingReadingBookmark, setMessages]);
 
   const startTyping = useAIChatTypingAction({
     appendMessage,
@@ -373,6 +382,7 @@ export function useAIChatState({
 
   const messageFollow = useAIChatExternalEffects({
     aiStatus,
+    isVisible,
     cancelAISearch,
     messages,
     messagesRef,
@@ -401,6 +411,7 @@ export function useAIChatState({
     showActions: isProcessing || isTyping,
     slowNotice,
     statusMeta,
+    stopAIResponse,
     streamingText,
     textareaRef,
   };

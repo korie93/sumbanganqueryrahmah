@@ -4,6 +4,7 @@ import { sanitizeAIMessageContentForDisplay } from "@/components/ai-message-sani
 type AIMessageProps = {
   messageRole: "user" | "assistant";
   content: string;
+  messageId?: string;
 };
 
 type AIMessageMarkdownBlock =
@@ -119,10 +120,107 @@ function parseAIMessageMarkdownBlocks(content: string): AIMessageMarkdownBlock[]
   return blocks;
 }
 
+type AIMessageStrongRange = {
+  start: number;
+  contentStart: number;
+  contentEnd: number;
+  end: number;
+};
+
+function parseAIMessageStrongRanges(content: string): AIMessageStrongRange[] {
+  const ranges: AIMessageStrongRange[] = [];
+  let opening = -1;
+  let cursor = 0;
+
+  while (cursor < content.length) {
+    const character = content[cursor];
+    if (character === "\\") {
+      cursor += 2;
+      continue;
+    }
+
+    if (character === "`") {
+      opening = -1;
+      const start = cursor;
+      while (content[cursor] === "`") cursor++;
+      const delimiterLength = cursor - start;
+
+      // Inline code keeps its existing literal representation. An unfinished
+      // backtick run protects the remaining text while a response is revealed.
+      while (cursor < content.length) {
+        if (content[cursor] === "\\") {
+          cursor += 2;
+          continue;
+        }
+        if (content[cursor] !== "`") {
+          cursor++;
+          continue;
+        }
+        const closingStart = cursor;
+        while (content[cursor] === "`") cursor++;
+        if (cursor - closingStart === delimiterLength) break;
+      }
+      continue;
+    }
+
+    if (character === "\n" || character === "\r") {
+      opening = -1;
+      cursor++;
+      continue;
+    }
+
+    if (character !== "*") {
+      cursor++;
+      continue;
+    }
+
+    const start = cursor;
+    while (content[cursor] === "*") cursor++;
+    const delimiterLength = cursor - start;
+    if (delimiterLength !== 2) {
+      if (delimiterLength > 2) opening = -1;
+      continue;
+    }
+
+    if (opening >= 0) {
+      if (start > opening + 2 && !/\s/.test(content[start - 1] ?? "")) {
+        ranges.push({ start: opening, contentStart: opening + 2, contentEnd: start, end: cursor });
+      }
+      opening = -1;
+      continue;
+    }
+
+    if (cursor < content.length && !/\s/.test(content[cursor] ?? "")) {
+      opening = start;
+    }
+  }
+
+  return ranges;
+}
+
+function renderAIMessageInline(content: string, allowBold: boolean): ReactNode {
+  if (!allowBold) return content;
+  const ranges = parseAIMessageStrongRanges(content);
+  if (ranges.length === 0) return content;
+
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const range of ranges) {
+    if (range.start > cursor) parts.push(content.slice(cursor, range.start));
+    parts.push(
+      <strong key={`strong:${range.start}`}>{content.slice(range.contentStart, range.contentEnd)}</strong>,
+    );
+    cursor = range.end;
+  }
+  if (cursor < content.length) parts.push(content.slice(cursor));
+  return parts;
+}
+
 function renderParagraphLines(
   lines: string[],
   blockKey: string,
   getContentKey: (scope: string) => string,
+  allowBold: boolean,
 ) {
   let isFirstLine = true;
 
@@ -133,13 +231,13 @@ function renderParagraphLines(
     return (
       <span key={getContentKey(`${blockKey}:line`)}>
         {needsLineBreak ? <br /> : null}
-      {line}
+        {renderAIMessageInline(line, allowBold)}
       </span>
     );
   });
 }
 
-function renderAIMessageMarkdown(content: string): ReactNode {
+function renderAIMessageMarkdown(content: string, allowBold: boolean): ReactNode {
   const blocks = parseAIMessageMarkdownBlocks(content);
   if (blocks.length === 0) {
     return null;
@@ -163,7 +261,7 @@ function renderAIMessageMarkdown(content: string): ReactNode {
       return (
         <ListTag key={blockKey} className="ai-markdown-list" start={block.ordered && block.start !== 1 ? block.start : undefined}>
           {block.items.map((item) => (
-            <li key={getContentKey(`${blockKey}:item`)}>{item}</li>
+            <li key={getContentKey(`${blockKey}:item`)}>{renderAIMessageInline(item, allowBold)}</li>
           ))}
         </ListTag>
       );
@@ -171,19 +269,19 @@ function renderAIMessageMarkdown(content: string): ReactNode {
 
     return (
       <p key={blockKey} className="ai-markdown-paragraph">
-        {renderParagraphLines(block.lines, blockKey, getContentKey)}
+        {renderParagraphLines(block.lines, blockKey, getContentKey, allowBold)}
       </p>
     );
   });
 }
 
 /** Renders sanitized AI message text with the shared Markdown formatting. */
-export const AIMessageContent = memo(function AIMessageContent({ content }: { content: string }) {
+export const AIMessageContent = memo(function AIMessageContent({ content, allowBold = true }: { content: string; allowBold?: boolean }) {
   const safeContent = sanitizeAIMessageContentForDisplay(content);
-  return <>{renderAIMessageMarkdown(safeContent)}</>;
+  return <>{renderAIMessageMarkdown(safeContent, allowBold)}</>;
 });
 
-function AIMessageImpl({ messageRole, content }: AIMessageProps) {
+function AIMessageImpl({ messageRole, content, messageId }: AIMessageProps) {
   const messageLabel = messageRole === "user" ? "Mesej pengguna" : "Mesej pembantu AI";
 
   return (
@@ -191,9 +289,10 @@ function AIMessageImpl({ messageRole, content }: AIMessageProps) {
       className={`ai-message-row ${messageRole === "user" ? "ai-message-row-user" : "ai-message-row-assistant"}`}
       role="article"
       aria-label={messageLabel}
+      data-ai-message-id={messageId}
     >
       <div className={`ai-bubble ${messageRole === "user" ? "ai-bubble-user" : "ai-bubble-assistant"}`}>
-        <AIMessageContent content={content} />
+        <AIMessageContent content={content} allowBold={messageRole === "assistant"} />
       </div>
     </div>
   );

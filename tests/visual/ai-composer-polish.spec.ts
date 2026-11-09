@@ -126,6 +126,11 @@ for (const surface of ["full", "floating"] as const) {
           if (surface === "floating") { expect(geometry.top).toBeGreaterThanOrEqual(0); expect(geometry.bottom).toBeLessThanOrEqual(901); }
           expect(geometry.inputBottom).toBeLessThanOrEqual(geometry.bottom + 1);
           await input.fill(longQuery); await reset.click();
+          const resetConfirmation = page.getByRole("alertdialog", { name: "Mulakan sembang baharu?", exact: true });
+          await expect(resetConfirmation).toBeVisible();
+          await expect(root.locator('textarea[name="aiConversationQuery"], textarea[name="floatingAiQuery"]')).toHaveValue(longQuery);
+          await resetConfirmation.getByRole("button", { name: "Sembang Baharu", exact: true }).click();
+          await expect(resetConfirmation).toHaveCount(0);
           await expect(input).toHaveValue("");
           await expect.poll(async () => (await input.boundingBox())!.height).toBeLessThanOrEqual(initial + 2);
           mode = "error";

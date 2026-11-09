@@ -236,6 +236,28 @@ test("FloatingAI mobile backdrop is a keyboard-dismissable button while Escape a
   assert.match(focusManagementSource, /onEscapeKeyDown:\s*handleMinimize/);
 });
 
+test("a nested AI reset confirmation owns focus and keys without minimizing the mobile panel", () => {
+  const documentObject = new FakeDocument();
+  const dialog = new FakeDialogElement(documentObject);
+  const outerButton = new FakeFocusableElement(documentObject);
+  const innerButton = Object.assign(new FakeFocusableElement(documentObject), { closest: () => ({}) });
+  dialog.registerFocusableElements([outerButton]);
+  let minimized = 0, prevented = 0;
+  const restore = applyFloatingAiModalAccessibility({
+    rootElement: new FakeElement(), dialogElement: dialog, documentObject,
+    onEscapeKeyDown: () => { minimized++; },
+  });
+  innerButton.focus();
+  documentObject.dispatch("focusin");
+  assert.equal(documentObject.activeElement, innerButton);
+  for (const key of ["Tab", "Escape"]) documentObject.dispatch("keydown", { key, preventDefault: () => { prevented++; } });
+  assert.equal(prevented, 0); assert.equal(minimized, 0);
+  outerButton.focus();
+  documentObject.dispatch("keydown", { key: "Escape", preventDefault: () => { prevented++; } });
+  assert.equal(prevented, 1); assert.equal(minimized, 1);
+  restore();
+});
+
 test("FloatingAI export remains memoized to avoid unrelated shell rerenders", () => {
   const source = readComponentSource("FloatingAI.tsx");
 

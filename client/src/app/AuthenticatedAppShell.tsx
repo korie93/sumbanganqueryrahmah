@@ -96,7 +96,7 @@ export default function AuthenticatedAppShell({
   }
 
   return (
-    <AIProvider>
+    <AIProvider key={user.id ?? user.username}>
       <div className="sqr-workspace viewport-min-height bg-background" data-sidebar-collapsed={sidebarCollapsed}>
         <AutoLogout
           onClientLogout={onClientLogout}

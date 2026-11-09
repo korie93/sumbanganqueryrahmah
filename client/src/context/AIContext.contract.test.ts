@@ -14,9 +14,16 @@ test("AI context resetSession remains memoized with stable provider identity", (
   const source = readSource("AIContext.tsx");
 
   assert.match(source, /const resetSession = useCallback\(\(\) => \{/);
+  assert.match(source, /const \[floatingReadingBookmark\] = useState\(createAIReadingBookmarkStore\);/);
+  assert.match(source, /floatingReadingBookmark\.clear\(\);\s*setMessages\(\[\]\);/);
   assert.match(source, /setMessages\(\[\]\);/);
   assert.match(source, /setUnreadCount\(0\);/);
-  assert.match(source, /\}, \[\]\);/);
-  assert.match(source, /\[isThinking, messages, resetSession, unreadCount\]/);
+  assert.match(source, /\}, \[floatingReadingBookmark\]\);/);
+  assert.match(source, /\[floatingReadingBookmark, isThinking, messages, resetSession, unreadCount\]/);
   assert.doesNotMatch(source, /resetSession:\s*\(\)\s*=>\s*\{/);
+});
+
+test("authenticated AI provider lifetime is scoped to the existing account identity", () => {
+  const shell = readSource("../app/AuthenticatedAppShell.tsx");
+  assert.match(shell, /<AIProvider key=\{user\.id \?\? user\.username\}>/);
 });

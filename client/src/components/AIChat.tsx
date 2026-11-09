@@ -1,4 +1,4 @@
-import { useId, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 import { RotateCcw, Square, SendHorizonal, TriangleAlert } from "lucide-react";
 import { handleAIQueryKeyDown } from "@/components/ai-query-keyboard";
 import {
@@ -17,10 +17,9 @@ import { type AIChatStatus as SharedAIChatStatus } from "@/lib/ai-chat";
 import "@/styles/ai.css";
 import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
 import { useAIChatState } from "@/components/useAIChatState";
-import {
-  AI_REQUEST_MAX_CHARACTERS,
-  getAIChatRemainingCharacterCount,
-} from "@/components/ai-chat-utils";
+import { AI_REQUEST_MAX_CHARACTERS } from "@/components/ai-chat-utils";
+import { AIQueryLimit } from "@/components/AIQueryLimit";
+import { AIResetConfirmation, useAIResetConfirmation, type AIResetControl } from "@/components/AIResetConfirmation";
 
 type AIChatProps = {
   timeoutMs: number;
@@ -28,9 +27,14 @@ type AIChatProps = {
   assistantLabel?: string;
   compactMode?: boolean;
   panelHeight?: number;
+  isVisible?: boolean;
   onCancelAISearchReady?: ((cancelFn: () => void) => void) | undefined;
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
+  onResetRequested?: (() => void) | undefined;
+  onResetControlReady?: ((control: AIResetControl | null) => void) | undefined;
 };
+
+const noop = () => {};
 
 export type AIChatStatus = SharedAIChatStatus;
 
@@ -43,8 +47,11 @@ export default function AIChat({
   assistantLabel = "AI SQR",
   compactMode = false,
   panelHeight,
+  isVisible = true,
   onCancelAISearchReady,
   onStatusChange,
+  onResetRequested = noop,
+  onResetControlReady,
 }: AIChatProps) {
   const isMobile = useIsMobile();
   const queryInputId = useId();
@@ -53,7 +60,7 @@ export default function AIChat({
   const sendButtonRef = useRef<HTMLButtonElement | null>(null);
   const {
     aiStatus,
-    cancelAISearch,
+    stopAIResponse,
     gateNotice,
     handleSend,
     retryAvailable,
@@ -73,14 +80,19 @@ export default function AIChat({
   } = useAIChatState({
     aiEnabled,
     isMobile,
+    isVisible,
     onCancelAISearchReady,
     onStatusChange,
     timeoutMs,
   });
   useAutoGrowTextarea(textareaRef, query, { minRows: 1, maxRows: 5, layoutKey: panelHeight });
-  const remainingCharacters = getAIChatRemainingCharacterCount(query);
-  const showCharacterLimit = remainingCharacters <= 200;
   const canStop = isProcessing || isTyping;
+  const hasDraft = Boolean(query.trim());
+  const reset = useAIResetConfirmation({ hasDraft, isActive: canStop, onReset: onResetRequested, fallbackFocusRef: textareaRef });
+  useEffect(() => {
+    onResetControlReady?.({ requestReset: reset.requestReset, hasDraft });
+    return () => onResetControlReady?.(null);
+  }, [hasDraft, onResetControlReady, reset.requestReset]);
   const canSend = aiEnabled && !canStop && Boolean(query.trim());
   const awaitingFirstToken =
     (aiStatus === "SEARCHING" || aiStatus === "PROCESSING") && streamingText.length === 0;
@@ -122,6 +134,7 @@ export default function AIChat({
           {messages.map((msg) => (
             <AIMessage
               key={msg.id}
+              messageId={msg.id}
               messageRole={msg.role}
               content={msg.content}
             />
@@ -176,7 +189,7 @@ export default function AIChat({
             ref={sendButtonRef}
             type="button"
             variant="ghost"
-            onClick={canStop ? () => cancelAISearch(true) : handleSend}
+            onClick={canStop ? stopAIResponse : handleSend}
             className="ai-send-btn"
             data-ai-action={canStop ? "stop" : "send"}
             disabled={!canStop && !canSend}
@@ -186,14 +199,8 @@ export default function AIChat({
           </Button>
         </AIIconTooltip>
       </div>
-      <p
-        id={queryLimitId}
-        className={showCharacterLimit ? "ai-input-limit" : "sr-only"}
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
-      </p>
+      <AIQueryLimit value={query} descriptionId={queryLimitId} className="ai-input-limit" />
+      <AIResetConfirmation {...reset} />
 
       {!aiEnabled ? (
         <div className="ai-notice ai-notice-error" role="alert">

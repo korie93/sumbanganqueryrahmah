@@ -30,7 +30,9 @@ test("ChangePassword aborts on unmount while the profile menu owns real session 
 
   const readApp = (name: string) => readFileSync(path.resolve(process.cwd(), "client/src/app", name), "utf8");
   const shell = readApp("AuthenticatedAppShell.tsx");
-  const forcedBranch = shell.slice(shell.indexOf("if (user.mustChangePassword)"), shell.indexOf("<AIProvider>"));
+  const providerBoundary = shell.indexOf("<AIProvider");
+  assert.ok(providerBoundary > shell.indexOf("if (user.mustChangePassword)"));
+  const forcedBranch = shell.slice(shell.indexOf("if (user.mustChangePassword)"), providerBoundary);
   assert.match(forcedBranch, /<NavbarUserMenuDropdown[\s\S]*onLogout=\{onLogout\}/);
   assert.match(forcedBranch, /<ChangePasswordPage forced username=\{user.username\}/);
   assert.match(readApp("AuthenticatedAppEntry.tsx"), /onLogout=\{handleLogout\}/);

@@ -1,9 +1,10 @@
-import { Suspense, lazy, type MouseEventHandler, type Ref } from "react";
+import { Suspense, lazy, useCallback, useRef, useState, type MouseEventHandler, type Ref } from "react";
 import { Minimize2, SquarePen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FloatingAIChatErrorBoundary } from "@/components/FloatingAIChatErrorBoundary";
 import { FloatingPanelShell } from "@/components/FloatingAIShell";
 import { AIIconTooltip } from "@/components/AIIconTooltip";
+import type { AIResetControl } from "@/components/AIResetConfirmation";
 import type { AIChatStatus } from "@/components/AIChat";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 import { cn } from "@/lib/utils";
@@ -67,6 +68,14 @@ export function FloatingAIPanel({
   shouldShowPanel,
   timeoutMs,
 }: FloatingAIPanelProps) {
+  const resetRequestRef = useRef<(() => void) | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
+  const [resetReady, setResetReady] = useState(false);
+  const registerResetControl = useCallback((control: AIResetControl | null) => {
+    resetRequestRef.current = control?.requestReset ?? null;
+    setHasDraft(control?.hasDraft ?? false);
+    setResetReady(control !== null);
+  }, []);
   if (!shouldKeepPanelMounted) {
     return null;
   }
@@ -153,7 +162,7 @@ export function FloatingAIPanel({
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {messagesLength > 0 || isThinking ? (
+            {messagesLength > 0 || isThinking || hasDraft ? (
               <AIIconTooltip label="Sembang Baharu" side="bottom">
                 <Button
                   type="button"
@@ -163,8 +172,8 @@ export function FloatingAIPanel({
                     styles.floatingHeaderButton,
                     isMobile ? "h-11 w-11 p-0" : "h-10 w-10 p-0",
                   )}
-                  onClick={handleReset}
-                  disabled={messagesLength === 0 && !isThinking}
+                  onClick={() => resetRequestRef.current?.()}
+                  disabled={!resetReady}
                   aria-label={`Reset sesi ${assistantLabel}`}
                 >
                   <SquarePen className="h-4 w-4" aria-hidden="true" />
@@ -222,8 +231,11 @@ export function FloatingAIPanel({
                   assistantLabel={assistantLabel}
                   compactMode={preferCompactPanel}
                   panelHeight={layoutState.panel.height}
+                  isVisible={shouldShowPanel}
                   onStatusChange={setAiStatus}
                   onCancelAISearchReady={registerCancelAISearch}
+                  onResetRequested={handleReset}
+                  onResetControlReady={registerResetControl}
                 />
               </FloatingAIChatErrorBoundary>
             </Suspense>

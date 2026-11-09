@@ -52,7 +52,7 @@ export default function AI({
       onSend={() => {
         void controller.handleSend();
       }}
-      onCancel={controller.cancelAI}
+      onCancel={controller.stopAIResponse}
       onReset={controller.resetChat}
       retryAvailable={controller.retryAvailable}
       onRetry={() => { void controller.retryLastQuery(); }}

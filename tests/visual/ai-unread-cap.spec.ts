@@ -117,6 +117,11 @@ test("AI unread cap: reset rejects a held late reply and the next hidden reply n
     await chat.send(1); await chat.finished(1);
     chat.hold(2); await chat.send(2);
     await chat.panel.getByRole("button", { name: "Reset sesi AI SQR", exact: true }).click();
+    const resetConfirmation = page.getByRole("alertdialog", { name: "Mulakan sembang baharu?", exact: true });
+    await expect(resetConfirmation).toBeVisible();
+    await expect(chat.panel.locator('[role="log"][aria-label="Perbualan AI SQR"]')).toHaveAttribute("aria-busy", "true");
+    await resetConfirmation.getByRole("button", { name: "Sembang Baharu", exact: true }).click();
+    await expect(resetConfirmation).toHaveCount(0);
     await expect(chat.log.getByRole("article")).toHaveCount(0);
     await expect(chat.input).toHaveValue(""); await expect(chat.input).toBeEnabled();
     await chat.minimize(); chat.release(2);

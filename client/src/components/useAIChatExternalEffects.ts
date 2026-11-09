@@ -1,5 +1,6 @@
 import { useEffect, type RefObject } from "react";
 import { useAIMessageFollow } from "@/hooks/useAIMessageFollow";
+import { useAIContext } from "@/context/AIContext";
 
 import {
   AI_CANCEL_EVENT,
@@ -16,6 +17,7 @@ type UseAIChatExternalEffectsOptions = {
   onStatusChange?: ((status: AIChatStatus) => void) | undefined;
   resetSession: () => void;
   streamingText: string;
+  isVisible?: boolean | undefined;
 };
 
 export function useAIChatExternalEffects({
@@ -27,8 +29,13 @@ export function useAIChatExternalEffects({
   onStatusChange,
   resetSession,
   streamingText,
+  isVisible = true,
 }: UseAIChatExternalEffectsOptions) {
-  const messageFollow = useAIMessageFollow({ containerRef: messagesRef, messages, streamingText, activityKey: aiStatus });
+  const { floatingReadingBookmark } = useAIContext();
+  const messageFollow = useAIMessageFollow({
+    containerRef: messagesRef, messages, streamingText, activityKey: aiStatus,
+    readingBookmark: floatingReadingBookmark, isVisible,
+  });
   useEffect(() => {
     onCancelAISearchReady?.(() => cancelAISearch(true));
     return () => {

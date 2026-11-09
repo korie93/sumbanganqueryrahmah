@@ -30,6 +30,7 @@ export function useAIPageController({
   const actions = useAIPageActions({
     aiEnabled,
     query: pageState.query,
+    streamingText: pageState.streamingText,
     resetSession,
     runtimeRefs,
     setAiStatus: pageState.setAiStatus,
@@ -81,6 +82,7 @@ export function useAIPageController({
     handleSend: actions.handleSend,
     retryLastQuery: actions.retryLastQuery,
     cancelAI: actions.cancelAI,
+    stopAIResponse: actions.stopAIResponse,
     resetChat: actions.resetChat,
   };
 }

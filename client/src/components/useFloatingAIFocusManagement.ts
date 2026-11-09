@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
-import { applyFloatingAiModalAccessibility } from "@/components/floating-ai-accessibility";
+import { applyFloatingAiModalAccessibility, hasAIResetConfirmationFocus } from "@/components/floating-ai-accessibility";
 import type { FloatingAiLayout } from "@/components/floating-ai-layout-types";
 
 type UseFloatingAIFocusManagementParams = {
@@ -119,6 +119,7 @@ export function useFloatingAIFocusManagement({
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || hasAIResetConfirmationFocus(document.activeElement)) return;
       if (event.key !== "Escape") {
         return;
       }

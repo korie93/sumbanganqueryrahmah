@@ -555,7 +555,7 @@ for (const surface of ["full", "floating"] as const) {
   for (const theme of ["light", "dark"] as const) {
     test(`AI reading polish input ${surface} ${theme}: stable short typing still grows and shrinks when needed`, async ({ page, baseURL }) => {
       const width = theme === "light" ? 1366 : 375;
-      const { fixture, input, log, send, reset } = await openChat(page, baseURL, surface, theme, width);
+      const { fixture, root, input, log, send, reset } = await openChat(page, baseURL, surface, theme, width);
       const cspErrors: string[] = [];
       page.on("console", (message) => {
         if (/Content Security Policy|violates.*(?:directive|Trusted)/i.test(message.text())) cspErrors.push(message.text());
@@ -687,6 +687,11 @@ for (const surface of ["full", "floating"] as const) {
         await expect(input).toHaveValue("");
         await expect.poll(async () => (await input.boundingBox())!.height).toBeLessThanOrEqual(restingHeight + 1);
         await input.fill(multiline); await reset.click();
+        const resetConfirmation = page.getByRole("alertdialog", { name: "Mulakan sembang baharu?", exact: true });
+        await expect(resetConfirmation).toBeVisible();
+        await expect(root.locator('textarea[name="aiConversationQuery"], textarea[name="floatingAiQuery"]')).toHaveValue(multiline);
+        await resetConfirmation.getByRole("button", { name: "Sembang Baharu", exact: true }).click();
+        await expect(resetConfirmation).toHaveCount(0);
         await expect(input).toHaveValue("");
         await expect(log.getByRole("article")).toHaveCount(0);
         await expect.poll(async () => (await input.boundingBox())!.height).toBeLessThanOrEqual(restingHeight + 1);

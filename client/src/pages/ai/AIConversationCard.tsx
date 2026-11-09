@@ -15,10 +15,11 @@ import type { AIChatMessage } from "@/context/AIContext";
 import type { AIChatStatus } from "@/lib/ai-chat";
 import { useDelayedVisibleFlag } from "@/components/useDelayedVisibleFlag";
 import { useAutoGrowTextarea } from "@/hooks/useAutoGrowTextarea";
+import { AIQueryLimit } from "@/components/AIQueryLimit";
+import { AIResetConfirmation, useAIResetConfirmation } from "@/components/AIResetConfirmation";
 import type { AIPageStatusContent } from "@/pages/ai/ai-page-controller-utils";
 import {
   AI_REQUEST_MAX_CHARACTERS,
-  getAIChatRemainingCharacterCount,
 } from "@/components/ai-chat-utils";
 
 interface AIConversationCardProps {
@@ -83,9 +84,9 @@ export function AIConversationCard({
     : "ai-page-message-log";
   const canStop = isProcessing || isTyping;
   const canSend = aiEnabled && !canStop && Boolean(query.trim());
-  const canReset = messages.length > 0 || isProcessing || isTyping;
-  const remainingCharacters = getAIChatRemainingCharacterCount(query);
-  const showCharacterLimit = remainingCharacters <= 200;
+  const hasDraft = Boolean(query.trim());
+  const canReset = messages.length > 0 || canStop || hasDraft;
+  const reset = useAIResetConfirmation({ hasDraft, isActive: canStop, onReset, fallbackFocusRef: textareaRef });
   const awaitingFirstToken = isThinking && streamingText.length === 0;
   const showProcessingIndicator = useDelayedVisibleFlag(
     awaitingFirstToken,
@@ -96,7 +97,7 @@ export function AIConversationCard({
   const chatControls = showResetButton && canReset ? (
     <div className="ml-auto flex shrink-0 items-center justify-end gap-2">
       <AIIconTooltip label="Sembang Baharu">
-        <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={onReset} disabled={!canReset}
+        <Button type="button" variant="outline" className="h-11 w-11 p-0" onClick={reset.requestReset} disabled={!canReset}
           aria-label="Sembang Baharu">
           <SquarePen className="h-4 w-4" aria-hidden="true" />
         </Button>
@@ -158,7 +159,7 @@ export function AIConversationCard({
                 aria-label={message.role === "user" ? "Mesej pengguna" : "Mesej pembantu AI"}
               >
                 <div className={`ai-page-bubble whitespace-pre-wrap rounded-2xl px-4 py-3 ${message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"}`}>
-                  <AIMessageContent content={message.content} />
+                  <AIMessageContent content={message.content} allowBold={message.role === "assistant"} />
                 </div>
               </div>
             ))}
@@ -221,13 +222,8 @@ export function AIConversationCard({
             </Button>
           </AIIconTooltip>
         </div>
-        <p
-          id="ai-conversation-query-limit"
-          className={showCharacterLimit ? "text-right text-2xs leading-snug text-muted-foreground" : "sr-only"}
-          aria-live="polite"
-        >
-          Had soalan AI {AI_REQUEST_MAX_CHARACTERS} aksara. {remainingCharacters} aksara berbaki.
-        </p>
+        <AIQueryLimit value={query} descriptionId="ai-conversation-query-limit" className="text-right text-2xs leading-snug text-muted-foreground" />
+        <AIResetConfirmation {...reset} />
 
       </div>
     </div>
