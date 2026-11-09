@@ -14,7 +14,7 @@ const password = "Theme-fixture-login-123!";
 const opposite = (theme: Theme): Theme => theme === "dark" ? "light" : "dark";
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
-  theme: Theme; legacyTheme?: Theme; systemTheme?: Theme; twoFactor?: boolean;
+  theme: Theme; legacyTheme?: Theme; systemTheme?: Theme; twoFactor?: boolean; logoutResponseDelayMs?: 1500;
 }) {
   expect(baseURL, "Use the real built loopback frontend").toBeTruthy();
   const origin = new URL(baseURL!).origin;
@@ -29,7 +29,8 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     twoFactorPendingSetup: false, twoFactorConfiguredAt: options.twoFactor ? fixedNow : null,
   };
   const fixture = {
-    origin, authenticated: false, loginCalls: 0, logoutCalls: 0, verificationCalls: 0,
+    origin, authenticated: false, logoutPending: false, loginCalls: 0, logoutCalls: 0, verificationCalls: 0,
+    socketEvents: [] as { phase: string; path: string }[], authenticatedSockets: 0, clientSocketCloses: 0,
     requests: [] as string[], artworkRequests: [] as string[], unexpected: [] as string[], errors: [] as string[], pending: new Set<Promise<void>>(),
   };
   const respond = (route: Route, body: unknown, status = 200) => route.fulfill({
@@ -45,8 +46,35 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
   });
   await page.context().routeWebSocket("**/*", socket => {
-    if (!fixture.authenticated) fixture.unexpected.push("WebSocket before authentication");
-    socket.close();
+    if (fixture.socketEvents.length >= 16) {
+      fixture.unexpected.push("WebSocket request bound exceeded");
+      socket.close();
+      return;
+    }
+    fixture.socketEvents.push({ phase: fixture.authenticated ? "authenticated" : fixture.logoutPending ? "logout-pending" : "public",
+      path: new URL(socket.url()).pathname });
+    if (!fixture.authenticated) {
+      fixture.unexpected.push("WebSocket before authentication");
+      socket.close();
+      return;
+    }
+    const url = new URL(socket.url());
+    if (url.origin !== origin.replace(/^http/, "ws") || url.pathname !== "/ws" || url.search) {
+      fixture.unexpected.push("Unexpected authenticated WebSocket endpoint");
+      socket.close();
+      return;
+    }
+    fixture.authenticatedSockets++;
+    let clientClosed = false;
+    socket.onClose(() => {
+      // Completing the mock-side close can echo a second close notification.
+      if (clientClosed) return;
+      clientClosed = true;
+      fixture.clientSocketCloses++;
+      socket.close();
+    });
+    // Playwright opens a local mock without connectToServer. Keep the healthy
+    // connection open; closing it here would manufacture reconnects during logout.
   });
   const handle = async (route: Route) => {
     const request = route.request(), url = new URL(request.url());
@@ -125,8 +153,12 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (endpoint === "POST /api/activity/logout") {
       fixture.logoutCalls++;
       fixture.authenticated = false;
-      return route.fulfill({ json: { ok: true, success: true },
+      fixture.logoutPending = true;
+      if (options.logoutResponseDelayMs) await new Promise(resolve => setTimeout(resolve, options.logoutResponseDelayMs));
+      await route.fulfill({ json: { ok: true, success: true },
         headers: { "Cache-Control": "no-store", "Set-Cookie": "sqr_auth_hint=; Max-Age=0; Path=/; SameSite=Lax" } });
+      fixture.logoutPending = false;
+      return;
     }
     fixture.unexpected.push(endpoint);
     return respond(route, { ok: false, message: "Unexpected theme fixture request" }, 404);
@@ -147,9 +179,14 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
 
 async function checkFixture(page: Page, fixture: Awaited<ReturnType<typeof installFixture>>) {
   while (fixture.pending.size) await Promise.all(fixture.pending);
+  if (fixture.logoutCalls > 0) {
+    await expect.poll(() => fixture.clientSocketCloses).toBe(fixture.authenticatedSockets);
+  }
+  const fitsViewport = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1);
+  while (fixture.pending.size) await Promise.all(fixture.pending);
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  expect(fitsViewport).toBe(true);
 }
 
 async function expectTheme(page: Page, theme: Theme) {
@@ -294,6 +331,7 @@ for (const selected of ["dark", "light"] as const) {
     await expect(page.getByTestId("home-dashboard")).toBeVisible();
     await expectTheme(page, selected);
     expect(fixture.loginCalls).toBe(1);
+    await expect.poll(() => fixture.authenticatedSockets).toBe(1);
     const toggle = page.getByTestId("button-toggle-theme");
     await expect(toggle).toHaveAccessibleName(`Switch to ${initial} mode`);
     await toggle.click();
@@ -316,6 +354,48 @@ for (const selected of ["dark", "light"] as const) {
     await checkFixture(page, fixture);
   });
 }
+
+test("Shared theme delayed logout keeps the authenticated socket stable until client cleanup", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const fixture = await installFixture(page, baseURL, { theme: "light", logoutResponseDelayMs: 1500 });
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await passwordLogin(page);
+  const workspace = page.getByTestId("home-dashboard");
+  await expect(workspace).toBeVisible();
+  await expect.poll(() => fixture.authenticatedSockets).toBe(1);
+  await page.getByTestId("button-user-menu").click();
+  const logout = page.getByTestId("button-logout").click();
+  await expect.poll(() => fixture.logoutPending).toBe(true);
+  await expect(workspace).toBeVisible();
+  expect(fixture.authenticated).toBe(false);
+  await logout;
+  await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "light");
+  await expectTheme(page, "light");
+  expect(fixture.logoutCalls).toBe(1);
+  console.log("THEME_LOGOUT_SOCKET=" + JSON.stringify({ events: fixture.socketEvents, logoutCalls: fixture.logoutCalls,
+    workspaceVisibleWhileLogoutPending: true }));
+  await checkFixture(page, fixture);
+  expect(fixture.socketEvents).toEqual([{ phase: "authenticated", path: "/ws" }]);
+  expect(fixture.clientSocketCloses).toBe(1);
+});
+
+test("Shared theme socket guard rejects a connection before login", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { theme: "light" });
+  await page.goto("/login", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("input-username")).toBeVisible();
+  await page.evaluate(origin => new Promise<void>((resolve, reject) => {
+    const socket = new WebSocket(origin.replace(/^http/, "ws") + "/ws");
+    const deadline = setTimeout(() => reject(new Error("The unauthenticated mock socket did not close")), 3000);
+    socket.addEventListener("close", () => { clearTimeout(deadline); resolve(); }, { once: true });
+  }), fixture.origin);
+  while (fixture.pending.size) await Promise.all(fixture.pending);
+  expect(fixture.authenticated).toBe(false);
+  expect(fixture.loginCalls).toBe(0);
+  expect(fixture.authenticatedSockets).toBe(0);
+  expect(fixture.socketEvents).toEqual([{ phase: "public", path: "/ws" }]);
+  expect(fixture.unexpected).toEqual(["WebSocket before authentication"]);
+  expect(fixture.errors).toEqual([]);
+});
 
 for (const width of [320, 1440]) {
   test(`Shared theme dark login keeps invalid fields and OTP readable at ${width}px`, async ({ page, baseURL }, testInfo) => {
