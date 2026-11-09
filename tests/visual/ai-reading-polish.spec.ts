@@ -5,12 +5,26 @@ declare global {
   interface Window {
     __aiPolishStatusMessages: string[];
     __aiPolishStatusObserver: MutationObserver;
+    __aiPolishExecution: number;
   }
 }
 
 const answer = "Ringkasan sintetik\n\n- Kutipan RM 100.00\n- Baki RM 25.00\n1. Semak rekod\n2. Sahkan jumlah\n\n```txt\nrujukan 000123\n```\n```txt\njumlah 100.00\n```\n\n"
   + Array.from({ length: 60 }, (_, index) => `Baris ${index + 1}: Butiran sintetik untuk semakan ruang bacaan.`).join("\n")
   + "\nAkhir jawapan sintetik.";
+const securityDiagnostic = /Content Security Policy|violates.*(?:directive|Trusted)|Trusted(?:HTML|Script(?:URL)?|Types)|trusted-types/i;
+
+async function installRelevantCsp(page: Page, baseURL: string | undefined) {
+  // Preserve CI's policy; the static preview otherwise has no Express CSP.
+  await page.route((url) => url.origin === new URL(baseURL!).origin && ["/ai", "/viewer"].includes(url.pathname), async (route) => {
+    if (!route.request().isNavigationRequest()) return route.fallback();
+    const response = await route.fetch();
+    const headers = response.headers();
+    const policy = "script-src-attr 'none'; trusted-types default sqr-ui dompurify; require-trusted-types-for 'script'";
+    await route.fulfill({ response, headers: { ...headers,
+      "content-security-policy": headers["content-security-policy"] ? `${headers["content-security-policy"]}, ${policy}` : policy } });
+  });
+}
 
 async function openChat(page: Page, baseURL: string | undefined, surface: "full" | "floating", theme: "light" | "dark", width: number, height = 900) {
   await page.setViewportSize({ width, height });
@@ -126,11 +140,12 @@ for (const theme of ["light", "dark"] as const) {
 
 for (const surface of ["full", "floating"] as const) {
   test(`AI reading polish stability ${surface}: growing answer blocks retain their DOM while history stays usable`, async ({ page, baseURL }) => {
+    await installRelevantCsp(page, baseURL);
     const { fixture, root, input, log, send } = await openChat(page, baseURL, surface, surface === "full" ? "light" : "dark", surface === "full" ? 1366 : 375);
     await page.emulateMedia({ reducedMotion: "no-preference" });
     const cspErrors: string[] = [];
     page.on("console", (message) => {
-      if (/Content Security Policy|violates.*(?:directive|Trusted)/i.test(message.text())) cspErrors.push(message.text());
+      if (securityDiagnostic.test(message.text())) cspErrors.push(message.text());
     });
     // Keep substantial finalized history in place before the next answer and
     // user draft are rendered. All response data is synthetic and local.
@@ -156,7 +171,7 @@ for (const surface of ["full", "floating"] as const) {
       repeatedParagraph, repeatedParagraph,
       `- ${repeatedItem}\n- ${repeatedItem}`,
       `\`\`\`txt\n${repeatedCode}\n\`\`\``, `\`\`\`txt\n${repeatedCode}\n\`\`\``,
-      'Selamat 000456 <img src="x" onerror="alert(1)"><svg onload="alert(2)"></svg>🧾 selesai.',
+      safeLine,
       tailLines.join("\n"),
     ].join("\n\n");
     let requests = 0;
@@ -241,6 +256,128 @@ for (const surface of ["full", "floating"] as const) {
       await telemetry.evaluate(({ observer }) => observer.disconnect());
       await telemetry.dispose();
     }
+  });
+}
+
+for (const surface of ["full", "floating"] as const) {
+  test(`AI reading polish security ${surface}: hostile reveal stays inert under strict CSP`, async ({ page, baseURL }) => {
+    await installRelevantCsp(page, baseURL);
+    const origin = new URL(baseURL!).origin, sanitizerAssets = new Set<string>();
+    const cspMessages: string[] = [], dialogs: string[] = [];
+    const reports = { requests: 0, accepted: 0, errors: [] as string[] };
+    let deliberateAttack = false;
+    await page.route((url) => url.origin === origin && url.pathname === "/api/csp-report", async (route) => {
+      reports.requests++;
+      const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+      try {
+        if (!deliberateAttack || route.request().method() !== "POST") throw new Error("CSP report outside the deliberate POST attack window");
+        const contentType = route.request().headers()["content-type"]?.split(";")[0]?.trim().toLowerCase();
+        const payload: unknown = route.request().postDataJSON();
+        let entries: Record<string, unknown>[];
+        if (contentType === "application/csp-report" && record(payload) && record(payload["csp-report"])) {
+          entries = [payload["csp-report"]];
+        } else if (contentType === "application/reports+json" && Array.isArray(payload) && payload.length > 0
+          && payload.every((item: unknown) => record(item) && item.type === "csp-violation" && record(item.body))) {
+          entries = payload.map((item) => (item as { body: Record<string, unknown> }).body);
+        } else throw new Error("Invalid or empty CSP report envelope/content type");
+        for (const entry of entries) {
+          const modern = contentType === "application/reports+json";
+          if (entry[modern ? "effectiveDirective" : "effective-directive"] !== "script-src-attr"
+            || entry[modern ? "blockedURL" : "blocked-uri"] !== "inline" || entry.disposition !== "enforce") {
+            throw new Error("Unexpected CSP report directive, blocked URI or disposition");
+          }
+          const source = entry[modern ? "sourceFile" : "source-file"];
+          if (source !== undefined && (typeof source !== "string" || !sanitizerAssets.has(source))) throw new Error("CSP report source is not the loaded sanitizer asset");
+        }
+        reports.accepted += entries.length;
+        await route.fulfill({ status: 204 });
+      } catch (error) {
+        reports.errors.push(error instanceof Error ? error.message : "Invalid CSP report");
+        await route.fulfill({ status: 400, body: "Unexpected synthetic CSP report" });
+      }
+    });
+    page.on("response", (response) => {
+      const url = new URL(response.url());
+      if (url.origin === origin && /^\/assets\/purify\.es-[A-Za-z0-9_-]+\.js$/.test(url.pathname) && response.status() === 200) sanitizerAssets.add(url.href);
+    });
+    page.on("console", (message) => {
+      if (securityDiagnostic.test(message.text())) cspMessages.push(message.text());
+    });
+    page.on("dialog", async (dialog) => { dialogs.push(dialog.type()); await dialog.dismiss(); });
+    const { fixture, input, log, send } = await openChat(page, baseURL, surface, surface === "full" ? "light" : "dark", surface === "full" ? 1366 : 375);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    expect(await page.evaluate(() => typeof (window as Window & { trustedTypes?: { isHTML?: unknown } }).trustedTypes?.isHTML === "function")).toBe(true);
+    const telemetry = await log.evaluateHandle((node) => {
+      window.__aiPolishExecution = 0;
+      const events: { directive: string; blocked: string; disposition: string; source: string }[] = [];
+      const state = { unsafeNodes: 0, mutations: 0 };
+      const inspect = (candidate: Node) => {
+        if (!(candidate instanceof Element)) return;
+        for (const element of [candidate, ...candidate.querySelectorAll("*")]) {
+          if (element.matches("script,style,img,svg,math,iframe,object,embed,link,meta,base,form,input,button,a")
+            || Array.from(element.attributes).some((attribute) => /^on/i.test(attribute.name))) state.unsafeNodes++;
+        }
+      };
+      const observer = new MutationObserver((records) => {
+        state.mutations += records.length;
+        for (const record of records) {
+          if (record.type === "attributes") {
+            // Detect a handler set then removed within the same mutation batch.
+            if (/^on/i.test(record.attributeName ?? "")) state.unsafeNodes++;
+            inspect(record.target);
+          }
+          for (const added of record.addedNodes) inspect(added);
+        }
+      });
+      observer.observe(node, { subtree: true, childList: true, attributes: true });
+      const listener = (event: SecurityPolicyViolationEvent) => events.push({ directive: event.effectiveDirective,
+        blocked: event.blockedURI, disposition: event.disposition, source: event.sourceFile });
+      document.addEventListener("securitypolicyviolation", listener);
+      return { snapshot: () => ({ events, ...state, executions: window.__aiPolishExecution }),
+        dispose: () => { observer.disconnect(); document.removeEventListener("securitypolicyviolation", listener); } };
+    });
+    const flush = () => page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    try {
+      await input.fill("Ringkas"); await send.click();
+      await expect(log).toContainText("Jawapan sintetik ringkas."); await expect(log).toHaveAttribute("aria-busy", "false"); await flush();
+      expect((await telemetry.evaluate((probe) => probe.snapshot())).events).toEqual([]); expect(cspMessages).toEqual([]);
+      expect(reports).toEqual({ requests: 0, accepted: 0, errors: [] });
+      const attack = [
+        'Selamat 000456 <img src="x" onerror="alert(1)"><svg onload="alert(2)"></svg>🧾 selesai.',
+        'Bersarang <div><span><b>Teks 000789</b><img src="x" onerror="window.__aiPolishExecution++"><svg onload="alert(3)"></svg></span></div> selamat.',
+        'Pembalut <body onload="window.__aiPolishExecution++" onclick="alert(4)"><strong>Akaun 000321</strong></body> selesai.',
+        "- Rujukan 000123\n- Baki RM 25.00", '```txt\n  rekod = "000123 🧾";\n```', "Security answer complete 🧾.",
+      ].join("\n\n");
+      let requests = 0;
+      await page.route((url) => url.origin === origin && url.pathname === "/api/ai/search", (route) => {
+        requests++; return route.fulfill({ json: { ai_explanation: attack } });
+      });
+      deliberateAttack = true;
+      await input.fill("Security answer"); await send.click();
+      await expect(log).toContainText("Security answer complete 🧾."); await expect(log).toHaveAttribute("aria-busy", "false"); await flush();
+      const final = log.getByRole("article", { name: "Mesej pembantu AI", exact: true }).last();
+      expect(await final.locator(".ai-markdown-paragraph, .ai-markdown-list, .ai-markdown-code").evaluateAll((nodes) => nodes.map((node) => node.textContent))).toEqual([
+        "Selamat 000456 🧾 selesai.", "Bersarang Teks 000789 selamat.", "Pembalut Akaun 000321 selesai.",
+        "Rujukan 000123Baki RM 25.00", '  rekod = "000123 🧾";', "Security answer complete 🧾.",
+      ]);
+      const observed = await telemetry.evaluate((probe) => probe.snapshot());
+      expect(sanitizerAssets.size, "The actual production sanitizer must have loaded").toBeGreaterThan(0);
+      expect(observed.unsafeNodes).toBe(0); expect(observed.executions).toBe(0); expect(dialogs).toEqual([]); expect(requests).toBe(1);
+      expect(observed.mutations).toBeGreaterThan(0);
+      for (const event of observed.events) {
+        expect(event.directive).toBe("script-src-attr"); expect(event.blocked).toBe("inline"); expect(event.disposition).toBe("enforce");
+        expect(sanitizerAssets.has(event.source), "Only the actually loaded sanitizer asset may report deliberate attack blocking").toBe(true);
+      }
+      const expectedDiagnostic = "Executing inline event handler violates the following Content Security Policy directive 'script-src-attr 'none''. Either the 'unsafe-inline' keyword, a hash ('sha256-...'), or a nonce ('nonce-...') is required to enable inline execution. Note that hashes do not apply to event handlers, style attributes and javascript: navigations unless the 'unsafe-hashes' keyword is present. The action has been blocked.";
+      for (const message of cspMessages) expect(message).toBe(expectedDiagnostic);
+      expect(reports.errors).toEqual([]);
+      expect(fixture.errors).toEqual([]); expect(fixture.unexpected).toEqual([]);
+      // Chrome 148 may emit none; Chrome 156 eagerly diagnoses parsed handlers.
+      // Counts are evidence, not a warning budget or an execution guarantee.
+      console.log("AI_READING_SECURITY=" + JSON.stringify({ surface, cspEvents: observed.events.length,
+        cspConsoleMessages: cspMessages.length, cspReportRequests: reports.requests, cspReportsAccepted: reports.accepted,
+        liveUnsafeNodes: observed.unsafeNodes, executions: observed.executions, dialogs: dialogs.length, requests }));
+    } finally { await telemetry.evaluate((probe) => probe.dispose()); await telemetry.dispose(); }
   });
 }
 
