@@ -28,10 +28,10 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API, payl
 
 | Fasa | Status |
 | --- | --- |
-| 1 Discovery | Sumber disemak; baseline browser sedang disediakan |
-| 2 Tokens/reduced motion | Belum diubah |
-| 3 Persistent layout | Belum diubah |
-| 4 Stable form slot | Belum diubah |
+| 1 Discovery | Baseline cerah dirender pada 5 lebar dan BM/EN; screenshot 360/1440px diperiksa |
+| 2 Tokens/reduced motion | Build lulus; commit baac8b8f |
+| 3 Persistent layout | Build + 34 ujian kontrak/SSR lulus; commit 5b251502 |
+| 4 Stable form slot | Kod siap; build/regresi belum dijalankan |
 | 5 Form transition | Belum diubah |
 | 6 Illustration crossfade | Belum diubah |
 | 7 Micro-interactions/states | Belum diubah |
@@ -42,8 +42,18 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API, payl
 ## Sambungan
 
 - Semua build/test/browser target dalam WSL/bwrap sedia ada, data sintetik, had asal CPU100%, RAM768MiB/high704, swap0, PID128, tmp256MiB, CPU120s/wall180s. Tiada instalasi atau peningkatan had.
-- Helper baharu di `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113` sedang disediakan. Harness lama kekal.
+- Helper baharu di `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113` sedia. Harness lama kekal. `sandbox.cjs` menerima build/tests/lint/types-focused/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Semua target mesti bersiri.
 - Jangan commit untracked `.agents/`, `.codex/`, `.github/agents|hooks|skills/`, `.impeccable/` atau sebarang `.env`.
 - Simpan baseline/after screenshot pada viewport matching serta metadata receipt dan source manifest. Laporan akhir mesti menyatakan batas pengesahan, default, commit hash dan perubahan setiap isu rakaman.
 
-Belum ada pembetulan UI atau ujian browser yang didakwa selesai dalam checkpoint ini.
+## Bukti setakat checkpoint
+
+- Baseline dibekukan daripada build `receipt-adaptive-build-4a87c44113c2`; 2,503 hash sumber direkodkan dan semua fail aplikasi/config/package sepadan sebelum suntingan.
+- Browser asal cerah `auth-smooth-tests-d0d764c1038a`: lulus, 26.481s, budgetFailure null. Brand/topbar identity false pada semua lima lebar. Y heading login/forgot: 360=311/311; 390=322.4375/322.4375; 412=333/333; 768=275.453125/247; 1440=189.28125/231. CLS yang diperhatikan sudah 0; jangan mendakwa penurunan CLS daripada metrik ini.
+- Screenshot baseline desktop login menunjukkan validasi username kosong selepas autofocus diikuti klik bahasa; autofocus awal akan dibuang dalam Fasa 5, sementara fokus validasi/MFA kekal.
+- Build Fasa 2: `receipt-adaptive-build-76b2f7cd4bbb`, lulus 32.343s. Guard commit `auth-smooth-tests-9fd639cb7e52`, lulus.
+- Build Fasa 3: `auth-smooth-build-e40ee0853e95`, lulus 21.017s. Regresi `auth-smooth-tests-364cd6d34063`: 34/34. Guard commit `auth-smooth-tests-51cd6e6bab7e`, lulus.
+- Dua percubaan persediaan helper gagal sebelum target bermula (mountpoint node_modules dan akses arkib private); kedua-duanya dibetulkan pada helper sahaja, caps kekal. Receipt gagal 12e89592c928 dan c5df3233c1e7 bukan kegagalan aplikasi.
+- C: turun ke sekitar 240MB semasa QA. Semua target dihentikan; VHD distro ujian sedang dipadatkan melalui skrip DiskPart lama dengan attach read-only. Jangan mulakan WSL sebelum compaction/detach tamat. Tiada fail dipadam.
+
+Fasa 4–10 dan pengesahan UI selepas pembaikan masih belum selesai. Goal kekal aktif.

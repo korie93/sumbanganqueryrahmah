@@ -84,7 +84,13 @@ test("password creation compact overrides and validation colors remain intact", 
 });
 
 test("public auth keeps bounded widths and short-screen/single-tab recovery layouts", () => {
-  assert.equal(declaration(v17, ".auth-v17-wrap", "width"), "min(100%, 480px)");
+  assert.equal(declaration(v17, ".auth-v17-wrap", "width"), "100%");
+  assert.equal(declaration(v17, ".auth-form-slot", "width"), "min(100%, 26rem)");
+  assert.equal(declaration(v17, ".auth-form-slot", "margin-top"), "clamp(2rem, 12vh, 6rem)");
+  assert.equal(declaration(v17, ".auth-form-slot", "min-height"), "var(--auth-slot-min-h, 34rem)");
+  assert.equal(declaration(v17, ".auth-v17-side", "flex-direction"), "column");
+  assert.equal(declaration(v17, ".auth-v17-side", "align-items"), "stretch");
+  assert.equal(declaration(v17, ".auth-v17-wrap", "transform"), undefined);
   assert.match(v17, /@media \(max-width: 699px\)[\s\S]*\.auth-v17\s*\{\s*display:\s*block;/);
   assert.match(v17, /@media[^\{]*max-height:[\s\S]*\.auth-v17-wrap\s*\{\s*transform:\s*none;/);
   assert.equal(declaration(layout, ".public-auth-layout__container", "max-width"), "40rem");

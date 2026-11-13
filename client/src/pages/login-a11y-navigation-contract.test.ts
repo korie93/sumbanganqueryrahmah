@@ -22,10 +22,17 @@ test("V17 auth controls and OTP slots preserve visible keyboard focus", () => {
 
 test("V17 login uses a bounded split form with a stacked mobile fallback", () => {
   const source = readSource("../components/auth/AuthV17Layout.css");
+  const layout = readSource("../components/auth/AuthV17Layout.tsx");
   assert.match(source, /\.auth-v17\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:/);
-  assert.match(source, /\.auth-v17-wrap\s*\{[^}]*width:\s*min\(100%, 480px\);/);
+  assert.match(source, /\.auth-v17-wrap\s*\{[^}]*width:\s*100%;/);
+  assert.match(source, /\.auth-form-slot\s*\{[^}]*width:\s*min\(100%, 26rem\);[^}]*margin-top:\s*clamp\(2rem, 12vh, 6rem\);[^}]*min-height:\s*var\(--auth-slot-min-h, 34rem\);/);
+  assert.match(source, /\.auth-v17-side\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*stretch;/);
+  assert.doesNotMatch(source, /\.auth-v17-wrap\s*\{[^}]*transform:\s*translate/);
+  assert.doesNotMatch(source, /\.auth-v17-forgot \.auth-v17-side\s*\{[^}]*padding-top:/);
   assert.match(source, /@media \(max-width: 699px\)[\s\S]*\.auth-v17\s*\{\s*display:\s*block;/);
   assert.match(source, /\.auth-v17-view\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/);
+  assert.match(layout, /<section className="auth-v17-side" aria-label=\{t\(recoveryArtwork \? "auth\.v17Recovery\.forgotTitle" : "auth\.v17\.signin"\)\}>/);
+  assert.match(layout, /<div className="auth-form-slot">\s*<AuthShellContext\.Provider value=\{true\}>\{children\}<\/AuthShellContext\.Provider>\s*<\/div>\s*<p className="auth-v17-help">/);
 });
 
 test("login fallback navigation uses router navigation instead of manual history events", () => {

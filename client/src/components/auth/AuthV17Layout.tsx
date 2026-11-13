@@ -93,7 +93,7 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
           /> : null}
         </div>
       </section>
-      <section className="auth-v17-side" aria-labelledby="auth-v17-title">
+      <section className="auth-v17-side" aria-label={t(recoveryArtwork ? "auth.v17Recovery.forgotTitle" : "auth.v17.signin")}>
         <div className="auth-v17-wrap">
           <div className="auth-v17-topline">
             {showBackButton ? <button type="button" className="auth-v17-back" onClick={onBackClick ?? (() => navigate("/"))}>
@@ -112,7 +112,10 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
             </div>
           </div>
           {offline ? <div className="auth-v17-offline" role="status"><WifiOff size={18} aria-hidden="true" />{t("auth.v17.offline")}</div> : null}
-          <AuthShellContext.Provider value={true}>{children}</AuthShellContext.Provider>
+          <div className="auth-form-slot">
+            <AuthShellContext.Provider value={true}>{children}</AuthShellContext.Provider>
+          </div>
+          <p className="auth-v17-help">{t("auth.v17.support")}</p>
         </div>
       </section>
     </main>
@@ -134,7 +137,6 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
         <strong>{t("auth.v17.controlled")}</strong><br />{t("auth.v17.assurance")}
       </div></div> : null}
     </div>
-    <p className="auth-v17-help">{t("auth.v17.support")}</p>
   </>;
   return embedded ? content : <AuthV17Shell {...shellProps}>{content}</AuthV17Shell>;
 }
