@@ -8,7 +8,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
 import { AuthLink } from "./AuthLink";
 import { AuthBrandArtwork } from "./AuthBrandArtwork";
-import { getActiveViewTransitionKind } from "@/lib/view-transition";
+import { AuthFormView } from "./AuthFormView";
 import { hasPublicAuthArrival } from "@/lib/auth-navigation-preload";
 import "./AuthV17Layout.css";
 
@@ -27,6 +27,8 @@ type Props = {
   controlledAccess?: boolean;
   recoveryArtwork?: boolean;
   headingRef?: RefObject<HTMLHeadingElement>;
+  contentKey?: string;
+  persistentActions?: ReactNode;
 };
 
 const AuthShellContext = createContext<{ hasShownForm: { current: boolean } } | null>(null);
@@ -118,20 +120,21 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
 
 /** Page content adapter also retains standalone rendering for existing callers. */
 export function AuthV17Layout({ children, title, description, icon, contentBusy = false,
-  controlledAccess = false, headingRef, ...shellProps }: Props) {
+  controlledAccess = false, headingRef, contentKey = "request", persistentActions, ...shellProps }: Props) {
   const embedded = useContext(AuthShellContext);
   const { t } = useAuthLocale();
   const localHeadingRef = useRef<HTMLHeadingElement>(null);
   const titleRef = headingRef ?? localHeadingRef;
+  const hasCommitted = useRef(false);
   const [focusOnArrival] = useState(() => Boolean(embedded?.hasShownForm.current || hasPublicAuthArrival()));
-  const [animateArrival] = useState(() => getActiveViewTransitionKind() === null);
+  useEffect(() => { hasCommitted.current = true; }, []);
   useEffect(() => {
     if (!embedded) return;
     if (focusOnArrival) titleRef.current?.focus({ preventScroll: true });
     embedded.hasShownForm.current = true;
   }, [embedded, focusOnArrival, titleRef]);
   const content = <>
-    <div className={`auth-v17-view${animateArrival ? " auth-form-enter" : ""}`}>
+    <AuthFormView key={contentKey} statusEntry={hasCommitted.current}>
       {icon ? <div className="auth-v17-icon">{icon}</div> : null}
       <h1 id="auth-v17-title" ref={titleRef} tabIndex={-1}>{title}</h1>
       <p className="auth-v17-subtitle">{description}</p>
@@ -139,7 +142,8 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
       {controlledAccess ? <div className="auth-v17-assure"><Check size={18} aria-hidden="true" /><div>
         <strong>{t("auth.v17.controlled")}</strong><br />{t("auth.v17.assurance")}
       </div></div> : null}
-    </div>
+    </AuthFormView>
+    {persistentActions ? <div className="auth-v17-persistent-actions">{persistentActions}</div> : null}
   </>;
   return embedded ? content : <AuthV17Shell {...shellProps}>{content}</AuthV17Shell>;
 }

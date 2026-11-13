@@ -1,0 +1,19 @@
+/* The brief permits this single layout-animation exception for error reveal. */
+.auth-shell .auth-error {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+.auth-shell .auth-error[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  animation: auth-error-reveal 200ms var(--ease-out) both;
+}
+.auth-shell .auth-error__clip { min-height: 0; overflow: hidden; }
+@keyframes auth-error-reveal {
+  from { grid-template-rows: 0fr; opacity: 0; }
+  to { grid-template-rows: 1fr; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell .auth-error[data-open="true"] { animation: none; }
+}

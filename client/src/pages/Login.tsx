@@ -4,6 +4,7 @@ import type { User } from "@/app/types";
 import { ExpandableMessage } from "@/components/ExpandableMessage";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { AuthLink } from "@/components/auth/AuthLink";
+import { AuthError } from "@/components/auth/AuthError";
 import { Eye, EyeOff, UserRound, LockKeyhole, KeyRound, ShieldCheck, ArrowRight, ArrowLeft } from "lucide-react";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
 import { AuthOtpInput } from "@/components/auth/AuthOtpInput";
@@ -203,9 +204,9 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
       contentBusy={loading}
     >
       {error && !lockedFlow ? (
-        <div className="public-auth-status-card public-auth-status-card--error" role="alert">
+        <AuthError>
           <ExpandableMessage locale={locale}>{localizeAuthFeedback(error, locale)}</ExpandableMessage>
-        </div>
+        </AuthError>
       ) : null}
       {notice && !isTwoFactor ? (
         <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">{localizeAuthFeedback(notice, locale)}</div>
@@ -238,7 +239,8 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
               <button type="button" onClick={toggleShowPassword} disabled={loading} className="login-password-toggle"
                 data-testid="button-toggle-password" aria-controls="login-password"
                 aria-label={t(showPassword ? "auth.v17.hidePassword" : "auth.v17.showPassword")} {...getAriaPressedProps(showPassword)}>
-                {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
+                <Eye size={18} className="login-password-toggle__icon" data-visible={!showPassword} aria-hidden="true" />
+                <EyeOff size={18} className="login-password-toggle__icon" data-visible={showPassword} aria-hidden="true" />
               </button>
             </div>
             <p id="login-caps-lock" className="login-caps-lock" role="status" hidden={!capsLock}>{t("auth.v17.caps")}</p>
@@ -264,10 +266,12 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
             {twoFactorCodeError ? <p id="login-two-factor-error" className="public-auth-field-error" role="alert">{t("auth.v17.codeRequired")}</p> : null}
           </div>
         )}
-        <PublicAuthButton type="submit" className="login-submit" disabled={loading || lockedFlow || (isTwoFactor && twoFactorCode.length !== 6)} data-testid="button-login">
-          {loading ? <span className="login-submit-spinner" aria-hidden="true" /> : <ShieldCheck size={18} aria-hidden="true" />}
+        <PublicAuthButton type="submit" className="login-submit auth-btn" aria-busy={loading || undefined} disabled={loading || lockedFlow || (isTwoFactor && twoFactorCode.length !== 6)} data-testid="button-login">
+          <span className="auth-btn__icon" aria-hidden="true"><ShieldCheck size={18} /></span>
           {t(loading ? (isTwoFactor ? "auth.v17.verifying" : "auth.v17.signing") : lockedFlow ? "auth.v17.locked" : isTwoFactor ? "auth.v17.verify" : "auth.v17.signin")}
-          {!isTwoFactor && !loading ? <ArrowRight size={16} className="login-submit-arrow" aria-hidden="true" /> : null}
+          <span className="auth-btn__icon auth-btn__tail" aria-hidden="true">
+            {loading ? <span className="auth-spinner" /> : !isTwoFactor ? <ArrowRight size={18} className="auth-btn__arrow login-submit-arrow" /> : null}
+          </span>
         </PublicAuthButton>
       </form>
       {lockedFlow ? <div className="login-locked-alert" role="alert">

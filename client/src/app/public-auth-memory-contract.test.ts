@@ -75,7 +75,11 @@ test("forgot password route uses persistent lightweight artwork without eager re
   assert.doesNotMatch(publicAuthCss, /--auth-illustration|\.auth-v17-art::before/);
   // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
   assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
-  assert.doesNotMatch(publicAuthCss, /animation:[^;]*infinite|will-change:\s*(?:transform|opacity)/);
+  assert.doesNotMatch(publicAuthCss, /will-change:\s*(?:transform|opacity)/);
+  // A submit-only progress spinner is functional; decorative chrome stays idle.
+  for (const selector of [".auth-v17-brand-panel", ".auth-v17-art", ".auth-v17-view", ".auth-v17-help"]) {
+    assert.doesNotMatch(readFirstCssRuleBlock(publicAuthCss, selector), /animation:[^;]*infinite/);
+  }
   assert.doesNotMatch(artworkCss, /will-change|backdrop-filter|animation:[^;]*infinite/);
   assert.match(readFirstCssRuleBlock(publicAuthCss, ".auth-v17-view"), /background:\s*transparent;/);
 });

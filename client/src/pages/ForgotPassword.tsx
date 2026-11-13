@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
 import { AuthLink } from "@/components/auth/AuthLink";
+import { AuthError } from "@/components/auth/AuthError";
 import { PublicAuthRequestReference } from "@/components/auth/PublicAuthRequestReference";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import { requestPasswordReset } from "@/lib/api/auth";
@@ -38,7 +39,7 @@ export default function ForgotPasswordPage({
   const [invalidFocusRequest, setInvalidFocusRequest] = useState<{ field: "identifier" } | null>(null);
   const mountedRef = useRef(true);
   const identifierInputRef = useRef<HTMLInputElement | null>(null);
-  const successRef = useRef<HTMLDivElement | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   const actionFocusRef = useRef<ReturnType<typeof beginPublicAuthActionFocus> | null>(null);
   const focusIdentifierAfterEditRef = useRef(false);
   const requestAbortControllerRef = useRef<AbortController | null>(null);
@@ -56,7 +57,7 @@ export default function ForgotPasswordPage({
 
   useEffect(() => {
     if (submitted) {
-      actionFocusRef.current?.complete(successRef.current);
+      actionFocusRef.current?.complete(headingRef.current);
       actionFocusRef.current = null;
     }
     if (!submitted && focusIdentifierAfterEditRef.current) {
@@ -142,11 +143,27 @@ export default function ForgotPasswordPage({
       visualMode="minimal"
       recoveryArtwork
       contentBusy={loading}
+      headingRef={headingRef}
+      contentKey={submitted ? "confirmation" : "request"}
+      persistentActions={<AuthLink
+        to="/login"
+        className={`public-auth-button public-auth-button-${submitted ? "primary" : "ghost"}`}
+        onNavigate={() => {
+          if (onBackToLogin) {
+            onBackToLogin();
+            return;
+          }
+          navigate("/");
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
+        {t("auth.v17Recovery.backToLogin")}
+      </AuthLink>}
       {...layoutBackProps}
     >
       {submitted ? (
         <>
-          <div ref={successRef} tabIndex={-1} className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
+          <div className="public-auth-status-card public-auth-status-card--success" role="status" aria-live="polite">
             {t("auth.v17Recovery.forgotSuccess")}
           </div>
           <PublicAuthButton
@@ -205,35 +222,26 @@ export default function ForgotPasswordPage({
             {t("auth.v17Recovery.forgotNote")}
           </div>
           {error ? (
-            <div className="public-auth-status-card public-auth-status-card--error" role="alert">
+            <AuthError>
               {localizeAuthFeedback(error, locale)}
-            </div>
+            </AuthError>
           ) : null}
           <PublicAuthRequestReference requestId={requestReference} />
           <PublicAuthButton
             type="submit"
+            className="auth-btn"
+            aria-busy={loading || undefined}
             disabled={loading}
           >
             {t(loading ? "auth.v17Recovery.sending"
               : showRetryHint ? "auth.v17Recovery.forgotRetry" : "auth.v17Recovery.sendRequest")}
+            <span className="auth-btn__icon auth-btn__tail" aria-hidden="true">
+              {loading ? <span className="auth-spinner" /> : <ArrowRight size={18} className="auth-btn__arrow" />}
+            </span>
           </PublicAuthButton>
         </form>
       )}
 
-      <AuthLink
-        to="/login"
-        className={`public-auth-button public-auth-button-${submitted ? "primary" : "ghost"}`}
-        onNavigate={() => {
-          if (onBackToLogin) {
-            onBackToLogin();
-            return;
-          }
-          navigate("/");
-        }}
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
-        {t("auth.v17Recovery.backToLogin")}
-      </AuthLink>
     </AuthV17Layout>
   );
 }

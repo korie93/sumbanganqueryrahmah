@@ -207,7 +207,7 @@ for (const theme of ["light", "dark"] as const) {
       await page.getByRole("button", { name: "Bahasa Melayu", exact: true }).click();
       const identifier = page.locator("#forgot-password-identifier");
       const submit = page.locator('form button[type="submit"]');
-      const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+      const alert = page.locator('.auth-error[role="alert"]');
       const reference = page.locator(".public-auth-request-reference__value");
       await identifier.fill(authV17FixtureIdentity.username);
 
@@ -271,6 +271,7 @@ for (const theme of ["light", "dark"] as const) {
         const success = page.locator('.public-auth-status-card--success[role="status"]');
         await expect(success).toContainText("If the account exists");
         await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeVisible();
+        await expect(page.locator("#auth-v17-title")).toBeFocused();
         await expect(page.locator(".auth-v17-subtitle")).toHaveText("A reset email is only sent after superuser approval.");
         const back = page.getByRole("link", { name: "Back to sign in", exact: true });
         await expect(back).toHaveClass(/(?:^|\s)public-auth-button-primary(?:\s|$)/);
@@ -313,7 +314,7 @@ for (const theme of ["light", "dark"] as const) {
         const before = fixture.state.counts.forgot;
         await identifier.fill(authV17FixtureIdentity.username);
         await submit.focus(); await submit.press("Enter");
-        const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+        const alert = page.locator('.auth-error[role="alert"]');
         await expect(alert).toHaveText(response.message);
         await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
         await expect(submit).toHaveText("Hantar Permintaan");
@@ -380,7 +381,7 @@ for (const theme of ["light", "dark"] as const) {
       await expect(success).toContainText("permintaan anda telah dihantar untuk semakan");
       await expect(page.getByRole("heading", { name: "Permintaan diterima", exact: true })).toBeVisible();
       await expect(page.locator(".auth-v17-subtitle")).toHaveText("Emel tetapan semula hanya dihantar selepas kelulusan superuser.");
-      await expect(success).toBeFocused();
+      await expect(page.locator("#auth-v17-title")).toBeFocused();
       await expect(identifier).toHaveCount(0);
       expect(state.forgotIdentifiers).toEqual([authV17FixtureIdentity.username]);
       for (const width of [320, 1440]) {
@@ -436,6 +437,28 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.locator('.public-auth-status-card--success[role="status"]')).toContainText("If the account exists");
       await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeVisible();
       await expect(english).toBeFocused();
+
+      // The bottom navigation belongs to the persistent action rail, not the
+      // keyed request/confirmation view. A response must retain its moved focus.
+      await page.getByRole("button", { name: "Use a different username/email", exact: true }).click();
+      await page.locator("#forgot-password-identifier").fill(authV17FixtureIdentity.username);
+      const back = page.getByRole("link", { name: "Back to sign in", exact: true });
+      const originalBack = await back.elementHandle();
+      const beforeForgot = fixture.state.counts.forgot;
+      state.forgotGate = new Promise<void>(resolve => { releaseForgot = resolve; });
+      await page.locator('form button[type="submit"]').click();
+      await expect.poll(() => fixture.state.counts.forgot).toBe(beforeForgot + 1);
+      await back.focus();
+      await expect(back).toBeFocused();
+      releaseForgot?.(); state.forgotGate = null;
+      await expect(page.locator('.public-auth-status-card--success[role="status"]')).toContainText("If the account exists");
+      await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeVisible();
+      expect(await back.evaluate((element, previous) => element === previous, originalBack)).toBe(true);
+      await expect(back).toBeFocused();
+      await back.press("Enter");
+      await expect(page).toHaveURL(/\/login$/);
+      await expect(page.locator("#login-username")).toBeVisible();
+      await originalBack?.dispose();
 
       for (const width of [320, 1440]) {
         await page.setViewportSize({ width, height: 900 });
@@ -513,7 +536,7 @@ test("Leaving a pending Forgot request aborts the caller without offering retry"
     await page.goto("/forgot-password", { waitUntil: "domcontentloaded" });
     await expect(page.locator("#forgot-password-identifier")).toHaveValue("");
     await expect(page.locator('form button[type="submit"]')).toHaveText("Hantar Permintaan");
-    await expect(page.locator('.public-auth-status-card--error[role="alert"]')).toHaveCount(0);
+    await expect(page.locator('.auth-error[role="alert"]')).toHaveCount(0);
     expect(fixture.state.counts.forgot).toBe(1);
   } finally { releaseForgot?.(); state.forgotGate = null; await finish(); }
 });

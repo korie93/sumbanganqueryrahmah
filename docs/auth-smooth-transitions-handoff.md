@@ -29,8 +29,8 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 | 3 Persistent layout | Build + 34 kontrak/SSR lulus; 5b251502 |
 | 4 Stable form slot | Build + 27 kontrak/SSR lulus; e683e1ab; browser mengesahkan heading Y sama pada 5 lebar |
 | 5 Form transition | Build, 28 ujian, lint, typecheck pengawal animasi dan browser lulus; commit 0da0e16d |
-| 6 Illustration crossfade | Sudah diintegrasi. 23 ujian, typecheck komponen dan build lulus; 3 browser termasuk slow-network/retry lulus; menunggu guard/commit |
-| 7 Micro-interactions | AuthError/AuthFormView disediakan, belum diintegrasi atau dijalankan |
+| 6 Illustration crossfade | 23 ujian, typecheck komponen, build dan 3 browser termasuk slow-network/retry lulus; commit 137f6f22 |
+| 7 Micro-interactions | Sudah diintegrasi; 39+24 ujian, lint, typecheck helper, build dan browser states/fokus lulus; menunggu guard/commit |
 | 8 Landing/auth fade | Belum diimplementasi |
 | 9 Responsive/helper/background | Belum diimplementasi |
 | 10 Verification/polish/audit | Belum selesai |
@@ -56,6 +56,11 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 - Pembaikan: kegagalan tidak disenarai hitam selamanya; revisit tema boleh retry sumber yang gagal, termasuk rendered URL masih sama selepas kedua-dua tema gagal. Rujukan imej mengekalkan DOM node; render biasa/failure tidak menyebabkan loop retry. Satu isu exactOptionalPropertyTypes pada ref map dikesan dan dibetulkan kepada record nullable; tiada kelemahan typecheck ditambah.
 - Fasa 6 selepas pembaikan: typecheck `auth-smooth-tests-5ca4f8404d93` lulus 3.615s; SSR/kontrak `auth-smooth-tests-fe6d324808d8` 23/23; build `auth-smooth-build-abc91cf8040d` lulus 17.169s; browser `auth-smooth-tests-50ddea148aed`, 3/3 lulus 27.156s (latency-gated normal, retry Dark berjaya, retry kedua-dua tema gagal).
 - Profil rangkaian browser dinyatakan tepat: latency150ms, download200000B/s, upload93750B/s. Gating memastikan keadaan pending dapat diperiksa; jangan dakwa preset DevTools tertentu. Imej asal/dimensi/decode, frame/node sama, CLS0 dan opacity transition sebenar360ms disahkan. Toolbar diuji ketika native form snapshot masih berjalan.
+- Guard Fasa 6 `auth-smooth-tests-baccd070555c`, lulus; tree disamakan sebelum commit137f6f22. Lint akhir satu komponen `auth-smooth-tests-58335849eae6`, lulus.
+- Fasa 7: `auth-smooth-tests-74f9b0deabe0` 39/39 dan `auth-smooth-tests-88d1ac4423cf` 24/24 kontrak tambahan; lint `auth-smooth-tests-619b9f3ef88c` lulus; typecheck dua helper `auth-smooth-tests-2e97154dac04` lulus; build `auth-smooth-build-c2346aee6eef` lulus18.033s.
+- Browser Fasa7 `auth-smooth-tests-edafbc5e098a`: login/forgot states lulus17.471s. Ia menyemak dua ikon mata/node stabil, opacity120ms, ARIA dan saiz butang sebelum/semasa/selepas loading, satu error alert/reveal200ms, generic success dengan auth-in260ms sebenar, serta tiada replay selepas preference rerender.
+- Browser existing feedback `auth-smooth-tests-75c6a997851c`: dua tema lulus25.073s. Fokus preference dan Back link kekal selepas pending response; DOM Back link sama dan Enter masih menuju login. Reset geometry/focus asal turut diuji tanpa mengubah implementasi Reset/Activate.
+- Default Fasa7: focus ring berubah serta-merta (0ms, memenuhi had150ms) untuk menghormati larangan paint-animation. Spinner loading sahaja menggunakan rotation700ms. Form status dikey; adapter/heading-ref dan Back link tidak dikey/remount. Slot tindakan kekal melindungi fokus dan intent preload.
 - Dua typecheck fokus terdahulu gagal ENOSPC pada persediaan host sebelum TypeScript bermula. Tiada hasil TypeScript daripada percubaan itu. Belum ada bukti browser selepas pembaikan.
 
 ## Sambung dan had keselamatan
@@ -74,6 +79,8 @@ C: berulang kali 0 bait, menyekat ujian dan penulisan checkpoint penuh. Fail ini
 Pemadatan VHD/fstrim tidak mencukupi. Pemampatan tanpa kehilangan data pada cache lama membebaskan ruang sementara dengan hash sebelum/selepas sepadan (`cache-compression.json`, `immutable-file-compression.json` di helper). WSL host dikurangkan 1536→1024MB dengan backup; had target kekal. DISM cleanup standard gagal `Incorrect function`; tiada ResetBase atau pembaikan OS.
 
 Empat binary dalam dua runtime.previous-* yang tidak aktif/tidak berkongsi hardlink turut dimampat LZX. Hash semua sepadan, tiada pemadaman; ruang diperhatikan naik47,620,096→195,403,776 bait (~141MiB). Bukti `previous-runtime-compression.json`. Tiga VSIX lama kemudian diperhatikan sudah tiada; jangan mendakwa agen memadamnya. Pagefile Windows membesar semasa typecheck, jadi ruang yang tersedia masih perlu dipantau.
+
+87 manifest sumber ujian yang telah ditutup juga dimampat tanpa kehilangan data. Semua hash sepadan, tiada kegagalan/pemadaman; ruang39,899,136→61,997,056 bait. Bukti `manifest-compression.json`. Jangan padam bukti yang diperlukan untuk laporan.
 
 Pengguna sudah membenarkan cleanup. Namun semakan kelulusan automatik menolak pemadaman cache browser dan tiga VSIX lama dengan `blocked by policy`; jangan memintas melalui API lain. Tiga cache di `AppData/Roaming/Code/CachedExtensionVSIXs` dikenal pasti (~982MiB): `.d00c1d92-d3fe-4100-a68f-3e4a09e96891`, `openai.chatgpt-26.908.40401-win32-x64`, `anthropic.claude-code-2.1.263-win32-x64`. Tiada data SQR, .env, resit/PDF/Excel, Downloads atau SQLite/WAL Codex disentuh.
 
