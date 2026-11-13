@@ -4,9 +4,6 @@
   --auth-text: #0f1d2e;
   --auth-muted: #5d6c7e;
   --auth-line: #d9e1ea;
-  --art-x: 50%;
-  --art-y: 100%;
-  --auth-illustration: url("../../assets/auth-v17/sqr-illustration.webp");
   --dm-input-bg: #fff;
   --dm-input-border: #cbd6e1;
   --dm-input-text: #0f1d2e;
@@ -62,12 +59,6 @@
 .auth-v17-status--warn i { background: #b45309; }
 .auth-v17-intro { position: relative; z-index: 1; margin: 2px 0 0; max-width: 14ch; color: #17314d; font-size: clamp(27px, 2.6vw, 38px); line-height: 1.08; letter-spacing: -.03em; font-weight: 700; }
 .auth-v17-art { position: relative; flex: 1; min-height: 360px; margin: -6px -8px -18px -44px; overflow: hidden; }
-.auth-v17-art::before {
-  content: ""; position: absolute; inset: -3% -2% -2%;
-  background: var(--auth-illustration) var(--art-x) var(--art-y)/min(100%, 920px) auto no-repeat;
-  mix-blend-mode: multiply; opacity: .98;
-  mask-image: radial-gradient(ellipse 76% 72% at 49% 57%, #000 50%, #000000f5 67%, #0000008f 82%, transparent 100%);
-}
 .auth-v17-curve { position: absolute; top: 0; right: -1px; width: 92px; height: 100%; z-index: 4; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='%23fff' d='M101 0H62C30 22 30 40 58 50C86 60 86 78 62 100H101Z'/%3E%3C/svg%3E") 0 0/100% 100% no-repeat;
 }
@@ -157,7 +148,6 @@
   .auth-v17 { grid-template-columns: minmax(0, 1.18fr) minmax(455px, .9fr); }
   .auth-v17-brand-panel { padding-left: 34px; padding-right: 52px; }
   .auth-v17-art { margin-left: -34px; }
-  .auth-v17-art::before { background-size: min(92%, 720px) auto; }
   .auth-v17-side { padding-left: 34px; padding-right: 34px; }
   .auth-v17-wrap { width: min(100%, 455px); }
 }
@@ -168,7 +158,6 @@
   .auth-v17-intro { margin-top: 8px; font-size: clamp(22px, 3.6vw, 28px); }
   .auth-v17-curve { width: 56px; }
   .auth-v17-art { margin: 0 -6px -10px -24px; }
-  .auth-v17-art::before { background-position: left 50%; background-size: 100% auto; }
   .auth-v17-side { padding: 28px 26px 30px 30px; }
   .auth-v17-wrap { width: 100%; transform: none; }
   .auth-v17 h1 { font-size: 30px; }
@@ -182,7 +171,6 @@
   .auth-v17-brand small { font-size: 10.5px; }
   .auth-v17-logo { width: 128px; }
   .auth-v17-art { position: absolute; inset: 0; margin: 0; min-height: 0; }
-  .auth-v17-art::before { inset: 0; background-position: right bottom; background-size: auto 100%; mask-image: linear-gradient(to bottom, #000 0, #000 84%, transparent); }
   .auth-v17-side { min-height: auto; padding: 22px 18px 32px; }
   .auth-v17-wrap { width: 100%; max-width: 520px; transform: none; }
   .auth-v17-topline { margin-bottom: 20px; }
@@ -209,7 +197,6 @@
 
 /* Login and password-reset requests share the selected app theme. */
 .auth-v17[data-theme="dark"] {
-  --auth-illustration: url("../../assets/auth-v17/sqr-illustration-dark.webp");
   --auth-blue: #8fc7f6;
   --auth-text: #f5f5f5;
   --auth-muted: #adb7c5;
@@ -255,16 +242,6 @@
 .auth-v17[data-theme="dark"] .auth-v17-secure i { background: #69c391; box-shadow: 0 0 0 4px #69c3911c; }
 .auth-v17[data-theme="dark"] .auth-v17-status--warn i { background: #f3ca81; box-shadow: 0 0 0 4px #f3ca811c; }
 .auth-v17[data-theme="dark"] .auth-v17-intro { color: #e3edf8; }
-.auth-v17[data-theme="dark"] .auth-v17-art::before {
-  /* Use the supplied night illustration in the identical frame, with its original colors. */
-  mix-blend-mode: normal;
-  filter: none;
-  opacity: 1;
-  /* Blend the image boundary into the dark panel without changing its dimensions. */
-  mask-image: radial-gradient(ellipse 76% 72% at 49% 57%, #000 50%, #000000f5 67%, #0000008f 82%, transparent 100%),
-    linear-gradient(to bottom, transparent, #000 16%, #000 88%, transparent);
-  mask-composite: intersect;
-}
 .auth-v17[data-theme="dark"] .auth-v17-curve {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='%23111' d='M101 0H62C30 22 30 40 58 50C86 60 86 78 62 100H101Z'/%3E%3C/svg%3E");
 }
@@ -308,20 +285,4 @@
   .auth-v17[data-theme="dark"] .auth-v17-brand-panel {
     background: linear-gradient(to bottom, transparent 72%, #111), radial-gradient(75% 80% at 20% 15%, #62a6e20d, transparent 70%), #010109;
   }
-}
-/* Forgot uses the supplied recovery scene; Login keeps its existing artwork. */
-.auth-v17.auth-v17-recovery-artwork { --auth-recovery-art-surface: #ffffff; }
-.auth-v17.auth-v17-recovery-artwork[data-theme="dark"] { --auth-recovery-art-surface: #050d19; }
-.auth-v17.auth-v17-recovery-artwork .auth-v17-brand-panel { background: var(--auth-recovery-art-surface); }
-.auth-v17.auth-v17-recovery-artwork .auth-v17-brand-panel::before,
-.auth-v17.auth-v17-recovery-artwork .auth-v17-art::before { content: none; }
-/* Use the existing full-width art track; the supplied scene has its own padding. */
-.auth-v17 .auth-v17-recovery-illustration { position: absolute; inset: 0; display: block; width: 100%; height: 100%; max-width: none; max-height: none; margin: auto; object-fit: contain; }
-@media (min-width: 1200px) and (min-height: 761px) {
-  /* The scene starts below an empty top margin in the supplied square asset. */
-  .auth-v17 .auth-v17-recovery-illustration { inset: auto 0 0; height: 115%; object-position: center bottom; }
-}
-@media (max-width: 699px) {
-  .auth-v17.auth-v17-recovery-artwork .auth-v17-art { inset: 8px 8px 8px auto; width: min(56vw, 260px, calc(100% - 152px)); min-height: 0; }
-  .auth-v17 .auth-v17-recovery-illustration { object-position: center bottom; }
 }

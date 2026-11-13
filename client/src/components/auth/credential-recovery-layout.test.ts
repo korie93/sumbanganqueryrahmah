@@ -11,6 +11,8 @@ import { getPasswordRequirements } from "@/lib/password-requirements";
 const stylesheetHook = registerHooks({
   load(url, context, nextLoad) {
     if (url.endsWith(".css")) return { format: "module", shortCircuit: true, source: "export default {};" };
+    if (url.endsWith(".webp")) return { format: "module", shortCircuit: true,
+      source: `export default ${JSON.stringify(new URL(url).pathname)};` };
     return nextLoad(url, context);
   },
 });

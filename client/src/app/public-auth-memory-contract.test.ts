@@ -62,18 +62,21 @@ test("login shell avoids persistent compositor hints on large decorative layers"
   assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".auth-v17-view"), /will-change:/);
 });
 
-test("forgot password route uses lightweight auth chrome without eager recovery preloading", () => {
+test("forgot password route uses persistent lightweight artwork without eager recovery module preloading", () => {
   const appSource = readClientSource("../App.tsx");
   const forgotPasswordSource = readClientSource("../pages/ForgotPassword.tsx");
   const publicAuthCss = readClientSource("../components/auth/AuthV17Layout.css");
+  const shellSource = readClientSource("../components/auth/AuthV17Layout.tsx");
+  const artworkCss = readClientSource("../components/auth/AuthBrandArtwork.css");
 
   assert.doesNotMatch(appSource, /ForgotPasswordPage\.preload\s*\(/);
   assert.match(forgotPasswordSource, /<AuthV17Layout/);
-  assert.match(publicAuthCss, /\.auth-v17\s*\{[^}]*--auth-illustration:\s*url\("\.\.\/\.\.\/assets\/auth-v17\/sqr-illustration\.webp"\)/);
-  assert.match(publicAuthCss, /\.auth-v17-art::before\s*\{[^}]*background:\s*var\(--auth-illustration\)/);
+  assert.match(shellSource, /<AuthBrandArtwork theme=\{surfaceTheme\} recoveryArtwork=\{recoveryArtwork\}/);
+  assert.doesNotMatch(publicAuthCss, /--auth-illustration|\.auth-v17-art::before/);
   // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
   assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
   assert.doesNotMatch(publicAuthCss, /animation:[^;]*infinite|will-change:\s*(?:transform|opacity)/);
+  assert.doesNotMatch(artworkCss, /will-change|backdrop-filter|animation:[^;]*infinite/);
   assert.match(readFirstCssRuleBlock(publicAuthCss, ".auth-v17-view"), /background:\s*transparent;/);
 });
 

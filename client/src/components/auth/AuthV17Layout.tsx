@@ -7,6 +7,7 @@ import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
 import { AuthLink } from "./AuthLink";
+import { AuthBrandArtwork } from "./AuthBrandArtwork";
 import { getActiveViewTransitionKind } from "@/lib/view-transition";
 import { hasPublicAuthArrival } from "@/lib/auth-navigation-preload";
 import "./AuthV17Layout.css";
@@ -84,20 +85,7 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
           </span> : null}
         </div>
         <p className="auth-v17-intro">{t("auth.v17.intro")}</p>
-        <div className={`auth-v17-art${recoveryArtwork ? " auth-v17-art--recovery" : ""}`} aria-hidden="true">
-          {recoveryArtwork ? <img
-            key={surfaceTheme}
-            src={`/illustrations/reset-password-${surfaceTheme}.webp`}
-            width={640}
-            height={640}
-            alt=""
-            aria-hidden="true"
-            loading="eager"
-            decoding="async"
-            {...{ fetchpriority: "low" }}
-            className="auth-v17-recovery-illustration"
-          /> : null}
-        </div>
+        <AuthBrandArtwork theme={surfaceTheme} recoveryArtwork={recoveryArtwork} />
       </section>
       <section className="auth-v17-side" aria-label={t(recoveryArtwork ? "auth.v17Recovery.forgotTitle" : "auth.v17.signin")}>
         <div className="auth-v17-wrap">

@@ -28,8 +28,8 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 | 2 Tokens/reduced motion | Build lulus; baac8b8f |
 | 3 Persistent layout | Build + 34 kontrak/SSR lulus; 5b251502 |
 | 4 Stable form slot | Build + 27 kontrak/SSR lulus; e683e1ab; browser mengesahkan heading Y sama pada 5 lebar |
-| 5 Form transition | Build, 28 ujian, lint, typecheck pengawal animasi dan browser lulus; menunggu guard/commit |
-| 6 Illustration crossfade | Helper/ujian disediakan, belum diintegrasi atau dijalankan |
+| 5 Form transition | Build, 28 ujian, lint, typecheck pengawal animasi dan browser lulus; commit 0da0e16d |
+| 6 Illustration crossfade | Sudah diintegrasi. 23 ujian, typecheck komponen dan build lulus; 3 browser termasuk slow-network/retry lulus; menunggu guard/commit |
 | 7 Micro-interactions | AuthError/AuthFormView disediakan, belum diintegrasi atau dijalankan |
 | 8 Landing/auth fade | Belum diimplementasi |
 | 9 Responsive/helper/background | Belum diimplementasi |
@@ -49,6 +49,13 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 - Build Fasa 5 akhir `auth-smooth-build-2725afded6cb`, lulus 17.17s. Browser `auth-smooth-tests-18dc0565fb13`, 6/6 lulus: anchor 5 lebar, modifier/history, fallback/reduced, rapid native dan Back ketika snapshot dipause. Build akar capture sebelumnya `auth-smooth-build-8e48838296a7` lulus; CSS akhir mengecualikan root capture untuk auth sahaja dan mengekalkan interaksi toolbar.
 - Selepas pengecualian root itu, `auth-smooth-tests-5bf11d5b9766`, 2/2 native/history lulus 13.804s. Durasi CSS native masuk 340ms (termasuk delay80), keluar140ms; jarak10px/6px. Durasi API start→finished ialah metrik berasingan dan masih perlu laporan prestasi akhir, bukan bukti CSS sahaja.
 - Y heading login/forgot selepas Fasa 5: 360=387/387; 390=398.4375/398.4375; 412=409/409; 768=183/183; 1440=195/195. Identiti brand/toolbar kekal pada semua lebar. Header telefon masih tinggi dan ilustrasi masih dipaparkan sehingga Fasa 9.
+- Guard Fasa 5 `auth-smooth-tests-86d0bc9bc574`, lulus; tree disamakan sebelum commit 0da0e16d.
+- Baseline dark tambahan `auth-smooth-tests-a9bfee2ff2ff`, lulus 22.976s; empat screenshot before dark dikumpul. Desktop login dark diperiksa; baseline mobile belum diperiksa.
+- Fasa 6 awal: 23 ujian `auth-smooth-tests-1aac3018f21d`, lint `auth-smooth-tests-4266b69e1899`, typecheck artwork `auth-smooth-tests-9a77430f393e`, build `auth-smooth-build-128c5715afd9`, semuanya lulus. Browser gated artwork `auth-smooth-tests-6301817488d0`, lulus 18.885s; gambar desktop dark recovery/light login diperiksa. Ini belum layout akhir Fasa 9.
+- Ujian retry pertama `auth-smooth-tests-8737e061eaa4` gagal pada SETUP kerana preload+img membuat dua request; fixture fail-sekali tidak cukup. Jangan tafsir sebagai bukti bug aplikasi. Selepas semua request awal digagalkan sehingga revisit sengaja, RED sebenar `auth-smooth-tests-2c41c45c5cb9` gagal pada stage light-revisit: 2 request awal gagal, Dark berjaya, kembali Light tidak membuat request baharu.
+- Pembaikan: kegagalan tidak disenarai hitam selamanya; revisit tema boleh retry sumber yang gagal, termasuk rendered URL masih sama selepas kedua-dua tema gagal. Rujukan imej mengekalkan DOM node; render biasa/failure tidak menyebabkan loop retry. Satu isu exactOptionalPropertyTypes pada ref map dikesan dan dibetulkan kepada record nullable; tiada kelemahan typecheck ditambah.
+- Fasa 6 selepas pembaikan: typecheck `auth-smooth-tests-5ca4f8404d93` lulus 3.615s; SSR/kontrak `auth-smooth-tests-fe6d324808d8` 23/23; build `auth-smooth-build-abc91cf8040d` lulus 17.169s; browser `auth-smooth-tests-50ddea148aed`, 3/3 lulus 27.156s (latency-gated normal, retry Dark berjaya, retry kedua-dua tema gagal).
+- Profil rangkaian browser dinyatakan tepat: latency150ms, download200000B/s, upload93750B/s. Gating memastikan keadaan pending dapat diperiksa; jangan dakwa preset DevTools tertentu. Imej asal/dimensi/decode, frame/node sama, CLS0 dan opacity transition sebenar360ms disahkan. Toolbar diuji ketika native form snapshot masih berjalan.
 - Dua typecheck fokus terdahulu gagal ENOSPC pada persediaan host sebelum TypeScript bermula. Tiada hasil TypeScript daripada percubaan itu. Belum ada bukti browser selepas pembaikan.
 
 ## Sambung dan had keselamatan
@@ -57,7 +64,7 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 - Helper: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113`. `sandbox.cjs` menyokong build/tests/lint/types-focused/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Target mesti bersiri. Binaan mestilah sepadan hash sumber sebelum browser; current-build masih menunjuk versi awal Fasa 5 sehingga build baharu lulus.
 - Ujian `auth-smooth-transitions.spec.ts` penuh merangkumi fasa yang belum siap. Jalankan subset Fasa 5 (anchor/fallback/native/links/history) dahulu. Jangan longgarkan penerimaan untuk meluluskan fasa belum siap.
 - Guard commit menggunakan staged snapshot sebenar dalam sandbox. Bandingkan tree selepas guard dengan index sebelum host Git commit melalui empty-host-hooks yang sedia ada. Allowlist helper turut membenarkan tepat `scripts/landing-v21-built-browser.mjs` untuk kemas kini selector button→link; pemeriksaan rahsia sebenar kekal. Jangan stage `.agents/`, `.codex/`, `.github/agents|hooks|skills/`, `.impeccable/` atau `.env`.
-- Fasa 6: inisialisasi active sebagai `useState<Variant | null>(null)` supaya decode pertama benar-benar memulakan fade. Buang pseudo-image dan crop/background/position recovery-only; kekalkan kedua-dua imej di frame sama. Jangan mengintegrasi sebelum Fasa 5 lulus.
+- Fasa 6 mengekalkan dua imej dalam frame sama dan mula active=null sehingga decode. Pseudo-image, crop/background/position recovery-only dibuang. Fasa 9 masih perlu membetulkan saiz frame desktop yang boleh melebihi tinggi panel dan menyembunyikan art di telefon; jangan dakwa semua layout sudah siap.
 - Pakej esbuild Linux tambahan belum tersedia. Jangan muat turun tanpa arahan sesuai. Frontend Vite build terdahulu lulus, tetapi ia bukan full backend/release build.
 
 ## Insiden ruang
@@ -65,6 +72,8 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 C: berulang kali 0 bait, menyekat ujian dan penulisan checkpoint penuh. Fail ini sempat dipendekkan kepada checkpoint kecil; versi penuh terdahulu kekal dalam commit e683e1ab. Ruang kira-kira 1GB kemudian diperhatikan tersedia dan pengesahan disambung. Agen tidak memadam fail; jangan dakwa punca ruang baharu tanpa bukti.
 
 Pemadatan VHD/fstrim tidak mencukupi. Pemampatan tanpa kehilangan data pada cache lama membebaskan ruang sementara dengan hash sebelum/selepas sepadan (`cache-compression.json`, `immutable-file-compression.json` di helper). WSL host dikurangkan 1536→1024MB dengan backup; had target kekal. DISM cleanup standard gagal `Incorrect function`; tiada ResetBase atau pembaikan OS.
+
+Empat binary dalam dua runtime.previous-* yang tidak aktif/tidak berkongsi hardlink turut dimampat LZX. Hash semua sepadan, tiada pemadaman; ruang diperhatikan naik47,620,096→195,403,776 bait (~141MiB). Bukti `previous-runtime-compression.json`. Tiga VSIX lama kemudian diperhatikan sudah tiada; jangan mendakwa agen memadamnya. Pagefile Windows membesar semasa typecheck, jadi ruang yang tersedia masih perlu dipantau.
 
 Pengguna sudah membenarkan cleanup. Namun semakan kelulusan automatik menolak pemadaman cache browser dan tiga VSIX lama dengan `blocked by policy`; jangan memintas melalui API lain. Tiga cache di `AppData/Roaming/Code/CachedExtensionVSIXs` dikenal pasti (~982MiB): `.d00c1d92-d3fe-4100-a68f-3e4a09e96891`, `openai.chatgpt-26.908.40401-win32-x64`, `anthropic.claude-code-2.1.263-win32-x64`. Tiada data SQR, .env, resit/PDF/Excel, Downloads atau SQLite/WAL Codex disentuh.
 
