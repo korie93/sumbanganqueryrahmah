@@ -44,8 +44,8 @@ test("public auth and login shells keep content reachable in short mobile landsc
 
   assert.match(v17Css, /min-height:\s*100vh;\s*min-height:\s*100dvh;/);
   assert.match(v17Css, /\.auth-v17-side\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*align-items:\s*stretch;/);
-  assert.match(v17Css, /\.auth-form-slot\s*\{[^}]*width:\s*min\(100%, 26rem\);[^}]*min-height:\s*var\(--auth-slot-min-h, 34rem\);/);
+  assert.match(v17Css, /\.auth-form-slot\s*\{[^}]*width:\s*min\(100%, 24rem\);[^}]*min-height:\s*var\(--auth-slot-min-h, 34rem\);/);
   assert.doesNotMatch(v17Css, /\.auth-v17-wrap\s*\{[^}]*transform:\s*translate/);
-  assert.match(v17Css, /@media \(max-width: 699px\)[\s\S]*\.auth-v17-side\s*\{\s*min-height:\s*auto;/);
+  assert.match(v17Css, /@media \(max-width: 767px\)[\s\S]*\.auth-v17-side\s*\{\s*min-height:\s*auto;/);
   assert.doesNotMatch(v17Css, /\.(?:auth-v17-(?:side|wrap|view|content)|auth-form-slot)\s*\{[^}]*(?:overflow:\s*(?:hidden|clip)|max-height:)/);
 });

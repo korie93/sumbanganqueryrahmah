@@ -1,5 +1,7 @@
 .auth-v17 .auth-brand-artwork {
+  width: 100%;
   min-width: 0;
+  /* The flex layout supplies its bounded height; images retain their own ratio. */
   aspect-ratio: 1780 / 1516;
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
-import { ArrowLeft, ArrowRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Info } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
 import { AuthLink } from "@/components/auth/AuthLink";
@@ -129,9 +129,9 @@ export default function ForgotPasswordPage({
   const identifierInvalidProps = identifierError
     ? {
       "aria-invalid": "true" as const,
-      "aria-describedby": "forgot-password-identifier-error",
+      "aria-describedby": "forgot-password-identifier-hint forgot-password-identifier-error",
     }
-    : {};
+    : { "aria-describedby": "forgot-password-identifier-hint" };
   const layoutBackProps = onBackToHome ? { onBackClick: onBackToHome } : {};
 
   return (
@@ -212,14 +212,15 @@ export default function ForgotPasswordPage({
               disabled={loading}
               {...identifierInvalidProps}
             />
+            <p id="forgot-password-identifier-hint" className="auth-v17-identifier-hint">
+              <Info size={16} aria-hidden="true" focusable="false" />
+              {t("auth.v17Recovery.forgotNote")}
+            </p>
             {identifierError ? (
               <p id="forgot-password-identifier-error" className="public-auth-field-error" role="alert">
                 {localizeAuthFeedback(identifierError, locale)}
               </p>
             ) : null}
-          </div>
-          <div className="public-auth-note">
-            {t("auth.v17Recovery.forgotNote")}
           </div>
           {error ? (
             <AuthError>
