@@ -210,22 +210,27 @@ export function useLandingNextMotion(root: RefObject<HTMLDivElement>) {
     const paint = () => {
       frame = null;
       const y = window.scrollY;
-      const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-      progress?.style.setProperty("--s", String(Math.min(1, Math.max(0, y / max))));
-      toTop?.classList.toggle("show", y > window.innerHeight * 1.2);
+      const viewportHeight = window.innerHeight;
+      const max = Math.max(1, document.documentElement.scrollHeight - viewportHeight);
       let current = "top";
-      for (const section of sections) if (section.getBoundingClientRect().top <= window.innerHeight * 0.5) current = section.id;
+      for (const section of sections) if (section.getBoundingClientRect().top <= viewportHeight * 0.5) current = section.id;
       if (y < 120) current = "top";
+      // Gather layout before style/class writes; the fixed overlays and mark
+      // do not change this geometry, so their existing motion values stay equal.
+      const animatedHero = motionPaused ? null : hero;
+      const height = animatedHero ? Math.max(1, animatedHero.offsetHeight) : 0;
+      const box = animatedHero && pointer && finePointer.matches ? animatedHero.getBoundingClientRect() : null;
+
+      progress?.style.setProperty("--s", String(Math.min(1, Math.max(0, y / max))));
+      toTop?.classList.toggle("show", y > viewportHeight * 1.2);
       setActiveSection(previous => previous === current ? previous : current);
-      if (motionPaused || !hero) return;
-      const height = Math.max(1, hero.offsetHeight);
+      if (!animatedHero) return;
       mark?.style.setProperty("--p", Math.min(y, height) * 0.22 + "px");
       mark?.style.setProperty("--o", String(1 - Math.min(y, height) / height * 0.75));
-      if (pointer && finePointer.matches) {
-        const box = hero.getBoundingClientRect();
+      if (pointer && box) {
         const x = Math.max(0, Math.min(100, (pointer.x - box.left) / box.width * 100));
         const py = Math.max(0, Math.min(100, (pointer.y - box.top) / box.height * 100));
-        hero.style.setProperty("--mx", x + "%"); hero.style.setProperty("--my", py + "%");
+        animatedHero.style.setProperty("--mx", x + "%"); animatedHero.style.setProperty("--my", py + "%");
         mark?.style.setProperty("--rx", (x - 50) * -0.32 + "px");
         mark?.style.setProperty("--ry", (py - 50) * -0.32 + "px");
         setCoordinateLabel(`LOC ${Math.round(x).toString().padStart(2, "0")}·${Math.round(py).toString().padStart(2, "0")}`);
