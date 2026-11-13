@@ -272,9 +272,9 @@ for (const theme of ["light", "dark"] as const) {
         await expect(success).toContainText("If the account exists");
         await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeVisible();
         await expect(page.locator(".auth-v17-subtitle")).toHaveText("A reset email is only sent after superuser approval.");
-        const back = page.getByRole("button", { name: "Back to sign in", exact: true });
+        const back = page.getByRole("link", { name: "Back to sign in", exact: true });
         await expect(back).toHaveClass(/(?:^|\s)public-auth-button-primary(?:\s|$)/);
-        await expect(back).toHaveAttribute("type", "button");
+        await expect(back).toHaveAttribute("href", "/login");
         await expect(reference).toHaveCount(0);
         await expect(alert).toHaveCount(0);
         const edit = page.getByRole("button", { name: "Use a different username/email", exact: true });
@@ -498,7 +498,7 @@ test("Leaving a pending Forgot request aborts the caller without offering retry"
     await page.locator('form button[type="submit"]').click();
     await expect.poll(() => fixture.state.counts.forgot).toBe(1);
     await expect(page.locator('form button[type="submit"]')).toBeDisabled();
-    await page.getByRole("button", { name: "Kembali ke log masuk", exact: true }).click();
+    await page.getByRole("link", { name: "Kembali ke log masuk", exact: true }).click();
     await expect(page.locator(".auth-v17-login")).toBeVisible();
     // Observe the request canceled by the component's real AbortController;
     // route.abort("aborted") would only simulate a different fetch failure.

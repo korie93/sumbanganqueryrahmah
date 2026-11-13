@@ -32,7 +32,7 @@ test("V17 login uses a bounded split form with a stacked mobile fallback", () =>
   assert.match(source, /@media \(max-width: 699px\)[\s\S]*\.auth-v17\s*\{\s*display:\s*block;/);
   assert.match(source, /\.auth-v17-view\s*\{[^}]*background:\s*transparent;[^}]*border:\s*0;[^}]*box-shadow:\s*none;/);
   assert.match(layout, /<section className="auth-v17-side" aria-label=\{t\(recoveryArtwork \? "auth\.v17Recovery\.forgotTitle" : "auth\.v17\.signin"\)\}>/);
-  assert.match(layout, /<div className="auth-form-slot">\s*<AuthShellContext\.Provider value=\{true\}>\{children\}<\/AuthShellContext\.Provider>\s*<\/div>\s*<p className="auth-v17-help">/);
+  assert.match(layout, /<div className="auth-form-slot">\s*<AuthShellContext\.Provider value=\{frame\}>\{children\}<\/AuthShellContext\.Provider>\s*<\/div>\s*<p className="auth-v17-help">/);
 });
 
 test("login fallback navigation uses router navigation instead of manual history events", () => {

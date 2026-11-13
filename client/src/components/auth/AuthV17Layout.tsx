@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { ArrowLeft, Check, Moon, Sun, WifiOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuthLocale } from "./useAuthLocale";
@@ -6,6 +6,9 @@ import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { safeJsonParseResult } from "@/lib/utils/safe-json";
 import { BrandLogo } from "@/components/BrandLogo";
 import { useTheme } from "@/components/useTheme";
+import { AuthLink } from "./AuthLink";
+import { getActiveViewTransitionKind } from "@/lib/view-transition";
+import { hasPublicAuthArrival } from "@/lib/auth-navigation-preload";
 import "./AuthV17Layout.css";
 
 type Props = {
@@ -22,14 +25,17 @@ type Props = {
   visualMode?: "standard" | "minimal";
   controlledAccess?: boolean;
   recoveryArtwork?: boolean;
+  headingRef?: RefObject<HTMLHeadingElement>;
 };
 
-const AuthShellContext = createContext(false);
+const AuthShellContext = createContext<{ hasShownForm: { current: boolean } } | null>(null);
 type ShellProps = Pick<Props, "children" | "showBackButton" | "backLabel" | "onBackClick" | "className" | "recoveryArtwork">;
 
 /** Persistent public chrome; page-owned auth state stays below this boundary. */
 export function AuthV17Shell({ children, showBackButton = true, backLabel, onBackClick,
   className = "", recoveryArtwork = false }: ShellProps) {
+  const hasShownForm = useRef(false);
+  const frame = useMemo(() => ({ hasShownForm }), []);
   const [, navigate] = useLocation();
   const { locale, setLocale, t } = useAuthLocale();
   const { theme: surfaceTheme, isDark, toggleTheme } = useTheme();
@@ -96,9 +102,9 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
       <section className="auth-v17-side" aria-label={t(recoveryArtwork ? "auth.v17Recovery.forgotTitle" : "auth.v17.signin")}>
         <div className="auth-v17-wrap">
           <div className="auth-v17-topline">
-            {showBackButton ? <button type="button" className="auth-v17-back" onClick={onBackClick ?? (() => navigate("/"))}>
+            {showBackButton ? <AuthLink to="/" kind="page" className="auth-v17-back" onNavigate={onBackClick ?? (() => navigate("/"))}>
               <ArrowLeft size={15} aria-hidden="true" />{backLabel ?? t("auth.v17.back")}
-            </button> : <span />}
+            </AuthLink> : <span />}
             <div className="auth-v17-topright">
               {typeof location !== "undefined" && location.protocol === "https:" ?
                 <span className="auth-v17-secure"><i aria-hidden="true" />{t("auth.v17.secure")}</span> : null}
@@ -113,7 +119,7 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
           </div>
           {offline ? <div className="auth-v17-offline" role="status"><WifiOff size={18} aria-hidden="true" />{t("auth.v17.offline")}</div> : null}
           <div className="auth-form-slot">
-            <AuthShellContext.Provider value={true}>{children}</AuthShellContext.Provider>
+            <AuthShellContext.Provider value={frame}>{children}</AuthShellContext.Provider>
           </div>
           <p className="auth-v17-help">{t("auth.v17.support")}</p>
         </div>
@@ -124,13 +130,22 @@ export function AuthV17Shell({ children, showBackButton = true, backLabel, onBac
 
 /** Page content adapter also retains standalone rendering for existing callers. */
 export function AuthV17Layout({ children, title, description, icon, contentBusy = false,
-  controlledAccess = false, ...shellProps }: Props) {
+  controlledAccess = false, headingRef, ...shellProps }: Props) {
   const embedded = useContext(AuthShellContext);
   const { t } = useAuthLocale();
+  const localHeadingRef = useRef<HTMLHeadingElement>(null);
+  const titleRef = headingRef ?? localHeadingRef;
+  const [focusOnArrival] = useState(() => Boolean(embedded?.hasShownForm.current || hasPublicAuthArrival()));
+  const [animateArrival] = useState(() => getActiveViewTransitionKind() === null);
+  useEffect(() => {
+    if (!embedded) return;
+    if (focusOnArrival) titleRef.current?.focus({ preventScroll: true });
+    embedded.hasShownForm.current = true;
+  }, [embedded, focusOnArrival, titleRef]);
   const content = <>
-    <div className="auth-v17-view">
+    <div className={`auth-v17-view${animateArrival ? " auth-form-enter" : ""}`}>
       {icon ? <div className="auth-v17-icon">{icon}</div> : null}
-      <h1 id="auth-v17-title">{title}</h1>
+      <h1 id="auth-v17-title" ref={titleRef} tabIndex={-1}>{title}</h1>
       <p className="auth-v17-subtitle">{description}</p>
       <div className="auth-v17-content" aria-busy={contentBusy || undefined}>{children}</div>
       {controlledAccess ? <div className="auth-v17-assure"><Check size={18} aria-hidden="true" /><div>

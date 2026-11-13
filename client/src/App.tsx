@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
@@ -19,6 +19,7 @@ import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
+import { getPreloadedAuthEntry } from "@/lib/auth-navigation-preload";
 
 // Public routes must not download the protected app or this authenticated gate.
 const SingleActiveTabGate = lazy(() => import("@/components/auth/SingleActiveTabGate"));
@@ -73,6 +74,9 @@ function AppContent() {
     user,
   } = usePublicAppState();
   const lastActivatedAccountScope = useRef("");
+  const isAuthFamily = !user && !["home", "maintenance", "not-found", "banned", "activate-account", "reset-password"].includes(currentPage);
+  // Keep the chosen component type stable until the entire auth family exits.
+  const PublicAuthEntry = useMemo(() => getPreloadedAuthEntry() ?? AuthEntryPage, [isAuthFamily]);
 
   const validateBeforeActivation = useCallback(async (signal: AbortSignal) => {
     const { validateTabSession } = await import("@/app/single-tab-session-validation");
@@ -215,7 +219,7 @@ function AppContent() {
           {renderRoutePage(
             "forgot-password",
             (
-              <AuthEntryPage
+              <PublicAuthEntry
                 page="forgot-password"
                 onBackToHome={() => handlePublicNavigate("home")}
                 onBackToLogin={() => handlePublicNavigate("login")}
@@ -265,7 +269,7 @@ function AppContent() {
         {renderRoutePage(
           "login",
           (
-            <AuthEntryPage
+            <PublicAuthEntry
               page="login"
               onBanned={handleBannedSessionDetected}
               onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}

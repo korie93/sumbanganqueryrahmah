@@ -112,15 +112,15 @@
 
 /* The landing, empty-state story and small sidebar Q animate on every hardware
  * tier. Their own reduced-motion and visibility rules still control playback. */
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *),
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::before,
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::after {
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *),
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *)::before,
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *)::after {
   animation: none !important;
 }
 
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *),
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::before,
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::after {
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *),
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *)::before,
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *)::after {
   transition: none !important;
 }
 

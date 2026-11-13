@@ -283,7 +283,7 @@ try {
       await expect(page.locator("#sqr-application-schema")).toHaveCount(0);
       await expectSharedTheme(page, "dark", ".auth-v17-login");
       assert.deepEqual(await page.getByTestId("input-username").evaluate(inputStyle), loginBefore.dark, "No landing CSS leakage into dark login");
-      await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+      await page.getByRole("link", { name: "Laman utama", exact: true }).click();
       await expectSharedTheme(page, "dark", ".sqr-landing-next");
       await expect(page.locator("#sqr-application-schema")).toHaveCount(1);
     }
@@ -295,7 +295,7 @@ try {
     await page.locator(".sqr-landing-next header .login").click();
     await expectSharedTheme(page, "light", ".auth-v17-login");
     assert.deepEqual(await page.getByTestId("input-username").evaluate(inputStyle), loginBefore.light, "No landing CSS leakage into light login");
-    await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+    await page.getByRole("link", { name: "Laman utama", exact: true }).click();
     await expectSharedTheme(page, "light", ".sqr-landing-next");
     pass("all login links, real form, Home return, theme persistence, language/schema cleanup and CSS isolation under strict CSP");
   } finally {
@@ -340,7 +340,7 @@ try {
     await checkAccessibility(page);
     await page.locator(".sqr-landing-next header .login").tap(); await expect(page.getByTestId("input-username")).toBeVisible();
     await expectSharedTheme(page, "dark", ".auth-v17-login");
-    await page.getByRole("button", { name: "Laman utama", exact: true }).tap();
+    await page.getByRole("link", { name: "Laman utama", exact: true }).tap();
     await expectSharedTheme(page, "dark", ".sqr-landing-next");
     pass("320px touch menu, animated replay, live motion preference, theme, login and accessibility");
   } finally {

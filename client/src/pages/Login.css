@@ -8,7 +8,7 @@
 .auth-v17 .login-password-toggle { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 8px; background: none; color: #66788b; }
 .auth-v17 .login-password-toggle:hover { background: #eef2f6; color: var(--auth-text); }
 .auth-v17 .login-actions { display: flex; justify-content: flex-end; margin-top: -6px; }
-.auth-v17 .login-secondary-link { min-height: 44px; border: 0; padding: 0; background: none; color: var(--auth-blue); font-size: 13px; font-weight: 600; }
+.auth-v17 .login-secondary-link { display: inline-flex; align-items: center; min-height: 44px; border: 0; padding: 0; background: none; color: var(--auth-blue); font-size: 13px; font-weight: 600; }
 .auth-v17 .login-secondary-link:hover { text-decoration: underline; }
 .auth-v17 .login-submit { position: relative; gap: 10px; justify-content: flex-start; }
 .auth-v17 .login-submit-arrow { position: absolute; right: 16px; }

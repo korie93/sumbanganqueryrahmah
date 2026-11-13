@@ -117,7 +117,7 @@ test("login page exposes real labels and a stable primary heading", () => {
   const otpSource = readClientSource("../components/auth/AuthOtpInput.tsx");
 
   assert.match(loginSource, /<AuthV17Layout/);
-  assert.match(authLayout, /<h1 id="auth-v17-title">\{title\}<\/h1>/);
+  assert.match(authLayout, /<h1 id="auth-v17-title" ref=\{titleRef\} tabIndex=\{-1\}>\{title\}<\/h1>/);
   assert.equal((authLayout.match(/<h1\b/g) ?? []).length, 1);
   assert.match(loginSource, /<label htmlFor="login-username" className="public-auth-field-label/);
   assert.match(loginSource, /<label htmlFor="login-password" className="public-auth-field-label/);

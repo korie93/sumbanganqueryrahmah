@@ -403,8 +403,8 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       await page.locator('form button[type="submit"]').click();
       await expect(status).toBeFocused();
       expect(fixture.state.counts.forgot).toBe(before + 2);
-      const backToLogin = page.getByRole("button", { name: "Back to sign in", exact: true });
-      await expect(backToLogin).toHaveAttribute("type", "button");
+      const backToLogin = page.getByRole("link", { name: "Back to sign in", exact: true });
+      await expect(backToLogin).toHaveAttribute("href", "/login");
       await backToLogin.focus();
       await backToLogin.press("Enter");
       await expect(page.locator(".auth-v17-login")).toBeVisible();

@@ -26,6 +26,8 @@ import {
 } from "@/lib/auth-session";
 import { shouldRedirectForMaintenance } from "@/app/maintenance-client-policy";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
+import { invalidateAuthNavigationIntents, markPublicAuthArrival } from "@/lib/auth-navigation-preload";
+import { cancelActiveViewTransition } from "@/lib/view-transition";
 
 type PublicBootstrapState = {
   currentPage: string;
@@ -159,6 +161,21 @@ export function usePublicAppState() {
     setCurrentPage(nextPage);
     replaceHistory(buildPathForPage(nextPage));
   }, []);
+
+  useEffect(() => {
+    if (user || isBannedSessionFlagSet() || !["home", "login", "forgot-password"].includes(currentPage)) return;
+    const syncPublicHistory = () => {
+      if (isBannedSessionFlagSet()) return;
+      const route = resolveRouteFromLocation(window.location.pathname, window.location.search);
+      if (!route || !["home", "login", "forgot-password"].includes(route.page)) return;
+      invalidateAuthNavigationIntents();
+      cancelActiveViewTransition();
+      markPublicAuthArrival();
+      setCurrentPage(route.page);
+    };
+    window.addEventListener("popstate", syncPublicHistory);
+    return () => window.removeEventListener("popstate", syncPublicHistory);
+  }, [currentPage, user]);
 
   const handleAuthenticatedLogout = useCallback(() => {
     const isBannedSession = isBannedSessionFlagSet();

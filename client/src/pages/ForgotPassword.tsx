@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { ArrowLeft } from "lucide-react";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
+import { AuthLink } from "@/components/auth/AuthLink";
 import { PublicAuthRequestReference } from "@/components/auth/PublicAuthRequestReference";
 import { useAuthLocale } from "@/components/auth/useAuthLocale";
 import { requestPasswordReset } from "@/lib/api/auth";
@@ -219,10 +220,10 @@ export default function ForgotPasswordPage({
         </form>
       )}
 
-      <PublicAuthButton
-        type="button"
-        variant={submitted ? "primary" : "ghost"}
-        onClick={() => {
+      <AuthLink
+        to="/login"
+        className={`public-auth-button public-auth-button-${submitted ? "primary" : "ghost"}`}
+        onNavigate={() => {
           if (onBackToLogin) {
             onBackToLogin();
             return;
@@ -232,7 +233,7 @@ export default function ForgotPasswordPage({
       >
         <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" focusable="false" />
         {t("auth.v17Recovery.backToLogin")}
-      </PublicAuthButton>
+      </AuthLink>
     </AuthV17Layout>
   );
 }

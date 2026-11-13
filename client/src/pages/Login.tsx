@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import type { User } from "@/app/types";
 import { ExpandableMessage } from "@/components/ExpandableMessage";
 import { PublicAuthButton, PublicAuthInput } from "@/components/PublicAuthControls";
-import { shouldAutoFocusPublicAuthField } from "@/lib/interaction-media";
+import { AuthLink } from "@/components/auth/AuthLink";
 import { Eye, EyeOff, UserRound, LockKeyhole, KeyRound, ShieldCheck, ArrowRight, ArrowLeft } from "lucide-react";
 import { AuthV17Layout } from "@/components/auth/AuthV17Layout";
 import { AuthOtpInput } from "@/components/auth/AuthOtpInput";
@@ -119,24 +119,6 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
       clearLockedCountdownInterval();
     };
   }, [clearLockedCountdownInterval]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !usernameInputRef.current) {
-      return;
-    }
-
-    if (!shouldAutoFocusPublicAuthField()) {
-      return;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      usernameInputRef.current?.focus();
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, []);
 
   useEffect(() => {
     if (!twoFactorChallengeToken) return;
@@ -271,7 +253,7 @@ export default function Login({ onBanned, onForgotPasswordClick, onLandingClick,
             <p id="login-captcha-help" className="login-help">{captchaChallenge || t("auth.v17.captchaHelp")}</p>
             {captchaResponseError ? <p id="login-captcha-error" className="public-auth-field-error" role="alert">{t("auth.v17.captchaRequired")}</p> : null}
           </div> : null}
-          <div className="login-actions"><button type="button" className="login-secondary-link" onClick={goToForgotPassword}>{t("auth.v17.forgot")}</button></div>
+          <div className="login-actions"><AuthLink to="/forgot-password" className="login-secondary-link" onNavigate={goToForgotPassword}>{t("auth.v17.forgot")}</AuthLink></div>
         </> : (
           <div className="login-field">
             <label htmlFor="login-two-factor-code" className="public-auth-field-label">{t("auth.v17.mfaLabel")}</label>

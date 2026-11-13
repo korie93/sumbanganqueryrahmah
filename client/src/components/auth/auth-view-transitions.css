@@ -1,0 +1,27 @@
+/* Native snapshots are document pseudo-elements, outside the shell subtree. */
+.auth-shell .auth-form-slot { view-transition-name: auth-form; }
+/* Keep chrome in ordinary DOM; only the form participates in auth snapshots. */
+html[data-vt="auth"] { view-transition-name: none; }
+html[data-vt="auth"]::view-transition { pointer-events: none; }
+
+@keyframes auth-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes auth-out { to { opacity: 0; transform: translateY(-6px); } }
+
+/* Selected once per form mount; cleanup never re-adds this class. */
+.auth-shell .auth-form-enter { animation: auth-in var(--dur-base) var(--ease-out) both; }
+html[data-vt="auth"]::view-transition-old(root),
+html[data-vt="auth"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html[data-vt]::view-transition-group(root) { animation: none; }
+::view-transition-group(auth-form) { animation: none; }
+::view-transition-old(auth-form) { animation: auth-out 140ms var(--ease-in-out) both; }
+::view-transition-new(auth-form) { animation: auth-in var(--dur-base) var(--ease-out) 80ms both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell .auth-form-enter { animation: none !important; }
+  html[data-vt]::view-transition-group(*),
+  html[data-vt]::view-transition-old(*),
+  html[data-vt]::view-transition-new(*) { animation: none !important; }
+}

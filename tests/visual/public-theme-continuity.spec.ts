@@ -346,7 +346,7 @@ for (const selected of ["dark", "light"] as const) {
     await page.locator('.sqr-landing-next header a[href="/login"]').click();
     await expect(page.locator(".auth-v17-login")).toHaveAttribute("data-theme", initial);
     await expectTheme(page, initial);
-    await page.locator(".auth-v17-topline > .auth-v17-back").click();
+    await page.locator('.auth-v17-topline > a.auth-v17-back[href="/"]').click();
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", initial);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", initial);
