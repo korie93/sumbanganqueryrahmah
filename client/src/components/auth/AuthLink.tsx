@@ -38,7 +38,7 @@ export function AuthLink({ to, onNavigate, kind = "auth", onClick, target, downl
       if (!mounted.current || !intent.isCurrent()) return;
       return withViewTransition(() => {
         if (mounted.current && intent.isCurrent()) {
-          markPublicAuthArrival();
+          markPublicAuthArrival(kind);
           onNavigate();
         }
       }, kind);

@@ -48,7 +48,8 @@ test("the universal landing preserves shared device policy, legacy modules, rout
   const protectedFiles = new Map([
     ["client/src/components/useTheme.ts", "1da25c86ec8ad0a6b0927e0a0df787ea92b007b300d74088d6e6ceea5dd2424a"],
     ["client/src/lib/low-spec-mode.ts", "9a77bca9208adcdd9dc58863ec2b4463d765e0fa0fe175aff8da052453638d80"],
-    ["client/src/app/lazy-pages.tsx", "09af4a5b0ccee8a2acfd701e7c493198fb2b9ad8d5426d1d308f4ceac13f32b9"],
+    // Persistent public auth entry is the only authorized lazy-registry addition.
+    ["client/src/app/lazy-pages.tsx", "29bf5baa8a28e8d9789229f9ba8c4720cf12b7c796e72ad6ac4264f1db950bdc"],
     ["client/src/app/routing.ts", "734810c0d91476cd4c92b47adef3fdecfdd29734287bb6992f7748d1ed90a2de"],
     ["client/src/app/document-metadata.ts", "4068ea9e356fca87f858fac7afae91d20430e86e217fc2fa66f33e62395cc0c6"],
     ["client/src/pages/landing-v21/landing-v21.css", "03b9ec52a2fe9db301b58fdb1a2fec4c3a53404b18634b897a4b7c6a5672e4d3"],
@@ -111,8 +112,8 @@ test("landing motion depends only on explicit reduced motion and visibility, nev
 
 test("shared low-spec motion rules retain only the approved local exceptions", () => {
   const expected = new Map([
-    ["animation", ".low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)"],
-    ["transition", ".low-spec *:not(.sqr-landing-next, .sqr-landing-next *)"],
+    ["animation", ".low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *)"],
+    ["transition", ".low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *)"],
   ]);
   for (const [property, selector] of expected) {
     const rules: postcss.Rule[] = [];
@@ -163,6 +164,7 @@ test("public landing is semantic React with local artwork and no protected servi
       if (ts.isImportDeclaration(node)) {
         assert.ok(ts.isStringLiteral(node.moduleSpecifier) && (
           approved.has(node.moduleSpecifier.text)
+          || (name === "LandingNext.tsx" && node.moduleSpecifier.text === "@/components/auth/AuthLink")
           || (name === "useLandingNextMotion.ts" && ["@/lib/browser-storage", "@/components/useTheme"].includes(node.moduleSpecifier.text))
           || (name === "Landing.tsx" && node.moduleSpecifier.text === "@/pages/landing-next/LandingNext")
         ), node.getText(file));
@@ -189,7 +191,7 @@ test("public landing is semantic React with local artwork and no protected servi
     inspect(file);
     assert.doesNotMatch(text!, /\.innerHTML\s*=|insertAdjacentHTML|document\.write\s*\(/);
   }
-  assert.match(component, /href === "\/login"[\s\S]*?event\.preventDefault\(\); navigation\.onLoginClick\(\)/);
+  assert.match(component, /href === "\/login"[\s\S]*?<AuthLink[^>]*to=\{href\} kind="page"[\s\S]*?onNavigate=\{\(\) => navigation\.onLoginClick\(\)\}/);
   assert.match(component, /event\.metaKey \|\| event\.ctrlKey \|\| event\.shiftKey \|\| event\.altKey/);
   assert.match(component, /SQR_BRAND_ASSETS\.transparentIcon/);
   assert.match(component, /getAriaExpandedProps\(motion\.menuOpen\)/);

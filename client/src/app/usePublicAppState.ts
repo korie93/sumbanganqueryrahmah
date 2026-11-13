@@ -170,7 +170,7 @@ export function usePublicAppState() {
       if (!route || !["home", "login", "forgot-password"].includes(route.page)) return;
       invalidateAuthNavigationIntents();
       cancelActiveViewTransition();
-      markPublicAuthArrival();
+      markPublicAuthArrival(currentPage === "home" || route.page === "home" ? "page" : "auth");
       setCurrentPage(route.page);
     };
     window.addEventListener("popstate", syncPublicHistory);

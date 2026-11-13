@@ -19,7 +19,7 @@ import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
-import { getPreloadedAuthEntry } from "@/lib/auth-navigation-preload";
+import { getPreloadedAuthEntry, getPreloadedLanding } from "@/lib/auth-navigation-preload";
 
 // Public routes must not download the protected app or this authenticated gate.
 const SingleActiveTabGate = lazy(() => import("@/components/auth/SingleActiveTabGate"));
@@ -77,6 +77,8 @@ function AppContent() {
   const isAuthFamily = !user && !["home", "maintenance", "not-found", "banned", "activate-account", "reset-password"].includes(currentPage);
   // Keep the chosen component type stable until the entire auth family exits.
   const PublicAuthEntry = useMemo(() => getPreloadedAuthEntry() ?? AuthEntryPage, [isAuthFamily]);
+  const isLandingFamily = !user && currentPage === "home";
+  const PublicLanding = useMemo(() => getPreloadedLanding() ?? LandingPage, [isLandingFamily]);
 
   const validateBeforeActivation = useCallback(async (signal: AbortSignal) => {
     const { validateTabSession } = await import("@/app/single-tab-session-validation");
@@ -195,7 +197,7 @@ function AppContent() {
           {readySignal}
           {renderRoutePage(
             "home",
-            <LandingPage onLoginClick={() => handlePublicNavigate("login")} />,
+            <PublicLanding onLoginClick={() => handlePublicNavigate("login")} />,
             true,
             <LandingRouteFallback onLoginClick={() => handlePublicNavigate("login")} />,
           )}

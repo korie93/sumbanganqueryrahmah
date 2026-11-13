@@ -1,6 +1,6 @@
 # Auth smooth transitions — handoff
 
-13 November 2026. Goal aktif mengikut keseluruhan `FIX-PROMPT-auth-smooth-transitions.md`. Asas `54a99feb6cc95b822d665130d64034449080cdf2`, branch `codex/visual-layout-repair`.
+14 November 2026. Goal aktif mengikut keseluruhan `FIX-PROMPT-auth-smooth-transitions.md`. Asas `54a99feb6cc95b822d665130d64034449080cdf2`, branch `codex/visual-layout-repair`.
 
 ## Skop dan keputusan
 
@@ -30,8 +30,8 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 | 4 Stable form slot | Build + 27 kontrak/SSR lulus; e683e1ab; browser mengesahkan heading Y sama pada 5 lebar |
 | 5 Form transition | Build, 28 ujian, lint, typecheck pengawal animasi dan browser lulus; commit 0da0e16d |
 | 6 Illustration crossfade | 23 ujian, typecheck komponen, build dan 3 browser termasuk slow-network/retry lulus; commit 137f6f22 |
-| 7 Micro-interactions | Sudah diintegrasi; 39+24 ujian, lint, typecheck helper, build dan browser states/fokus lulus; menunggu guard/commit |
-| 8 Landing/auth fade | Belum diimplementasi |
+| 7 Micro-interactions | 39+24 ujian, lint, typecheck helper, build, browser states/fokus dan guard lulus; commit b6802756 |
+| 8 Landing/auth fade | 37 kontrak, lint, typecheck helper, build dan 3 aliran browser tanpa jeda lulus; menunggu guard/commit |
 | 9 Responsive/helper/background | Belum diimplementasi |
 | 10 Verification/polish/audit | Belum selesai |
 
@@ -61,13 +61,17 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 - Browser Fasa7 `auth-smooth-tests-edafbc5e098a`: login/forgot states lulus17.471s. Ia menyemak dua ikon mata/node stabil, opacity120ms, ARIA dan saiz butang sebelum/semasa/selepas loading, satu error alert/reveal200ms, generic success dengan auth-in260ms sebenar, serta tiada replay selepas preference rerender.
 - Browser existing feedback `auth-smooth-tests-75c6a997851c`: dua tema lulus25.073s. Fokus preference dan Back link kekal selepas pending response; DOM Back link sama dan Enter masih menuju login. Reset geometry/focus asal turut diuji tanpa mengubah implementasi Reset/Activate.
 - Default Fasa7: focus ring berubah serta-merta (0ms, memenuhi had150ms) untuk menghormati larangan paint-animation. Spinner loading sahaja menggunakan rotation700ms. Form status dikey; adapter/heading-ref dan Back link tidak dikey/remount. Slot tindakan kekal melindungi fokus dan intent preload.
-- Dua typecheck fokus terdahulu gagal ENOSPC pada persediaan host sebelum TypeScript bermula. Tiada hasil TypeScript daripada percubaan itu. Belum ada bukti browser selepas pembaikan.
+- Guard Fasa 7 `auth-smooth-tests-d2d834e1f548`, lulus; commit b6802756.
+- Fasa 8 awal `auth-smooth-tests-ba2526c03016`: 34/37 lulus. Tiga kegagalan ialah pin hash lazy-pages yang belum dikemas kini selepas AuthEntry Fasa 3, senarai pengecualian low-spec yang belum memasukkan auth-shell yang diluluskan, dan import AuthLink baharu dalam LandingNext. Pembaikan kontrak dihadkan kepada hash fail itu, selector tepat auth-shell dan import tepat AuthLink dalam LandingNext; pin lain, had selector dan larangan service/dynamic import kekal. Selepas pembaikan, `auth-smooth-tests-07dd38daf9c2` lulus37/37; lint `2066fe59bc42`, typecheck helper `210276b953c1`, build `auth-smooth-build-3f41333973ec` lulus18.582s.
+- Browser `6bf15462bc44` lulus4 regresi links/fallback/native tetapi ujian landing tersalah memilih dua `.theme-btn`; selector dibetulkan kepada nama akses tepat. Run `5cff8dc3ea7b`, diagnostic `6c62ac4de556` dan `6940d779eef2` gagal pada Back selepas filmstrip dijeda. Akhirnya URL dokumen `/`, landing/h1 wujud, history memanggil `/` dan fade240ms selesai, tetapi polling URL dokumen juga gagal sebelum itu; jangan dakwa ia sekadar URL cached Playwright. Ujian filmstrip akan diasingkan daripada roundtrip biasa untuk menentukan gangguan fixture; tiada routing/controller diubah. Filmstrip native0/120ms diperiksa secara visual (timeline dijeda untuk screenshot sahaja); bukan ukuran masa prestasi. Browser ulang belum selesai.
+- Selepas pengasingan fixture, `auth-smooth-tests-697889e028d2` lulus ketiga-tiga roundtrip biasa (native, unsupported, reduced): URL/history/theme/CLS0 serta sifat opacity-only240ms lulus. Ujian keempat, filmstrip sahaja, menghasilkan kedua-dua screenshot tetapi timeout ketika menyambung animasi yang dijeda secara buatan. Cleanup ujian tersebut masih dibaiki; jangan tafsir sebagai kegagalan aliran aplikasi yang tidak dijeda. Masa dinding API native lebih panjang daripada240ms termasuk snapshot/render dalam sandbox; jangan dakwa CSS240ms membuktikan keseluruhan masa siap≤260ms.
+- Dua typecheck fokus terdahulu gagal ENOSPC pada persediaan host sebelum TypeScript bermula. Tiada hasil TypeScript daripada percubaan itu. Typecheck 11 fail yang kehabisan heap di atas masih belum diselesaikan; keputusan helper terfokus bukan bukti typecheck semua fail.
 
 ## Sambung dan had keselamatan
 
 - Semua target build/test/browser dalam WSL/bwrap sedia ada, data sintetik, had asal CPU100%, RAM768MiB/high704, swap0, PID128, tmp256MiB, CPU120s/wall180s. Tiada instalasi atau peningkatan had.
-- Helper: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113`. `sandbox.cjs` menyokong build/tests/lint/types-focused/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Target mesti bersiri. Binaan mestilah sepadan hash sumber sebelum browser; current-build masih menunjuk versi awal Fasa 5 sehingga build baharu lulus.
-- Ujian `auth-smooth-transitions.spec.ts` penuh merangkumi fasa yang belum siap. Jalankan subset Fasa 5 (anchor/fallback/native/links/history) dahulu. Jangan longgarkan penerimaan untuk meluluskan fasa belum siap.
+- Helper: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113`. `sandbox.cjs` menyokong build/tests/lint/types-focused/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Target mesti bersiri. Binaan mestilah sepadan hash sumber sebelum browser; current-build ialah Fasa 8 `auth-smooth-build-3f41333973ec`.
+- Ujian `auth-smooth-transitions.spec.ts` penuh merangkumi fasa yang belum siap. Jalankan subset mengikut fasa yang sudah diimplementasi; selesaikan kontrak/lint/typecheck terfokus/build Fasa 8 sebelum browser page fade. Jangan longgarkan penerimaan untuk meluluskan fasa belum siap.
 - Guard commit menggunakan staged snapshot sebenar dalam sandbox. Bandingkan tree selepas guard dengan index sebelum host Git commit melalui empty-host-hooks yang sedia ada. Allowlist helper turut membenarkan tepat `scripts/landing-v21-built-browser.mjs` untuk kemas kini selector button→link; pemeriksaan rahsia sebenar kekal. Jangan stage `.agents/`, `.codex/`, `.github/agents|hooks|skills/`, `.impeccable/` atau `.env`.
 - Fasa 6 mengekalkan dua imej dalam frame sama dan mula active=null sehingga decode. Pseudo-image, crop/background/position recovery-only dibuang. Fasa 9 masih perlu membetulkan saiz frame desktop yang boleh melebihi tinggi panel dan menyembunyikan art di telefon; jangan dakwa semua layout sudah siap.
 - Pakej esbuild Linux tambahan belum tersedia. Jangan muat turun tanpa arahan sesuai. Frontend Vite build terdahulu lulus, tetapi ia bukan full backend/release build.
@@ -84,4 +88,6 @@ Empat binary dalam dua runtime.previous-* yang tidak aktif/tidak berkongsi hardl
 
 Pengguna sudah membenarkan cleanup. Namun semakan kelulusan automatik menolak pemadaman cache browser dan tiga VSIX lama dengan `blocked by policy`; jangan memintas melalui API lain. Tiga cache di `AppData/Roaming/Code/CachedExtensionVSIXs` dikenal pasti (~982MiB): `.d00c1d92-d3fe-4100-a68f-3e4a09e96891`, `openai.chatgpt-26.908.40401-win32-x64`, `anthropic.claude-code-2.1.263-win32-x64`. Tiada data SQR, .env, resit/PDF/Excel, Downloads atau SQLite/WAL Codex disentuh.
 
-Goal kekal aktif. Fasa 5–10 dan pengesahan akhir belum lengkap; tiada push/deploy.
+Enam fail `.dmp` tepat dalam `AppData/Local/Temp/wsl-crashes` telah diperiksa sebagai ELF dan tidak lagi dipegang proses (exclusive-open berjaya). Saiz mentahnya 1,066,098,688 + 722,587,976 + 246,315,416 + 209,895,888 + 184,705,088 + 181,519,416 = 2,611,122,472 bait. Semakan kelulusan automatik menolak pemadaman dengan `blocked by policy`; tiada fail dipadam. Percubaan LZX pertama gagal kerana ruang tidak cukup. Pemampatan NTFS standard kemudian berjaya pada keenam-enam fail, dengan SHA256 sebelum/selepas sepadan bagi setiap fail. Ruang tersedia diperhatikan naik46,219,264→2,187,608,064 bait, pertambahan2,141,388,800 bait (~1.99GiB). Tiada fail aplikasi, data atau .env disentuh.
+
+Goal kekal aktif. Fasa 8–10 dan pengesahan akhir belum lengkap; tiada push/deploy.

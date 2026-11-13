@@ -11,7 +11,7 @@ let login: LoginComponent | null = null;
 let forgot: ForgotComponent | null = null;
 let landing: LandingComponent | null = null;
 let latestIntent = 0;
-let publicArrival = false;
+export { hasPublicAuthArrival, markPublicAuthArrival } from "./public-auth-arrival";
 
 /** Only an ordinary user activation calls this; no idle or mount preloading. */
 export async function preloadAuthNavigation(to: string): Promise<void> {
@@ -64,11 +64,3 @@ export function invalidateAuthNavigationIntents() {
   latestIntent++;
 }
 
-/** First document load skips focus; later user/history arrivals announce their heading. */
-export function markPublicAuthArrival() {
-  publicArrival = true;
-}
-
-export function hasPublicAuthArrival() {
-  return publicArrival;
-}
