@@ -3,8 +3,8 @@ import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
   ActivateAccountPage,
+  AuthEntryPage,
   BannedPage,
-  ForgotPasswordPage,
   LandingPage,
   LoginPage,
   MaintenanceRoutePage,
@@ -215,9 +215,13 @@ function AppContent() {
           {renderRoutePage(
             "forgot-password",
             (
-              <ForgotPasswordPage
+              <AuthEntryPage
+                page="forgot-password"
                 onBackToHome={() => handlePublicNavigate("home")}
                 onBackToLogin={() => handlePublicNavigate("login")}
+                onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
+                onBanned={handleBannedSessionDetected}
+                onLoginSuccess={handleLoginSuccess}
               />
             ),
           )}
@@ -261,10 +265,12 @@ function AppContent() {
         {renderRoutePage(
           "login",
           (
-            <LoginPage
+            <AuthEntryPage
+              page="login"
               onBanned={handleBannedSessionDetected}
               onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
-              onLandingClick={() => handlePublicNavigate("home")}
+              onBackToHome={() => handlePublicNavigate("home")}
+              onBackToLogin={() => handlePublicNavigate("login")}
               onLoginSuccess={handleLoginSuccess}
             />
           ),

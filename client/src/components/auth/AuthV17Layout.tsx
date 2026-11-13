@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { ArrowLeft, Check, Moon, Sun, WifiOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuthLocale } from "./useAuthLocale";
@@ -24,9 +24,12 @@ type Props = {
   recoveryArtwork?: boolean;
 };
 
-/** Shared V17 presentation shell. Authentication state and API calls remain owned by each existing flow. */
-export function AuthV17Layout({ children, title, description, icon, contentBusy = false,
-  showBackButton = true, backLabel, onBackClick, className = "", controlledAccess = false, recoveryArtwork = false }: Props) {
+const AuthShellContext = createContext(false);
+type ShellProps = Pick<Props, "children" | "showBackButton" | "backLabel" | "onBackClick" | "className" | "recoveryArtwork">;
+
+/** Persistent public chrome; page-owned auth state stays below this boundary. */
+export function AuthV17Shell({ children, showBackButton = true, backLabel, onBackClick,
+  className = "", recoveryArtwork = false }: ShellProps) {
   const [, navigate] = useLocation();
   const { locale, setLocale, t } = useAuthLocale();
   const { theme: surfaceTheme, isDark, toggleTheme } = useTheme();
@@ -62,7 +65,7 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
   }, []);
 
   return (
-    <main id="main-content" tabIndex={-1} lang={locale} data-theme={surfaceTheme} className={`auth-v17 ${className}${recoveryArtwork ? " auth-v17-recovery-artwork" : ""}`}>
+    <main id="main-content" tabIndex={-1} lang={locale} data-theme={surfaceTheme} className={`auth-v17 auth-shell ${className}${recoveryArtwork ? " auth-v17-recovery-artwork" : ""}`}>
       <section className="auth-v17-brand-panel" aria-label={t("auth.v17.platform")}>
         <div className="auth-v17-curve" aria-hidden="true" />
         <div className="auth-v17-top">
@@ -109,18 +112,29 @@ export function AuthV17Layout({ children, title, description, icon, contentBusy 
             </div>
           </div>
           {offline ? <div className="auth-v17-offline" role="status"><WifiOff size={18} aria-hidden="true" />{t("auth.v17.offline")}</div> : null}
-          <div className="auth-v17-view">
-            {icon ? <div className="auth-v17-icon">{icon}</div> : null}
-            <h1 id="auth-v17-title">{title}</h1>
-            <p className="auth-v17-subtitle">{description}</p>
-            <div className="auth-v17-content" aria-busy={contentBusy || undefined}>{children}</div>
-            {controlledAccess ? <div className="auth-v17-assure"><Check size={18} aria-hidden="true" /><div>
-              <strong>{t("auth.v17.controlled")}</strong><br />{t("auth.v17.assurance")}
-            </div></div> : null}
-          </div>
-          <p className="auth-v17-help">{t("auth.v17.support")}</p>
+          <AuthShellContext.Provider value={true}>{children}</AuthShellContext.Provider>
         </div>
       </section>
     </main>
   );
+}
+
+/** Page content adapter also retains standalone rendering for existing callers. */
+export function AuthV17Layout({ children, title, description, icon, contentBusy = false,
+  controlledAccess = false, ...shellProps }: Props) {
+  const embedded = useContext(AuthShellContext);
+  const { t } = useAuthLocale();
+  const content = <>
+    <div className="auth-v17-view">
+      {icon ? <div className="auth-v17-icon">{icon}</div> : null}
+      <h1 id="auth-v17-title">{title}</h1>
+      <p className="auth-v17-subtitle">{description}</p>
+      <div className="auth-v17-content" aria-busy={contentBusy || undefined}>{children}</div>
+      {controlledAccess ? <div className="auth-v17-assure"><Check size={18} aria-hidden="true" /><div>
+        <strong>{t("auth.v17.controlled")}</strong><br />{t("auth.v17.assurance")}
+      </div></div> : null}
+    </div>
+    <p className="auth-v17-help">{t("auth.v17.support")}</p>
+  </>;
+  return embedded ? content : <AuthV17Shell {...shellProps}>{content}</AuthV17Shell>;
 }
