@@ -1,6 +1,6 @@
 # Auth smooth transitions — handoff
 
-14 November 2026. Goal aktif mengikut keseluruhan `FIX-PROMPT-auth-smooth-transitions.md`. Asas `54a99feb6cc95b822d665130d64034449080cdf2`, branch `codex/visual-layout-repair`.
+14 November 2026. Matlamat belum selesai mengikut keseluruhan `FIX-PROMPT-auth-smooth-transitions.md`. Asas `54a99feb6cc95b822d665130d64034449080cdf2`, branch `codex/visual-layout-repair`.
 
 ## Skop dan keputusan
 
@@ -37,7 +37,18 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 
 ## Keputusan semasa yang perlu diutamakan
 
-- Checkpoint Fasa10 memakai mesej commit `fix(auth-ui): address verification findings`; dapatkan hash tepat daripada sejarah Git. Parent checkpoint ialah07382370 (guard121473a3a0cc lulus, staged tree disamakan). Build Fasa10 `auth-smooth-build-be1c5a9d1e76` lulus16.438s. Tiada push/deploy.
+- Checkpoint Fasa10 ialah `68f8b4e9`, `fix(auth-ui): address verification findings`; parent checkpoint ialah07382370 (guard121473a3a0cc lulus, staged tree disamakan). Sambungan bahasa/metadata dan skop selector CSS masih belum commit. Build akhir sambungan `auth-smooth-build-b268845f99d6` lulus16.519s. Tiada push/deploy; goal aktif dan belum lengkap.
+- Prestasi plain TERKINI pada buildb268845f99d6: CPU1/high7b91ea314549 exit0/12.64s, native API auth531.8/463.1ms,page562/555.7ms,max long task native auth0/page146ms,unsupported auth0/page169ms. CPU4/auto→low6b74c7c039db native auth668.3/682.7ms,page1171.4/1369.5ms,max native auth116/page423ms,unsupported auth145/page398ms. CPU6/low resit sama native auth740.7/812.7ms,page1406.6/1185.5ms,max native auth157/page728ms,unsupported auth120/page651ms. Run4/6 exit0/52.731s. Semua mod longTaskAcceptance=FAIL; mod native juga nativeWallAcceptance=FAIL (unsupported tidak berkenaan). Dua angka API mengikut arah; long task ialah maksimum merentasi dua arah setiap jenis pertukaran. Angka ini mengatasi run terdahulu untuk status prestasi semasa; jangan jadikan exit0 sebagai kelulusan budget.
+- Set akhir cf69bcb98b8e lulus82/82 dalam13.458s termasuk GREEN kontrak PostCSS selepas REDdbb69d4767e8; typecheck dua fail ujian unit ac2478496f3a lulus3.88s (bukan graph penuh), lint sumber9a407bf617a8 lulus6.47s. Native rapid+tiga boundary f935d6bbff86 lulus4/4 dalam30.22s, mengekalkan CSS auth keluar140ms/masuk tamat340ms,page240ms serta unsupported/reduced.
+- Geometri akhir cerah a076c14d386a lulus103.567s dan gelap82b1c4b42edb lulus39.746s pada7 lebar×BM/EN, CLS perjalanan0/layout sepadan. Bukti14JPG setiap tema dikumpul. Root memeriksa pasangan login/forgot cerah1440px dan pasangan login/forgot gelap390px daripada set terkini; jangan dakwa semua28 gambar disemak secara manual. Ini ulangan pada build akhir sambungan, berasingan daripada bukti Fasa9 terdahulu.
+- Jejak `8ab62da6251d` mengenal pasti style utama96.102ms/layout78.687ms, kemudian perubahan html.lang ms→en, diikuti style utama kedua88.296ms/layout5.14ms. English pada root landing sahaja (build207cc48ee792/tracebfd8d7b05a14) masih meninggalkan pass lewat78.338ms. Selepas effect metadata App dipindahkan useEffect→useLayoutEffect dengan deps/resolver/nilai sama, trace334adc22810e menempatkan marker bahasa sebelum pass utama92.379ms; hanya satu pass besar, total main-style98.553ms dan full layout675 objek sekali. Style changed699→32. Ini mengesahkan penghapusan satu pass penuh berulang, bukan peningkatan kelajuan dalam peratus atau kelulusan budget keseluruhan.
+- Bukti RED/GREEN: English-root AST0270359f14d4 (9 lulus/1 gagal)→3a75841b33e1 (10 lulus); metadata-effect AST80125c485462 (11 lulus/1 gagal)→5449801bd66d (29 ujian tiga fail lulus). Typecheck446e7d68e771 lulus4.546s untuk dua fail ujian unit sahaja, bukan graph App penuh. Tiga boundary native/unsupported/reduced d6b5383553b5 lulus33.907s dengan assertion metadata/private SEO serta URL/history/tema/fokus.
+- Arahan sebenar npm run lint client/server de131614ae49 lulus59.458s menggunakan snapshot server read-only dan shim executable tool sedia terpasang dalam scratch. Percubaan1f576dbcdb33 gagal persediaan kerana executable eslint tidak ditemui; bukan kegagalan rule sumber. Tiada instalasi atau kenaikan had. Config ESLint masih tidak memadankan fail visual.
+- Trace395b7ca87665 memisahkan wall/thread CPU: style94.546/39.831ms dan layout48.93/13.949ms;67/86 period cgroup dithrottle. Ini menghalang tafsiran wall sebagai CPU eksklusif, bukan alasan menganggap penerimaan lulus. Raw trace maksimum2MiB dalam memori; hanya aggregate dikeluarkan dan elapsed berinstrumentasi tidak dibandingkan dengan budget biasa.
+- Ulangan tanpa trace pada build metadata masih gagal: CPU1/high65f3df2a1309 native API auth510.7/474.4ms,page607.5/539.9ms,max long task native auth0/page127ms,unsupported auth56/page124ms. CPU4/auto→low d2fb439ae9c4 native auth686.8/766.6ms,page1309.8/1078.7ms,max auth140/page667ms;unsupported auth158/page363ms. CPU6/low resit sama native auth827/725.3ms,page1682.7/995.9ms,max auth239/page806ms;unsupported auth167/page564ms. d2fb tamat55.061s/exit0 dengan aliran/metadata betul, tetapi semua mod longTaskAcceptance=FAIL dan nativeWallAcceptance=FAIL. Maksimum long task merentasi dua arah setiap jenis pertukaran, bukan setiap langkah.
+- SelectorStats e16a7f064911 exit0/9.653s mengenal pasti selector global ::view-transition-new(auth-form) dengan414 cubaan,0 padanan dan0 fast reject. Tiga selector group/old/new dibatasi html[data-vt="auth"] tanpa perubahan declaration/durasi. RED PostCSS dbb69d4767e8 (12 lulus/1 gagal) menjadi GREEN dalam set82. Trace selepas723cffaa784c merekodkan authSnapshotSelectors:[]: ketiga-tiga rule auth tidak dilaporkan antara rule yang dicuba dalam perjalanan unsupported yang diukur; bucketing sumber turut disahkan. Regresi native/geometri lulus seperti di atas. [Chrome DevTools](https://developer.chrome.com/docs/devtools/performance/selector-stats) menyatakan rakaman statistik selector menambah overhead; elapsed berinstrumentasi bukan ukuran budget biasa atau CPU eksklusif. Medan selector_stats.selector_timings disemak pada [sumber Chromium yang dipin](https://chromium.googlesource.com/chromium/src/+/54e69a145747eccc022ded8d94c537154ed15852/third_party/blink/renderer/core/css/element_rule_collector.cc). Tiada dakwaan peningkatan latency keseluruhan daripada perubahan ini.
+- Selepas perubahan selector, `b8b0a3c18f90` turut lulus dua kes links/history dalam16.418s (14.3s Playwright): modifier/native anchor/replace-history dan Back membatalkan snapshot berjalan. Jangan guna keputusan ini sebagai metrik prestasi.
+- Inventory TypeScript penuh6b0e80e8fe28 menggunakan3,006 root termasuk server daripada config asal dengan options kekal, tetapi OOM heap384MB sebelum graph/semantik lengkap; semanticChecked:false. Percubaan151aaa8c85b5 terdahulu hanya11 fail fokus. Arahan sebenar npm run typecheck kini telah dijalankan dalam f64afe1ae542, menggunakan CLI rasmi lib/tsc.js yang sama seperti wrapper bin, lalu OOM heap384MiB sebelum selesai; peak600666112 bait dan tiada cgroupOOM. dec73afd9345 sebelumnya hanya gagal fixture kerana wrapper bin tiada dalam snapshot. Tiada dependency/options projek diubah. Tiada keputusan semantik penuh atau full-project TypeScript lulus.
 - Set72 kontrak/SSR `auth-smooth-tests-4327d2c00d62` lulus12.876s pada sumber Fasa9/build7e034d294641, sebelum pembaikan hook. Slow-artwork satu kes `auth-smooth-tests-9e8120164345` lulus19.964s; dua retry sudah lulus Fasa6, jangan dakwa tiga kes dalam ulangan ini. Selepas hook diubah,9 kontrak landing442e1de9f70f, typecheck3c0525cad2a8 dan lintfe5b351aa679 lulus.
 - CPU audit `auth-smooth-tests-df35d8a8dc3e` exit0/115.07s dengan3 ujian fungsi lulus, tetapi AUTH_LONG_TASK_ACCEPTANCE=FAIL bagi CPU1/high,4/auto→low,6/low. CSS/keyboard betul, tiada motion dropped/unfinished. Masa API auth kira-kira509–985ms; page1243–18442ms. Long task maksimum5162/4552/4527ms mengikut profil. Kriteria50ms dan masa API keseluruhan belum lulus; jangan jadikan exit0 sebagai bukti prestasi lulus.
 - Run itu mencatat peak744071168 bait, memory.high19128, OOM0, system CPU72.785s berbanding user16.772s, direct page scan4060238 dan major fault7684. Tekanan sumber ialah confound yang nyata, bukan bukti punca tunggal atau kesalahan aplikasi. GPU dilumpuhkan oleh harness sedia ada dan tiada kesimpulan production dibuat.
@@ -101,11 +112,13 @@ Frontend login, forgot-password dan peralihan landing sahaja. Kekalkan API/paylo
 ## Sambung dan had keselamatan
 
 - Semua target build/test/browser dalam WSL/bwrap sedia ada, data sintetik, had asal CPU100%, RAM768MiB/high704, swap0, PID128, tmp256MiB, CPU120s/wall180s. Tiada instalasi atau peningkatan had.
-- Helper: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113`. `sandbox.cjs` menyokong build/tests/lint/types-focused/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Target mesti bersiri. Binaan mestilah sepadan hash sumber sebelum browser; current-build ialah Fasa10 `auth-smooth-build-be1c5a9d1e76`. Diagnostik direct juga hanya dipanggil selepas sempadan WSL/bwrap.
-- Geometri/helper Fasa9 dan filmstrip terasing sudah lulus; ketiga-tiga profil direct CPU sudah selesai tetapi kriteria prestasi masih gagal. Checkpoint Fasa10 pembaikan/ujian/hardening disahkan secara terfokus. Goal kekal terbuka kerana prestasi ketat dan full-project TypeScript belum selesai. Jangan longgarkan penerimaan atau jadikan exit0 sebagai bukti prestasi lulus. Langkah berikut ialah atribusi style/layout ketika landing dipasang, bukan benchmark rawak atau pengurangan animasi tanpa punca.
+- Helper: `C:/Users/Administrator/security-audit-skill/sumbanganqueryrahmah/auth-smooth-20261113`. `sandbox.cjs` menyokong build/tests/lint/lint-project/types-focused/types-inventory/typecheck-project/browser/hooks; `collect.cjs <receipt>` mengambil bukti bounded. Target mesti bersiri. `typecheck-project` sudah dijalankan dalam f64afe1ae542 dan OOM heap384MiB; jangan mengulang keadaan yang sama. Wrapper rasmi bin hanya memanggil lib/tsc.js; shim kini menggunakan entry itu yang tersedia secara lokal. Binaan mestilah sepadan hash sumber sebelum browser; current-build disahkan ialah `auth-smooth-build-b268845f99d6`. Diagnostik direct juga hanya dipanggil selepas sempadan WSL/bwrap.
+- Geometri/helper Fasa9 dan filmstrip terasing sudah lulus; geometri sambungan terbaru dan native/boundary turut lulus. Ketiga-tiga profil direct CPU sudah selesai tetapi kriteria prestasi masih gagal, termasuk selepas metadata dan skop selector dibetulkan. Checkpoint Fasa10 disahkan secara terfokus; sambungan sekarang belum commit. Goal kekal aktif kerana prestasi ketat dan full-project TypeScript belum selesai. Jangan longgarkan penerimaan atau jadikan exit0 sebagai bukti prestasi lulus. Kemajuan berikut masih boleh dibuat melalui atribusi initial full-tree/offscreen layout tanpa menjejaskan UI/motion; jangan menandakan goal blocked atau complete berdasarkan checkpoint ini.
 - Guard commit menggunakan staged snapshot sebenar dalam sandbox. Bandingkan tree selepas guard dengan index sebelum host Git commit melalui empty-host-hooks yang sedia ada. Allowlist helper turut membenarkan tepat `scripts/landing-v21-built-browser.mjs` untuk kemas kini selector button→link; pemeriksaan rahsia sebenar kekal. Jangan stage `.agents/`, `.codex/`, `.github/agents|hooks|skills/`, `.impeccable/` atau `.env`.
 - Fasa 6 mengekalkan dua imej dalam frame sama dan mula active=null sehingga decode. Pseudo-image/crop/position recovery-only dibuang; latar statik tambahan Fasa9 dipadankan dengan scene decoded melalui opacity sahaja. Frame desktop dan art tersembunyi telefon kini disahkan dalam geometri akhir tujuh lebar. Jangan dakwa aset raster berlatar sudah menjadi transparent.
 - Pakej esbuild Linux tambahan belum tersedia. Jangan muat turun tanpa arahan sesuai. Frontend Vite build terdahulu lulus, tetapi ia bukan full backend/release build.
+
+Langkah pemeriksaan seterusnya: ukur saiz sebenar setiap panel landing, termasuk teks 200%, sebelum menilai eksperimen layout luar viewport. `content-visibility` atau intrinsic-size bukan pembaikan yang sudah diluluskan secara teknikal: tolak calon yang mengubah saiz, kedudukan anchor, scrollbar, CLS atau animasi yang kelihatan. CSS global tidak boleh dipangkas hanya berdasarkan masa SelectorStats yang mengandungi overhead. Tiada perubahan sedemikian dibuat dalam checkpoint ini.
 
 ## Insiden ruang
 
@@ -123,4 +136,76 @@ Enam fail `.dmp` tepat dalam `AppData/Local/Temp/wsl-crashes` telah diperiksa se
 
 Cleanup susulan melalui pemampatan NTFS tanpa kehilangan data berjaya; root kemudian memerhatikan kira-kira1.8GiB ruang tersedia. Ini baki ruang pada masa tersebut, bukan tambahan1.8GiB untuk dijumlahkan dengan keuntungan terdahulu. Tiada pemadaman dilakukan.
 
-Goal kekal aktif. Fasa10 dan pengesahan akhir belum lengkap; tiada push/deploy.
+Sambungan berikutnya memampat satu lagi dump WSL tertutup kira-kira1.064GB dengan hash sebelum/selepas sama dan peruntukan akhir142,102,528 bait. Ruang tersedia diperhatikan779,816,960→1,701,363,712 bait; tiada pemadaman. Bacaan ruang berbeza masa tidak dijumlahkan sebagai keuntungan baharu.
+
+Cleanup permintaan pengguna seterusnya: 267 manifest snapshot ujian sendiri (106,791,009 bait logik) diperiksa; pemampatan NTFS dan `compact /Q` mengesahkan semuanya compressed. Atribut fail biasa tidak mengesan pemampatan WOF pada 83 fail, maka semakan atribut awal terhenti walaupun operasi compact berjaya. Hash stabil semasa semakan akhir semua fail, tetapi rekod hash sebelum pemampatan hanya berada dalam proses yang sudah tamat; jangan dakwa bukti hash sebelum/selepas lengkap disimpan. Bukti luar projek `maintenance-manifests-20261114-final.json`. Baki C: diperhatikan1,558,659,072 bait (~1.45GiB), bukan jumlah baharu yang dibebaskan. Tiada fail dipadam. Semua dump besar sudah dimampat; tiada calon pemadaman besar yang jelas selamat ditemui. Jangan ulang full-program inventory yang telah OOM di bawah had sama.
+
+Semakan seni bina baca sahaja menolak penggunaan umum `content-visibility:auto` sebagai pembaikan selamat: panel landing mempunyai tinggi bergantung kandungan dan hanya desktop min-height, manakala strip menetapkan min-height0. Saiz intrinsik tekaan boleh mengubah scrollHeight, kedudukan anchor dan susun atur 200% teks. Belum ada eksperimen atau perubahan aplikasi untuk cadangan ini. Jika disiasat lagi, asingkan atribusi daripada ukuran budget dan buktikan geometri sejuk/selepas reveal, semua anchor, fokus, motion serta screenshot sebelum mempertimbangkan CSS produksi.
+
+## Sambungan akhir: bukti baharu dan gate sebenar
+
+- Ujian MFA baharu dalam `tests/visual/auth-smooth-transitions.spec.ts`: `15d0c1b653cf` dua tema lulus15.437s (13.0s Playwright), OTP fokus dan native numeric/autofill, enam slot, butang354×54px sebelum/semasa/selepas verify, busy/disabled/spinner, satu alert dengan copy rasmi, payload tepat challenge/code, kembali password, brand kekal. Native View Transitions dimatikan untuk kes keadaan ini, tiada sesi berjaya/data protected dibuka. memory.high971: jangan guna sebagai bukti prestasi. Percubaan awalfaee35ec2f07 salah menjangka teks mentah API; assertion ditukar kepada feedback rasmi sedia ada, tiada aplikasi diubah. Focused strictTS fail visual akhir3040354df4d5 lulus5.681s; resit/stdout sudah dikumpul. Jumlah82 ujian unit terdahulu kekal berasingan daripada2 kes browser baharu.
+- Pemeriksaan manual screenshot akhir kini20 gambar EN: login/forgot, cerah/gelap,360/390/412/768/1440px, daripada runa076c14d386a/82b1c4b42edb yang mewakili binaan aplikasi b268845f99d6. Tiada clipping/overflow baharu dilihat.320/1024 dan BM mempunyai pemeriksaan geometri automatik; jangan dakwa28 gambar semuanya diteliti manual.
+- `npm run typecheck` sebenar kini sudah dilaksanakan: dec73afd9345 mula-mula gagal fixture kerana snapshot tiada wrapper bin/tsc. Wrapper rasmi host hanya require('../lib/tsc.js'), jadi shim dipercayai menggunakan entry lib yang memang tersedia. f64afe1ae542 benar-benar menjalankan npm→tsc--noEmit, lalu heap384MiB OOM/receipt exit1 dalam9.961s, peak600666112/no cgroupOOM. Config/root/options dikekalkan, tiada dependency dipasang. Jangan ulang keadaan sama atau dakwa semantik penuh lulus.
+- Pencegahan dump: `.wslconfig` dibackup dalam `wslconfig-before-disable-crash-dumps-20261114.txt`, kemudian hanya menambah `maxCrashDumpCount=-1` dan komen. BackupSHA256230029168c984442590e53c4e92b8407a8e8236ccbe9a0e85843eb1a52d24d84; semasaSHA256cd459411fa37dcd9593411efd046d9190759aca3f4963150875418c29bb20e4c. CPU/RAM/swap dan had sandbox tidak dinaikkan. WSL di-shutdown selepas memastikan hanya distro audit dan tiada target aktif. RLIMIT_CORE0 ditambah pada wrapper. Selepas OOM npm sebenar,10 dump lama mempunyai nama/saiz/timestamp sama dan tiada dump baharu; tiada pemadaman. Rujukan [penyelenggara WSL](https://github.com/microsoft/WSL/issues/12147).
+- Pemeriksaan lengkap spesifikasi kini berada dalam jadual terakhir laporan. Full-project typecheck tidak selesai, full release/backend build tiada binary esbuild Linux, budget plain masih gagal, screen reader/GPU/peranti sebenar belum diuji. Semua kerja selamat bebas daripada gate ini sudah diperiksa; jangan mendakwa goal complete. Perlu persekitaran ujian yang sesuai untuk menutup gate tersebut; pembetulan metadata/CSS, ujian MFA dan dokumen masih belum commit/push/deploy.
+
+## Goal diaktifkan semula: audit blocked baharu bermula
+
+Pengguna mengaktifkan goal semula; jangan membawa counter blocked3 terdahulu ke run ini. Sambungan pertama selepas resume menghasilkan bukti eksperimen baharu dan rollback, bukan sekadar status. Keperluan asal kekal penuh. Tiada target masih berjalan pada akhir checkpoint ini.
+
+- Hipotesis exact-top (y===0/pointer===null) diuji tanpa menukar UI/timing. Unit callback sebenar RED8f220476a8e8=3pass/2fail; guard eksperimen GREEN7001cc36c80d=28/28 dalam5.227s. Lint8395f9d85b8a, focusedTS dua fail046e17bb7d42, frontend build8d5272328fe7 dan focusedTS spec9cd21320ae92 lulus.
+- Browser eksperimen5aab7382145b lulus12.106s:0 bacaan eksplisit pada top/return-top, nonzero scroll/pointer mengembalikan bacaan serta output yang sama. Ini bukti getter/output sahaja, bukan kelulusan prestasi. Kes itu serta5 unit khusus sudah dibuang selepas eksperimen ditolak.
+- Plain9ac8fed99f63 CPU1/high masihFAIL: native auth526.4/467.7,page592.2/699.3ms; maxHome native164/unsupported159ms. Baseline pra-guard7b91ea314549 auth531.8/463.1,page562/555.7,maxHome146/169ms. Tiada peningkatan konsisten atau dakwaan manfaat signifikan.
+- Tracebdda5efee82f masih full675 objek68.59wall/16.94CPU berbanding trace395b7ca87665 48.93/13.949ms. Kedua-dua layout tiada enclosing FunctionCall direkodkan. Trace ialah atribusi berinstrumentasi, bukan benchmark. Hipotesis guard menyelesaikan kos layout pertama ditolak.
+- Rollback tepat: hanya guard eksperimen sendiri dikeluarkan daripada hook, unit baru dipadam dan suffix kes browser ditanggalkan. Sembilan hash checkpointfinal-gates sepadan selepas rollback; spec kembali SHA25606459f914dcc673d34285b51b81e477b6601f109e9cdc0cb7661095e2d125185. MFA dan semua kerja terdahulu terpelihara. Hook tidak lagi dirty. `current-build.json` dipulihkan kepada resit b268845f99d6;8d527 ialah eksperimen ditolak. Jangan menjalankan semula suite eksperimen seolah-olah ia kod semasa.
+- Carian tepat cache lokal esbuild Linux0.28.1 juga negatif: rg indeks tiada tarball dan contentpath SHA512 daripada lockfile tiada; .npm alternatif tiada. Tiada install/download/extract. Maklumat persekitaran CI/Linux terasing yang mempunyai RAM/toolchain mencukupi sudah diminta melalui soalan async; jangan anggap respons belum tiba sebagai kelulusan. FullTS384MiB OOM, fullbuild/performance/SR/GPU/peranti kekal tidak lengkap. Jangan ulang ujian OOM sama atau melonggarkan threshold.
+
+Fasa10 dan pengesahan akhir belum lengkap; tiada push/deploy. Status goal semasa direkodkan oleh alat goal, bukan dianggap complete oleh handoff ini.
+
+## Sambungan 15 November 2026 — mod typecheck lokal jimat memori
+
+Pengguna mengesahkan supaya mod lokal bersiri disediakan sambil mengekalkan
+typecheck penuh CI. `npm run typecheck:low-memory` kini menyemak 64 root setiap
+pekerja (heap768MiB), dengan import berkaitan, deklarasi global projek dan konteks
+Node yang telah dipasang. Compiler options asal dikekalkan. Ia ialah bantuan
+lokal dan tidak menggantikan semantik program monolitik atau gate CI.
+
+- Run `0157573c2a80`: exit0, 3006/3006 root,485.814s, peak991350784 bait,
+  tiada high/max/OOM. Bukti stdout/stderr telah dipromosi dan dikumpulkan.
+- Regresi `9b20686b8499`:6/6 lulus, termasuk CLI sebenar, ralat jenis, konteks
+  global/import, sumber berubah dan konteks jenis yang hilang.
+- Full monolitik512MiB `034fd043513d` dan1024MiB `4ba107cea9a7` OOM;
+  1536MiB `da821e967052` mencapai CPU budget, bukan bukti monolitik lulus.
+- Local32-root `b104eddb816c` menyelesaikan2624/3006 tanpa diagnostik sebelum
+  CPU720s tamat. Local64-root menyelesaikan semua root dalam budget yang sama.
+- Pelancar luar projek mempunyai mod `typecheck-low-memory` khusus:
+  CPU100%, RAM1280MiB/high1216MiB, swap0,128 proses, scratch256MiB,
+  CPU720s/wall900s. WSL memory1536MB; profil ujian lain kekal pada had asal.
+  Jangan gunakan profil ini sebagai baseline prestasi browser.
+- `tsconfig.json`,workflow CI dan package-lock tidak berubah. Arahan CI kekal
+  `tsc --noEmit`. Lihat `docs/typecheck-low-memory.md` untuk batas mod lokal.
+
+Goal auth penuh masih belum complete: gate monolitik CI, full release build,
+budget prestasi peralihan dan verifikasi SR/GPU/peranti sebenar masih terbuka.
+Tiada commit,push atau deploy baharu dibuat dalam sambungan ini.
+
+Regresi akhir `c6edd25853f9`:19/19 lulus dalam19.028s, termasuk6 ujian mod lokal
+serta kontrak release dan dokumentasi. Run sebelumnya `2a20a31b9321` mempunyai
+3 ENOENT kerana snapshot belum menyertakan rate-limit.ts dan2 dokumen rujukan;
+fixture dipenuhi dengan3 fail baca sahaja dan kesemua ujian lulus tanpa perubahan
+aplikasi. Kod helper/package/tsconfig semasa disahkan hash sepadan dengan run
+lokal berjaya0157573c2a80. Gate goal auth yang lain tidak ditutup oleh keputusan ini.
+
+Binaan frontend semasa kemudian lulus dalam `auth-smooth-build-07032abb4d13`
+(20.72s,exit0). `current-build.json` kini menunjuk07032abb4d13, menggantikan
+b268845f99d6 selepas tambahan arahan lokal dalam package.json. Ini masih binaan
+frontend Vite, bukan pengesahan build server/release penuh.
+
+## Penyerahan untuk commit dan push — 15 November 2026
+
+Pengguna meminta perubahan semasa dicommit dan dipush walaupun pengesahan penuh
+belum selesai. Goal auth kekal blocked, bukan complete. Typecheck lokal3006/3006,
+regresi19/19 dan binaan frontend lulus; typecheck monolitik, build release penuh,
+had prestasi transisi dan semakan screen reader/GPU/peranti sebenar masih terbuka.
+Permintaan ini tidak merangkumi deploy. Jangan anggap push sebagai kelulusan release.

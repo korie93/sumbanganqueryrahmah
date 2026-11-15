@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import postcss from "postcss";
 import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,37 @@ test("public authentication routes do not warm the authenticated shell before lo
   assert.doesNotMatch(loginSource, /authenticated-entry-lazy/);
   assert.doesNotMatch(loginSource, /AuthenticatedAppEntry\.preload\s*\(/);
   assert.doesNotMatch(authenticatedEntrySource, /AuthenticatedAppShell\.preload\s*\(/);
+});
+
+test("route document metadata is committed before the new page's first style and paint", () => {
+  const source = readClientSource("../App.tsx");
+  const file = ts.createSourceFile("App.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let metadataEffect: ts.CallExpression | undefined;
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+      && ["useEffect", "useLayoutEffect"].includes(node.expression.text)
+      && node.arguments[0]?.getText(file).includes("applyDocumentMetadata(")) metadataEffect = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  assert.ok(metadataEffect, "Route metadata must remain synchronized with the current page");
+  assert.equal(metadataEffect.expression.getText(file), "useLayoutEffect",
+    "Changing the inherited document language after paint invalidates the new page's complete style tree again");
+});
+
+test("native auth snapshot selectors are restricted to the active document root", () => {
+  const stylesheet = postcss.parse(readClientSource("../components/auth/auth-view-transitions.css"));
+  const names = new Set<string>();
+  stylesheet.walkRules(rule => {
+    for (const selector of rule.selectors) {
+      const snapshot = selector.match(/::view-transition-(group|old|new)\(auth-form\)$/);
+      if (!snapshot) continue;
+      names.add(snapshot[1]!);
+      assert.ok(selector.startsWith('html[data-vt="auth"]::'),
+        "Document-only snapshot styles must not be attempted for every ordinary landing element");
+    }
+  });
+  assert.deepEqual([...names].sort(), ["group", "new", "old"], "Keep all three native form snapshot rules");
 });
 
 test("login shell avoids persistent compositor hints on large decorative layers", () => {

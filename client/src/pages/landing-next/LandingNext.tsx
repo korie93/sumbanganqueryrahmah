@@ -125,7 +125,7 @@ export default function LandingNext({ onLoginClick }: LandingNextProps) {
   );
   return (
     <NavigationContext.Provider value={{ root, onLoginClick, paused: isPaused, closeMenu: () => motion.setMenuOpen(false) }}>
-    <div ref={root} id="top" tabIndex={-1} className={`sqr-landing-next${isPaused ? " motion-paused" : ""}`} data-theme={motion.theme}>
+    <div ref={root} id="top" lang="en" tabIndex={-1} className={`sqr-landing-next${isPaused ? " motion-paused" : ""}`} data-theme={motion.theme}>
       <Link className="skip" href="#main-content">Skip to content</Link>
       <header>
         <div className="wrap nav">

@@ -15,9 +15,9 @@ html[data-vt="auth"]::view-transition { pointer-events: none; }
 html[data-vt="auth"]::view-transition-old(root),
 html[data-vt="auth"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html[data-vt]::view-transition-group(root) { animation: none; }
-::view-transition-group(auth-form) { animation: none; }
-::view-transition-old(auth-form) { animation: auth-out 140ms var(--ease-in-out) both; }
-::view-transition-new(auth-form) { animation: auth-in var(--dur-base) var(--ease-out) 80ms both; }
+html[data-vt="auth"]::view-transition-group(auth-form) { animation: none; }
+html[data-vt="auth"]::view-transition-old(auth-form) { animation: auth-out 140ms var(--ease-in-out) both; }
+html[data-vt="auth"]::view-transition-new(auth-form) { animation: auth-in var(--dur-base) var(--ease-out) 80ms both; }
 
 /* Keep the previous page fully visible while the next page fades over it. */
 html[data-vt="page"]::view-transition-old(root) { animation: none; mix-blend-mode: normal; }

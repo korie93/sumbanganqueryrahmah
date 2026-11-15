@@ -24,6 +24,19 @@ function descendants(node: ts.Node): ts.Node[] {
   return nodes;
 }
 
+test("English landing content does not inherit the previous auth document language before metadata commits", () => {
+  const file = ts.createSourceFile("LandingNext.tsx", component, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const root = descendants(file).find((node): node is ts.JsxOpeningElement => ts.isJsxOpeningElement(node)
+    && node.tagName.getText(file) === "div" && node.attributes.properties.some(attribute => ts.isJsxAttribute(attribute)
+      && attribute.name.getText(file) === "id" && attribute.initializer && ts.isStringLiteral(attribute.initializer)
+      && attribute.initializer.text === "top"));
+  assert.ok(root, "The actual public landing root must be present");
+  const language = root.attributes.properties.find((attribute): attribute is ts.JsxAttribute => ts.isJsxAttribute(attribute)
+    && attribute.name.getText(file) === "lang");
+  assert.ok(language?.initializer && ts.isStringLiteral(language.initializer));
+  assert.equal(language.initializer.text, "en", "English content needs a stable language from its first style/layout pass");
+});
+
 test("every device receives one public page behind the shared lazy route without a device or performance branch", () => {
   const file = ts.createSourceFile("Landing.tsx", entry, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const imports = file.statements.filter(ts.isImportDeclaration);

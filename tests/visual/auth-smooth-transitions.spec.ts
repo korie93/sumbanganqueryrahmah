@@ -62,9 +62,10 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   const fixture = createAuthV17Fixture(origin);
   const state: {
     forgotGate: Promise<void> | null;
+    verifyGate: Promise<void> | null;
     forgotResult: "success" | "temporary";
     mutations: Array<{ path: string; body: Record<string, unknown> }>;
-  } = { forgotGate: null, forgotResult: "success", mutations: [] };
+  } = { forgotGate: null, verifyGate: null, forgotResult: "success", mutations: [] };
   const errors: string[] = [], pending = new Set<Promise<void>>();
   await page.emulateMedia({ colorScheme: options.theme ?? "dark", reducedMotion: options.reducedMotion ? "reduce" : "no-preference" });
   await page.addInitScript<BrowserThemeFixtureOptions>(initializeBrowserThemeFixture,
@@ -212,6 +213,8 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     const url = new URL(message.location().url || origin, origin), text = message.text();
     if (url.origin === origin && /^(?:\/api\/me|\/api\/auth\/login|\/api\/auth\/request-password-reset)$/.test(url.pathname)
       && /status of (?:401|503)/.test(text)) return;
+    if (url.origin === origin && url.pathname === "/api/auth/verify-two-factor-login"
+      && state.mutations.some(mutation => mutation.path === url.pathname) && text.includes("status of 401")) return;
     errors.push(text);
   });
   await page.context().routeWebSocket("**/*", socket => { errors.push("Public auth opened a protected WebSocket"); socket.close(); });
@@ -235,6 +238,9 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     }
     if (request.method() === "POST" && url.pathname.startsWith("/api/auth/")) {
       state.mutations.push({ path: url.pathname, body: request.postDataJSON() });
+    }
+    if (url.pathname === "/api/auth/verify-two-factor-login" && request.method() === "POST" && state.verifyGate) {
+      await state.verifyGate;
     }
     if (url.pathname === "/api/auth/request-password-reset" && request.method() === "POST") {
       fixture.state.counts.forgot++;
@@ -921,6 +927,72 @@ test("Auth smooth login states: fixed busy button, password toggle and unchanged
     for (const icon of originalIcons) await icon.dispose();
   } finally { release?.(); fixture.state.loginGate = null; await finish(); }
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Auth smooth MFA ${theme}: OTP focus, stable busy button and unchanged verification contract`, async ({ page, baseURL }, testInfo) => {
+    test.setTimeout(60_000);
+    test.skip(baseline, "Shared-layout MFA verification covers the new implementation");
+    const { fixture, state, finish } = await installFixture(page, baseURL, { theme, noViewTransitions: true });
+    let release: (() => void) | undefined;
+    try {
+      await page.setViewportSize({ width: 390, height: 844 });
+      fixture.state.login = "mfa";
+      await page.goto("/login", { waitUntil: "domcontentloaded" });
+      await expect(page.locator("#auth-v17-title")).toBeVisible(); await settle(page);
+      await page.getByRole("button", { name: "English", exact: true }).click();
+      const brand = await page.locator(".auth-v17-brand").elementHandle();
+      expect(brand).toBeTruthy();
+      const submit = page.getByTestId("button-login");
+      await page.locator("#login-username").fill(authV17FixtureIdentity.username);
+      await page.locator("#login-password").fill(authV17FixtureIdentity.password);
+      await submit.click();
+      const otp = page.getByTestId("input-two-factor-code");
+      await expect(otp).toBeVisible(); await expect(otp).toBeFocused();
+      await expect(otp).toHaveAttribute("inputmode", "numeric");
+      await expect(otp).toHaveAttribute("autocomplete", "one-time-code");
+      await expect(page.locator(".auth-v17-otp__slot")).toHaveCount(6);
+      await expect(submit).toBeDisabled();
+      await expect(page.locator("#login-password")).toHaveCount(0);
+      await expect(page.locator(".auth-v17")).toHaveAttribute("data-theme", theme);
+      await otp.fill("123456"); await expect(submit).toBeEnabled();
+      await settle(page);
+      const before = await dimensions(submit);
+      state.verifyGate = new Promise<void>(resolve => { release = resolve; });
+      await submit.click();
+      await expect.poll(() => state.mutations.filter(mutation => mutation.path === "/api/auth/verify-two-factor-login").length).toBe(1);
+      await expect(submit).toBeDisabled(); await expect(otp).toBeDisabled();
+      await expect(submit).toHaveAttribute("aria-busy", "true");
+      await expect(submit.locator(".auth-spinner")).toHaveCount(1);
+      const busy = await dimensions(submit);
+      expect(busy).toEqual(before);
+      release?.(); state.verifyGate = null;
+      const error = page.locator('.auth-error[role="alert"]');
+      await expect(error).toBeVisible(); await expect(error).toHaveAttribute("data-open", "true");
+      // The existing feedback mapper intentionally localizes this API code;
+      // preserve the displayed copy rather than expecting the raw fixture text.
+      await expect(error).toHaveText("The authenticator code is incorrect. Use the latest code and check that your phone's time is set automatically.");
+      await expect(page.getByRole("alert")).toHaveCount(1);
+      await expect(submit).toBeEnabled(); await expect(otp).toBeEnabled();
+      await expect(submit).not.toHaveAttribute("aria-busy", "true");
+      await expect(submit.locator(".auth-spinner")).toHaveCount(0);
+      expect(await dimensions(submit)).toEqual(before);
+      expect(state.mutations).toHaveLength(2);
+      expect(state.mutations[0].path).toBe("/api/auth/login");
+      expect(state.mutations[0].body).toMatchObject({ username: authV17FixtureIdentity.username, password: authV17FixtureIdentity.password });
+      expect(Object.keys(state.mutations[0].body).sort()).toEqual(["fingerprint", "password", "username"]);
+      expect(state.mutations[1]).toEqual({ path: "/api/auth/verify-two-factor-login", body: { challengeToken: "v17-ui-challenge", code: "123456" } });
+      expect(fixture.state.counts).toEqual({ login: 1, verify: 1, forgot: 0, reset: 0, validate: 0 });
+      expect(await brand!.evaluate(element => element.isConnected)).toBe(true);
+      await page.locator("button.auth-v17-back").click();
+      await expect(page.locator("#login-username")).toBeVisible(); await expect(otp).toHaveCount(0);
+      await expect(page).toHaveURL(/\/login$/);
+      expect(await brand!.evaluate(element => element.isConnected)).toBe(true);
+      await brand?.dispose();
+      report(testInfo, "mfa-state", { theme, before, busy, counts: fixture.state.counts,
+        verificationBody: state.mutations[1].body, returnedToPassword: true });
+    } finally { release?.(); state.verifyGate = null; await finish(); }
+  });
+}
 
 test("Auth smooth forgot states: same generic success and animation for both identifiers", async ({ page, baseURL }, testInfo) => {
   test.setTimeout(75_000);

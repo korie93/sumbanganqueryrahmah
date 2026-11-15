@@ -47,6 +47,7 @@
     "supply-chain:sbom": "node scripts/generate-sbom.mjs",
     "audit:dependencies": "node scripts/audit-dependencies.mjs",
     "typecheck": "tsc --noEmit",
+    "typecheck:low-memory": "node scripts/run-typecheck-low-memory.mjs --context-types=node",
     "build:status": "tsx scripts/build-system-status.ts",
     "verify:status-assets": "tsx scripts/build-system-status.ts --check",
     "test:status:nginx": "node scripts/test-system-status-nginx.mjs",

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
@@ -109,7 +109,9 @@ function AppContent() {
     return true;
   }, [handleRejectedTabSession, handleVerifiedAccountChanged, handleVerifiedSession, user?.id]);
 
-  useEffect(() => {
+  // Commit the inherited language before first paint, so the new route does
+  // not need a second complete style pass after its initial layout.
+  useLayoutEffect(() => {
     applyDocumentMetadata(
       resolveDocumentMetadata({
         currentPage,
