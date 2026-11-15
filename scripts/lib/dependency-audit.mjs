@@ -201,6 +201,10 @@ function isExternalPackageSource(resolved) {
 
 const documentedOverrideReasons = new Map([
   [
+    "@opentelemetry/instrumentation-http",
+    "Pins the incoming HTTP query-redaction fix for GHSA-3v2p-hm54-8qcq while auto-instrumentations-node still requests the affected 0.221 line.",
+  ],
+  [
     "@babel/core",
     "Pins the patched Babel 7 line for ESLint tooling until react-hooks resolves the fixed release transitively.",
   ],
