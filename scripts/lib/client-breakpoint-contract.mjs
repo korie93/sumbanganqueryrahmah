@@ -16,7 +16,9 @@ const LANDING_NEXT_CSS_PATH = "client/src/pages/landing-next/landing-next.css";
 // The supplied canonical V17 authentication reference keeps its own split-panel
 // transitions. This exception applies only to its isolated, .auth-v17-scoped CSS;
 // authenticated workspace and other authentication styles retain shared tiers.
-const AUTH_V17_BREAKPOINT_WIDTHS = [380, 699, 700, 980, 981, 1200];
+// Narrow-phone fixes reserve the localized form/footer below 360px and stack
+// the toolbar below 380px (see docs/auth-smooth-transitions-report.md).
+const AUTH_V17_BREAKPOINT_WIDTHS = [359, 379, 380, 699, 700, 980, 981, 1200];
 const AUTH_V17_CSS_PATH = "client/src/components/auth/AuthV17Layout.css";
 
 // Preserve the supplied Enterprise FINAL empty-state composition only in its
@@ -295,7 +297,7 @@ export function formatClientBreakpointContractReport(validation) {
   const inspected = `Client breakpoint contract inspected ${summary.checkedRequirementFileCount || 0}/${summary.requirementFileCount || 0} targeted files, ${summary.checkedRequirementCount || 0}/${summary.requirementCount || 0} contract markers, and ${summary.cssFileCount || 0} CSS files (${summary.cssBreakpointCount || 0} width media queries).`;
 
   if (failures.length === 0) {
-    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths. Only isolated V21 landing CSS (390/900/1040px), normal-profile landing CSS (480/560/700/720/860/1320px), V17 authentication CSS (380/699/700/980/981/1200px), and Enterprise FINAL General Search empty-state CSS (365/760/980px) retain their approved reference breakpoints; these exceptions apply to their exact source-reference stylesheet paths only.`;
+    return `${inspected}\nBreakpoint tiers remain standardized around 640/767/768/1023/1024 across the guarded client viewport paths. Only isolated V21 landing CSS (390/900/1040px), normal-profile landing CSS (480/560/700/720/860/1320px), V17 authentication CSS (359/379/380/699/700/980/981/1200px), and Enterprise FINAL General Search empty-state CSS (365/760/980px) retain their approved reference and documented layout breakpoints; these exceptions apply to their exact source-reference stylesheet paths only.`;
   }
 
   return [

@@ -154,14 +154,15 @@ test("client breakpoint contract report summarizes successful checks", () => {
   assert.match(report, /inspected 10\/10 targeted files, 25\/25 contract markers, and 7 CSS files/i);
   assert.match(report, /standardized around 640\/767\/768\/1023\/1024/i);
   assert.match(report, /normal-profile landing CSS \(480\/560\/700\/720\/860\/1320px\)/);
+  assert.match(report, /V17 authentication CSS \(359\/379\/380\/699\/700\/980\/981\/1200px\)/);
   assert.match(report, /Enterprise FINAL General Search empty-state CSS \(365\/760\/980px\)/);
   assert.match(report, /exact source-reference stylesheet paths only/);
 });
 
-test("only the isolated V17 auth stylesheet may retain the canonical reference breakpoints", () => {
+test("only the isolated V17 auth stylesheet may retain reference and narrow-phone layout breakpoints", () => {
   const filesByPath = buildCompliantFilesByPath();
   const authPath = "client/src/components/auth/AuthV17Layout.css";
-  const widths = [380, 699, 700, 980, 981, 1200];
+  const widths = [359, 379, 380, 699, 700, 980, 981, 1200];
   filesByPath[authPath] = widths.map((width) => `@media (min-width: ${width}px) {}`).join("\n");
   assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
 
@@ -173,6 +174,34 @@ test("only the isolated V17 auth stylesheet may retain the canonical reference b
 
   filesByPath[authPath] = "@media (max-width: 999px) {}";
   assert.equal(validateClientBreakpointContract({ filesByPath }).failures.length, 1);
+});
+
+test("narrow-phone auth fixes stay exclusive to the exact auth stylesheet", () => {
+  const filesByPath = buildCompliantFilesByPath();
+  const authPath = "client/src/components/auth/AuthV17Layout.css";
+  const widths = [359, 379];
+  const css = widths.map(width => `@media (max-width: ${width}px) { .auth-v17 .auth-form-slot { min-height: 1px; } }`).join("\n");
+  filesByPath[authPath] = css;
+  assert.deepEqual(ALLOWED_CLIENT_BREAKPOINT_WIDTHS, [640, 767, 768, 1023, 1024]);
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, []);
+
+  for (const otherPath of [
+    "client/src/components/auth/AuthV17Layout.module.css",
+    "client/src/components/auth/Other.css",
+    "client/src/pages/Login.css",
+    "client/src/pages/collection/CollectionDailyPage.css",
+    "client/src/app/AuthenticatedAppShell.css",
+  ]) {
+    const validation = validateClientBreakpointContract({ filesByPath: { ...filesByPath, [otherPath]: css } });
+    assert.deepEqual(validation.failures, widths.map(width =>
+      `${otherPath}: unsupported responsive breakpoint ${width}px (allowed: 640, 767, 768, 1023, 1024px)`,
+    ));
+  }
+
+  filesByPath[authPath] += "\n@media (max-width: 358px) {}\n@media (max-width: 378px) {}";
+  assert.deepEqual(validateClientBreakpointContract({ filesByPath }).failures, [358, 378].map(width =>
+    `${authPath}: unsupported responsive breakpoint ${width}px (allowed: 640, 767, 768, 1023, 1024px)`,
+  ));
 });
 
 test("only the exact Enterprise FINAL empty-state stylesheet retains its supplied reference breakpoints", () => {
