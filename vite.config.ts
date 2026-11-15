@@ -104,6 +104,11 @@ export default defineConfig({
               // chunks, without pulling private pages or the whole icon library in.
               if (
                 /\/client\/src\/lib\/(?:browser-storage|secure-id|web-vitals|client-error-telemetry|safe-url|aria-state-props|auth-session|lazy-with-preload)\.ts$/.test(normalizedId)
+                // App and lazy auth chrome share navigation state. Give these
+                // helpers entry ownership before auth's dependency traversal,
+                // otherwise the entry eagerly imports the entire auth chunk.
+                || /\/client\/src\/lib\/(?:auth-navigation-preload|public-auth-arrival|view-transition)\.ts$/.test(normalizedId)
+                || /\/client\/src\/app\/lazy-pages\.tsx$/.test(normalizedId)
                 || /\/client\/src\/app\/maintenance-client-policy\.ts$/.test(normalizedId)
                 // The entry resolves theme before React mounts. Keep this pure
                 // hook out of lazy AuthV17Layout's dependency ownership.
@@ -147,7 +152,7 @@ export default defineConfig({
               const normalizedId = id.replace(/\\/g, "/");
               return /\/client\/src\/lib\/(?:interaction-media|fingerprint|i18n|auth-flow-feedback|api-errors)\.ts$/.test(normalizedId)
                 || /\/client\/src\/pages\/auth-field-utils\.ts$/.test(normalizedId)
-                || /\/client\/src\/components\/(?:auth\/AuthV17Layout|PublicAuthControls|ExpandableMessage)\.tsx$/.test(normalizedId)
+                || /\/client\/src\/components\/(?:auth\/(?:AuthV17Layout|AuthError)|PublicAuthControls|ExpandableMessage)\.tsx$/.test(normalizedId)
                 || /\/node_modules\/lucide-react\/dist\/esm\/icons\/(?:arrow-left|eye|eye-off|key-round|shield-check|user-round|wifi-off)\.js$/.test(normalizedId);
             },
           }],

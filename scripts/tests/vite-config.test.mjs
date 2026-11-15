@@ -288,6 +288,27 @@ test("public startup helpers share one chunk without absorbing API clients, test
   }
 });
 
+test("entry navigation ownership cannot pull lazy auth presentation into startup", async () => {
+  const config = await importViteConfigFresh();
+  const groups = config.build.rollupOptions.output.codeSplitting.groups;
+  const shared = groups[0];
+  const auth = groups.find(group => group.name === "public-auth-runtime");
+  assert.ok(shared.priority > (auth.priority ?? 0));
+  for (const file of [
+    "lib/auth-navigation-preload.ts", "lib/public-auth-arrival.ts",
+    "lib/view-transition.ts", "app/lazy-pages.tsx",
+  ]) {
+    for (const id of [`/repo/client/src/${file}`, `C:\\repo\\client\\src\\${file.replace(/\//g, "\\")}`]) {
+      assert.equal(shared.name(id), "public-runtime", `${file} is already required by App`);
+      assert.equal(auth.test(id), false);
+    }
+    assert.equal(shared.name(`/repo/client/src/${file.replace(/\.(tsx?)$/, ".test.$1")}`), undefined);
+  }
+  for (const file of ["pages/AuthEntry.tsx", "pages/Login.tsx", "pages/ForgotPassword.tsx", "pages/Viewer.tsx", "components/auth/AuthLink.tsx"]) {
+    assert.equal(shared.name(`/repo/client/src/${file}`), undefined, "Route and presentation modules must remain lazy");
+  }
+});
+
 test("entry theme ownership cannot pull lazy auth presentation into the landing startup", async () => {
   const config = await importViteConfigFresh();
   const groups = config.build.rollupOptions.output.codeSplitting.groups;
@@ -378,7 +399,7 @@ test("public auth runtime consolidates only login's existing helpers, shared pre
     assert.equal(chunk(`/repo/client/src/lib/${name}.ts`), "public-auth-runtime");
   }
   assert.equal(chunk("/repo/client/src/pages/auth-field-utils.ts"), "public-auth-runtime");
-  for (const name of ["auth/AuthV17Layout", "PublicAuthControls", "ExpandableMessage"]) {
+  for (const name of ["auth/AuthV17Layout", "auth/AuthError", "PublicAuthControls", "ExpandableMessage"]) {
     const id = `client/src/components/${name}.tsx`;
     assert.equal(chunk(`/repo/${id}`), "public-auth-runtime");
     assert.equal(chunk(`C:\\repo\\${id.replace(/\//g, "\\")}`), "public-auth-runtime");
