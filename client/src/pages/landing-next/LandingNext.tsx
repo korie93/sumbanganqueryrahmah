@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ComponentP
 import { ArrowRight, ArrowUp, Check, Menu, Moon, Sun, X } from "lucide-react";
 import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
 import { getAriaExpandedProps } from "@/lib/aria-state-props";
+import { AuthLink } from "@/components/auth/AuthLink";
 import { useLandingNextMotion } from "./useLandingNextMotion";
 import "./landing-next.css";
 
@@ -14,10 +15,13 @@ const NavigationContext = createContext<{
 
 function LandingNextLink({ href, onClick, ...props }: ComponentProps<"a"> & { href: string }) {
   const navigation = useContext(NavigationContext);
+  if (navigation && href === "/login") {
+    return <AuthLink {...props} to={href} kind="page" onClick={onClick}
+      onNavigate={() => navigation.onLoginClick()} />;
+  }
   return <a {...props} href={href} onClick={event => {
     onClick?.(event);
     if (!navigation || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (href === "/login") { event.preventDefault(); navigation.onLoginClick(); return; }
     if (!href.startsWith("#")) return;
     const target = [...(navigation.root.current?.querySelectorAll<HTMLElement>("[id]") ?? [])]
       .find(element => element.id === href.slice(1)) ?? (href === "#top" ? navigation.root.current : null);
@@ -121,7 +125,7 @@ export default function LandingNext({ onLoginClick }: LandingNextProps) {
   );
   return (
     <NavigationContext.Provider value={{ root, onLoginClick, paused: isPaused, closeMenu: () => motion.setMenuOpen(false) }}>
-    <div ref={root} id="top" tabIndex={-1} className={`sqr-landing-next${isPaused ? " motion-paused" : ""}`} data-theme={motion.theme}>
+    <div ref={root} id="top" lang="en" tabIndex={-1} className={`sqr-landing-next${isPaused ? " motion-paused" : ""}`} data-theme={motion.theme}>
       <Link className="skip" href="#main-content">Skip to content</Link>
       <header>
         <div className="wrap nav">

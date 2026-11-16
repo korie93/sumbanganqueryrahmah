@@ -82,12 +82,13 @@ if (allTrackedFilesResult.error) {
 
   for (const filePath of trackedFiles) {
     try {
-      const text = readFileSync(filePath, "utf8");
+      const bytes = readFileSync(filePath);
+      const text = bytes.toString("utf8");
       smtpSecretFindings.push(
         ...findPotentialCommittedSmtpSecrets({ filePath, text }),
       );
       highConfidenceSecretFindings.push(
-        ...findHighConfidenceSecretTokens({ filePath, text }),
+        ...findHighConfidenceSecretTokens({ filePath, text, bytes }),
       );
       automationKillFindings.push(
         ...findUnsafeAutomationKillPatterns({ filePath, text }),
@@ -101,7 +102,7 @@ if (allTrackedFilesResult.error) {
         );
       }
     } catch {
-      // Ignore binary or unreadable files. Hygiene scanning targets text sources only.
+      // Ignore unreadable files. Binary content is classified by the secret scanner.
     }
   }
 

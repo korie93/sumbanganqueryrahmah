@@ -273,7 +273,7 @@ for (const [label, selectors] of [
       await expect(page.getByTestId("input-username")).toBeVisible(); await expect(page.getByTestId("input-password")).toBeVisible(); await expect(page.getByTestId("button-login")).toBeVisible();
       await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
       expect(await page.evaluate(() => history.length)).toBe(historyLength); // Existing public router replaces entries.
-      await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+      await page.getByRole("link", { name: "Laman utama", exact: true }).click();
       await expect(page).toHaveURL(/\/$/); await expect(page.locator(".sqr-landing-next h1")).toHaveText("Search.Analyse.Monitor.");
     }
     await checkFixture(fixture);
@@ -418,7 +418,7 @@ test("Landing next touch controls work on a compact phone without magnetic movem
     await expect(phone.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
     await phone.locator("header .login").tap();
     await expect(phone.getByTestId("input-username")).toBeVisible();
-    await phone.getByRole("button", { name: "Laman utama", exact: true }).tap();
+    await phone.getByRole("link", { name: "Laman utama", exact: true }).tap();
     await expect(phone.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
     await checkFixture(fixture);
   } finally {
@@ -464,7 +464,7 @@ for (const [label, profile] of [
     await expect(replay.locator("img")).toHaveAttribute("src", "/landing-next/search-dark-animated.svg");
     await page.locator(".sqr-landing-next header .login").click();
     await expect(page.getByTestId("input-username")).toBeVisible();
-    await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+    await page.getByRole("link", { name: "Laman utama", exact: true }).click();
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", "dark");
     await expect(page.locator(".radar-artwork")).toHaveAttribute("src", "/landing-next/radar-animated.svg");
     expect(await page.evaluate(() => localStorage.getItem("perf_mode"))).toBe(profile.performanceMode === "auto" ? null : profile.performanceMode ?? "high");

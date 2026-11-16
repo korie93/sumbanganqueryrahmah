@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -63,6 +64,49 @@ test("read-only loopback preview serves built SPA routes and assets but rejects 
   } finally {
     if (server) await server.close();
     await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("auth cache fixture serves built assets directly without an upstream HTTP server", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "sqr-direct-built-test-"));
+  let built;
+  let bridge;
+  try {
+    await writeFile(path.join(directory, "index.html"), "<!doctype html><title>Synthetic auth</title>");
+    await mkdir(path.join(directory, "assets"));
+    await writeFile(path.join(directory, "assets/app-fixture.js"), "export const synthetic = true;");
+    built = await startVisualBuiltServer(directory);
+    assert.equal(typeof built.serve, "function");
+    await built.close();
+    bridge = createServer((request, response) => {
+      response.setHeader("Content-Security-Policy", "default-src 'self'");
+      void built.serve(request, response, { immutableAssets: true });
+    });
+    await new Promise(resolve => bridge.listen(0, "127.0.0.1", resolve));
+    const origin = `http://127.0.0.1:${bridge.address().port}`;
+    const asset = await fetch(`${origin}/assets/app-fixture.js`);
+    assert.equal(asset.status, 200);
+    assert.equal(await asset.text(), "export const synthetic = true;");
+    assert.equal(asset.headers.get("cache-control"), "public, max-age=31536000, immutable");
+    assert.equal(asset.headers.get("content-security-policy"), "default-src 'self'");
+    assert.equal(asset.headers.get("x-content-type-options"), "nosniff");
+    assert.match(asset.headers.get("content-type"), /javascript/);
+    for (const method of ["GET", "HEAD"]) {
+      const document = await fetch(`${origin}/login`, { method });
+      assert.equal(document.status, 200);
+      assert.equal(document.headers.get("cache-control"), "no-store");
+      if (method === "HEAD") assert.equal(await document.text(), "");
+      for (const route of ["/api/me", "/.env", "/assets/missing.js", "//outside.invalid/a.js", "/assets/%2e%2e%5c.env"]) {
+        const response = await fetch(origin + route, { method });
+        assert.equal(response.status, 404, route);
+        assert.equal(response.headers.get("cache-control"), "no-store");
+      }
+    }
+    assert.equal((await fetch(`${origin}/assets/app-fixture.js`, { method: "POST", body: "{}" })).status, 405);
+  } finally {
+    if (bridge) await new Promise(resolve => { bridge.close(resolve); bridge.closeAllConnections(); });
+    else if (built) await built.close();
+    await rm(directory, { recursive: true, force: true });
   }
 });
 

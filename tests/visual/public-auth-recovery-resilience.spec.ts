@@ -255,7 +255,7 @@ test("Clipboard denial leaves a truthful manual-copy instruction on a recovery r
     await page.locator('form button[type="submit"]').click();
     const reference = page.locator(".public-auth-request-reference");
     const submit = page.locator('form button[type="submit"]');
-    const alert = page.locator('.public-auth-status-card--error[role="alert"]');
+    const alert = page.locator('.auth-error[role="alert"]');
     await expect(submit).toHaveText("Cuba hantar semula");
     await expect(alert).toHaveText("Synthetic server response.");
     await expect(page.locator("#forgot-password-identifier")).toHaveValue(authV17FixtureIdentity.username);

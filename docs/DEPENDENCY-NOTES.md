@@ -8,6 +8,50 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-11-15 incoming HTTP telemetry query redaction
+
+[CI run 43684580154](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/43684580154)
+on `cbc591d3` stopped at dependency audit for the moderate HTTP instrumentation
+advisory and its inherited auto-instrumentation finding. This was a complete
+security finding, not a registry outage or an auth-transition test failure.
+
+[`GHSA-3v2p-hm54-8qcq`](https://github.com/advisories/GHSA-3v2p-hm54-8qcq)
+affects HTTP instrumentation versions >=0.204.0 and <0.222.0. The incoming span
+could contain sensitive URL query values even though outgoing spans redacted
+them. SQR resolved 0.221.0 through `auto-instrumentations-node@0.79.0`.
+
+An exact override selects `instrumentation-http@0.222.0`. Its required
+`core@2.11.0`, `instrumentation@0.222.0` and `api-logs@0.222.0` remain nested
+under that package. Only four lock records change (two updated, two added);
+the direct NodeSDK/exporter versions and application telemetry configuration
+are unchanged. Registry SHA-512 integrity was checked for all four packages.
+No lifecycle scripts were executed and the host node_modules was not modified.
+
+Regression evidence from the isolated, network-disabled Linux sandbox:
+
+- Before the update, `7cb5484f5aaa` reproduced raw synthetic Azure/AWS query
+  signatures in the incoming `url.query` attribute.
+- After the update, `4f37dfca003b` passed 94 tests: incoming query redaction,
+  lock/installed-version checks, existing HTTP/PostgreSQL/OTLP regressions and
+  dependency audit policy tests. The application still receives the original
+  request URL, while exported span attributes omit the synthetic credentials.
+- The official npm bulk advisory response captured on 2026-11-15 contains
+  the advisory for the old graph and no advisories for the patched graph.
+  The actual project audit gate also passes against that captured response
+  through an isolated loopback replay. This is not a claim that remote CI ran.
+- Final replay `91a228239798` passed the actual audit gate and offline npm
+  lock-only resolution in 7.98 seconds. No dependencies were installed. npm
+  preserved the dependency graph; its only unrelated metadata normalization
+  was the existing Zod funding string into an equivalent URL object, which
+  was intentionally not copied back into the project lockfile.
+
+The moderate-or-higher threshold, fail-closed behavior and source/integrity
+checks are retained. The new documented override is not an advisory exception.
+Remove it when a separately tested auto-instrumentation upgrade naturally
+selects the patched HTTP line. Do not claim production was exposed without
+checking whether tracing and affected span attributes were actually enabled.
+No production requests or tracing backend were inspected during this repair.
+
 ## 2026-10-31 glob and minimatch tooling security updates
 
 [CI run 41156100909](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/41156100909)
@@ -513,6 +557,7 @@ Operational notes:
 | Package | Override reason | CVE/Issue context | Safe to remove when |
 | --- | --- | --- | --- |
 | `@babel/core` | Pins the patched Babel 7 line for ESLint tooling until `eslint-plugin-react-hooks` resolves the fixed release transitively. | Local arbitrary-file-read advisory in vulnerable Babel source-map processing. | The lint toolchain resolves Babel 7.29.7 or newer without override support. |
+| `@opentelemetry/instrumentation-http` | Pins 0.222.0 for GHSA-3v2p-hm54-8qcq. | Redacts known signed URL credentials in incoming HTTP spans; core/instrumentation/api-logs dependencies are nested to preserve the existing SDK graph. | The direct auto-instrumentation dependency selects a patched HTTP version without an override and telemetry regressions pass. |
 | `gaxios` | Pins the compatible patch that removes deprecated runtime cleanup dependencies from GCP metadata detection. | Removes the unsupported `rimraf@5` to `glob@10` chain while retaining the Gaxios 7 API used by OpenTelemetry. | `gcp-metadata` depends on `gaxios` 7.1.5 or newer directly. |
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. | Query parser hardening and historical prototype-pollution class risk. | Direct and transitive Express middleware no longer resolve a vulnerable `qs` version and `npm run audit:dependencies` stays clean without the override. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. | Template injection and prototype-pollution advisory class across older lodash releases. | `npm ls lodash` shows only patched versions without override support. |

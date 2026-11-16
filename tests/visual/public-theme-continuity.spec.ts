@@ -257,19 +257,21 @@ for (const width of [320, 722, 1440]) {
           await document.fonts.ready;
           await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         });
-        const artwork = await shell.locator(".auth-v17-art").evaluate(async element => {
-          const style = getComputedStyle(element, "::before");
-          const match = /^url\(["']?([^"')]+)["']?\)$/.exec(style.backgroundImage);
-          if (!match) throw new Error("Expected the actual supplied illustration background");
-          const image = new Image();
-          image.src = match[1]!;
+        const illustration = shell.locator("img.auth-v17-signin-illustration");
+        await expect(illustration).toHaveAttribute("data-active", "true");
+        await expect(illustration).toHaveAttribute("src", imagePath!);
+        if (width < 768) await expect(illustration).toBeHidden();
+        else await expect(illustration).toBeVisible();
+        const artwork = await illustration.evaluate(async element => {
+          const image = element as HTMLImageElement;
+          const style = getComputedStyle(image);
           await image.decode();
           return {
             path: new URL(image.src).pathname, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight,
             filter: style.filter, blend: style.mixBlendMode,
             geometry: { width: style.width, height: style.height, top: style.top, right: style.right,
-              bottom: style.bottom, left: style.left, size: style.backgroundSize,
-              position: style.backgroundPosition, repeat: style.backgroundRepeat },
+              bottom: style.bottom, left: style.left, fit: style.objectFit,
+              position: style.objectPosition },
           };
         });
         expect(artwork.path).toBe(imagePath);
@@ -346,7 +348,7 @@ for (const selected of ["dark", "light"] as const) {
     await page.locator('.sqr-landing-next header a[href="/login"]').click();
     await expect(page.locator(".auth-v17-login")).toHaveAttribute("data-theme", initial);
     await expectTheme(page, initial);
-    await page.locator(".auth-v17-topline > .auth-v17-back").click();
+    await page.locator('.auth-v17-topline > a.auth-v17-back[href="/"]').click();
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", initial);
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator(".sqr-landing-next")).toHaveAttribute("data-theme", initial);
@@ -429,8 +431,8 @@ for (const width of [320, 1440]) {
     await otp.fill("123456");
     await expect(page.getByTestId("button-login")).toBeEnabled();
     await page.getByTestId("button-login").click();
-    await expect(shell.locator('.public-auth-status-card--error[role="alert"]')).toBeVisible();
-    await expectContrast(shell.locator('.public-auth-status-card--error[role="alert"]'));
+    await expect(shell.locator('.auth-error[role="alert"]')).toBeVisible();
+    await expectContrast(shell.locator('.auth-error[role="alert"] .public-auth-status-card--error'));
     await expect(otp).toHaveValue("123456");
     expect(fixture.loginCalls).toBe(1);
     expect(fixture.verificationCalls).toBe(1);

@@ -1,6 +1,7 @@
 import { lazyWithPreload } from "@/lib/lazy-with-preload";
 
 export const LandingPage = lazyWithPreload(() => import("@/pages/Landing"));
+export const AuthEntryPage = lazyWithPreload(() => import("@/pages/AuthEntry"));
 export const LoginPage = lazyWithPreload(() => import("@/pages/Login"));
 export const ForgotPasswordPage = lazyWithPreload(() => import("@/pages/ForgotPassword"));
 export const ActivateAccountPage = lazyWithPreload(() => import("@/pages/ActivateAccount"));

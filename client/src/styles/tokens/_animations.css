@@ -1,3 +1,20 @@
+/* Shared timing for the public authentication flow. */
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur-base: 260ms;
+  --dur-slow: 360ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-shell *, .auth-shell *::before, .auth-shell *::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
 /* Interaction elevation utilities */
 
 /* .no-default-hover-elevate/no-default-active-elevate is an escape hatch so consumers of
@@ -95,15 +112,15 @@
 
 /* The landing, empty-state story and small sidebar Q animate on every hardware
  * tier. Their own reduced-motion and visibility rules still control playback. */
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *),
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::before,
-.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .sidebar-q-artwork, .sidebar-q-artwork *)::after {
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *),
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *)::before,
+.low-spec *:not(.sqr-empty, .sqr-empty *, .sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *, .sidebar-q-artwork, .sidebar-q-artwork *)::after {
   animation: none !important;
 }
 
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *),
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::before,
-.low-spec *:not(.sqr-landing-next, .sqr-landing-next *)::after {
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *),
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *)::before,
+.low-spec *:not(.sqr-landing-next, .sqr-landing-next *, .auth-shell, .auth-shell *)::after {
   transition: none !important;
 }
 

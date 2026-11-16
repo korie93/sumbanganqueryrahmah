@@ -49,11 +49,18 @@ test("monthly chart Inspect fields retain generated form identities", () => {
 });
 
 test("login password visibility control has stable accessible names and pressed state", () => {
-  assert.match(loginSource, /aria-label=\{t\(showPassword \? "auth\.v17\.hidePassword" : "auth\.v17\.showPassword"\)\}/);
-  assert.match(loginSource, /getAriaPressedProps\(showPassword\)/);
-  assert.match(loginSource, /aria-controls="login-password"/);
-  assert.match(loginSource, /<EyeOff size=\{18\} aria-hidden="true" \/>/);
-  assert.match(loginSource, /<Eye size=\{18\} aria-hidden="true" \/>/);
+  const toggle = loginSource.match(/<button\b[^>]*className="login-password-toggle"[\s\S]*?<\/button>/)?.[0];
+  assert.ok(toggle, "Password visibility retains its dedicated button");
+  assert.match(toggle, /aria-label=\{t\(showPassword \? "auth\.v17\.hidePassword" : "auth\.v17\.showPassword"\)\}/);
+  assert.match(toggle, /getAriaPressedProps\(showPassword\)/);
+  assert.match(toggle, /aria-controls="login-password"/);
+  // Styling and animation attributes may change without changing the icon's accessibility.
+  for (const name of ["Eye", "EyeOff"]) {
+    const icon = toggle.match(new RegExp(`<${name}\\b[^>]*\\/>`))?.[0];
+    assert.ok(icon, `${name} remains inside the password visibility button`);
+    assert.match(icon, /\bsize=\{18\}/);
+    assert.match(icon, /\baria-hidden="true"/);
+  }
 });
 
 test("monthly comparison native quick range select keeps its visible label, selected value and disabled gate", () => {

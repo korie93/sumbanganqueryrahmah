@@ -1,10 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { AppRouteErrorBoundary } from "@/app/AppRouteErrorBoundary";
 import { applyDocumentMetadata, resolveDocumentMetadata } from "@/app/document-metadata";
 import {
   ActivateAccountPage,
+  AuthEntryPage,
   BannedPage,
-  ForgotPasswordPage,
   LandingPage,
   LoginPage,
   MaintenanceRoutePage,
@@ -19,6 +19,7 @@ import LandingRouteFallback from "@/pages/LandingRouteFallback";
 import { usePublicAppState } from "@/app/usePublicAppState";
 import { resolveAuthenticatedRoleHomePage } from "@/app/role-home-page";
 import { SQR_BRAND_ASSETS } from "@shared/brand-assets";
+import { getPreloadedAuthEntry, getPreloadedLanding } from "@/lib/auth-navigation-preload";
 
 // Public routes must not download the protected app or this authenticated gate.
 const SingleActiveTabGate = lazy(() => import("@/components/auth/SingleActiveTabGate"));
@@ -73,6 +74,11 @@ function AppContent() {
     user,
   } = usePublicAppState();
   const lastActivatedAccountScope = useRef("");
+  const isAuthFamily = !user && !["home", "maintenance", "not-found", "banned", "activate-account", "reset-password"].includes(currentPage);
+  // Keep the chosen component type stable until the entire auth family exits.
+  const PublicAuthEntry = useMemo(() => getPreloadedAuthEntry() ?? AuthEntryPage, [isAuthFamily]);
+  const isLandingFamily = !user && currentPage === "home";
+  const PublicLanding = useMemo(() => getPreloadedLanding() ?? LandingPage, [isLandingFamily]);
 
   const validateBeforeActivation = useCallback(async (signal: AbortSignal) => {
     const { validateTabSession } = await import("@/app/single-tab-session-validation");
@@ -103,7 +109,9 @@ function AppContent() {
     return true;
   }, [handleRejectedTabSession, handleVerifiedAccountChanged, handleVerifiedSession, user?.id]);
 
-  useEffect(() => {
+  // Commit the inherited language before first paint, so the new route does
+  // not need a second complete style pass after its initial layout.
+  useLayoutEffect(() => {
     applyDocumentMetadata(
       resolveDocumentMetadata({
         currentPage,
@@ -191,7 +199,7 @@ function AppContent() {
           {readySignal}
           {renderRoutePage(
             "home",
-            <LandingPage onLoginClick={() => handlePublicNavigate("login")} />,
+            <PublicLanding onLoginClick={() => handlePublicNavigate("login")} />,
             true,
             <LandingRouteFallback onLoginClick={() => handlePublicNavigate("login")} />,
           )}
@@ -215,9 +223,13 @@ function AppContent() {
           {renderRoutePage(
             "forgot-password",
             (
-              <ForgotPasswordPage
+              <PublicAuthEntry
+                page="forgot-password"
                 onBackToHome={() => handlePublicNavigate("home")}
                 onBackToLogin={() => handlePublicNavigate("login")}
+                onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
+                onBanned={handleBannedSessionDetected}
+                onLoginSuccess={handleLoginSuccess}
               />
             ),
           )}
@@ -261,10 +273,12 @@ function AppContent() {
         {renderRoutePage(
           "login",
           (
-            <LoginPage
+            <PublicAuthEntry
+              page="login"
               onBanned={handleBannedSessionDetected}
               onForgotPasswordClick={() => handlePublicNavigate("forgot-password")}
-              onLandingClick={() => handlePublicNavigate("home")}
+              onBackToHome={() => handlePublicNavigate("home")}
+              onBackToLogin={() => handlePublicNavigate("login")}
               onLoginSuccess={handleLoginSuccess}
             />
           ),

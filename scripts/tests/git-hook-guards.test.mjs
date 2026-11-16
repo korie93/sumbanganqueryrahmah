@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   findGenericSecretAssignments,
@@ -67,6 +70,72 @@ test("pre-commit guard detects high-confidence and generic secret patterns", () 
   assert.match(findings[1], /private key/i);
   assert.match(findings[2], /api_key/i);
   assert.match(findings[3], /password/i);
+});
+
+test("pre-commit guard accepts the CI PNG without exempting binary secrets or forbidden paths", () => {
+  const filePath = "tests/visual/__snapshots__/app.visual.spec.ts/login-dark.png";
+  const bytes = readFileSync(filePath);
+  assert.deepEqual(findPreCommitSecretFindings({ files: [{ filePath, bytes }] }), []);
+  const token = "ghp_" + "a".repeat(36);
+  const tainted = Buffer.concat([bytes, Buffer.from(`\n${token}\nPASSWORD=real-service-value\n`)]);
+  const findings = findPreCommitSecretFindings({ files: [{ filePath, bytes: tainted }] });
+  assert.equal(findings.length, 2);
+  assert.match(findings[0], /GitHub token/);
+  assert.match(findings[1], /secret assignment/);
+  for (const forbidden of [".env.local", "secrets/image.png", "image.pem"]) {
+    assert.equal(findPreCommitSecretFindings({ files: [{ filePath: forbidden, bytes }] }).length, 1);
+  }
+  const masked = Buffer.from("*".repeat(6));
+  assert.match(findPreCommitSecretFindings({ files: [{ filePath, bytes: masked }] })[0], /masked secret placeholder/);
+});
+
+test("hygiene and both pre-commit modes classify real PNG bytes but still reject text and tokens", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "sqr-secret-scan-"));
+  const git = process.platform === "win32" ? "git.exe" : "git";
+  const run = (command, args) => spawnSync(command, args, { cwd: root, encoding: "utf8", timeout: 15_000 });
+  const gitOk = (args) => {
+    const result = run(git, args);
+    assert.equal(result.status, 0, result.error?.message || result.stderr);
+  };
+  const checks = [
+    ["verify-repo-hygiene.mjs"], ["verify-secret-scan.mjs"],
+    ["precommit-secret-guard.mjs", "--staged"], ["precommit-secret-guard.mjs", "--files", "image.png"],
+  ];
+  const assertChecks = (status, pattern) => {
+    for (const [script, ...args] of checks) {
+      const result = run(process.execPath, [path.resolve("scripts", script), ...args]);
+      assert.equal(result.status, status, `${script} ${args.join(" ")}: ${result.error?.message || result.stderr}`);
+      if (pattern) assert.match(result.stderr, pattern);
+    }
+  };
+  try {
+    gitOk(["init", "--quiet"]);
+    writeFileSync(path.join(root, ".gitignore"), readFileSync(".gitignore"));
+    writeFileSync(path.join(root, ".env.example"), "# Synthetic test template\n");
+    const image = readFileSync("tests/visual/__snapshots__/app.visual.spec.ts/login-dark.png");
+    writeFileSync(path.join(root, "image.png"), image);
+    gitOk(["add", "--", ".gitignore", ".env.example", "image.png"]);
+    assertChecks(0);
+
+    // A filename extension is not an exemption for a text secret.
+    writeFileSync(path.join(root, "image.png"), "*".repeat(6));
+    gitOk(["add", "--", "image.png"]);
+    assertChecks(1, /masked secret placeholder/);
+
+    // A binary prefix cannot hide a real provider token from any entry point.
+    const token = "ghp_" + "a".repeat(36);
+    writeFileSync(path.join(root, "image.png"), Buffer.concat([image, Buffer.from(`\n${token}\n`)]));
+    gitOk(["add", "--", "image.png"]);
+    assertChecks(1, /GitHub token/);
+
+    // --staged reads the index, not the now-clean working tree.
+    writeFileSync(path.join(root, "image.png"), image);
+    const staged = run(process.execPath, [path.resolve("scripts/precommit-secret-guard.mjs"), "--staged"]);
+    assert.equal(staged.status, 1);
+    assert.match(staged.stderr, /GitHub token/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("generic secret detection allows placeholders and secret-manager references", () => {

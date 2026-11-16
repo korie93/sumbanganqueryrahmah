@@ -94,10 +94,14 @@ async function checkLayoutAndAccessibility(page: Page, width: number) {
   expect(box).toBeTruthy();
   expect(box!.width).toBeGreaterThanOrEqual(44);
   expect(box!.height).toBeGreaterThanOrEqual(44);
-  const back = await page.locator(".auth-v17-topline > .auth-v17-back").boundingBox();
+  const back = await page.locator('.auth-v17-topline > a.auth-v17-back[href="/"]').boundingBox();
   const languages = await page.locator(".auth-v17-lang").boundingBox();
   expect(back && languages).toBeTruthy();
-  expect(box!.x).toBeGreaterThanOrEqual(back!.x + back!.width);
+  if (width < 380) {
+    expect(box!.y, "Narrow toolbar wraps below the full-width back link").toBeGreaterThanOrEqual(back!.y + back!.height);
+  } else {
+    expect(box!.x).toBeGreaterThanOrEqual(back!.x + back!.width);
+  }
   expect(box!.x + box!.width).toBeLessThanOrEqual(languages!.x + 1);
   expect(languages!.x + languages!.width).toBeLessThanOrEqual(width);
   await page.evaluate(axeSource);
@@ -157,7 +161,9 @@ for (const theme of ["light", "dark"] as const) {
     let releaseRequest: (() => void) | undefined;
     try {
       await page.goto("/login", { waitUntil: "domcontentloaded" });
-      await page.getByRole("button", { name: "Lupa kata laluan?", exact: true }).click();
+      const forgotPassword = page.getByRole("link", { name: "Lupa kata laluan?", exact: true });
+      await expect(forgotPassword).toHaveAttribute("href", "/forgot-password");
+      await forgotPassword.click();
       await expectTheme(page, theme, ".auth-v17-forgot");
       for (const width of [320, 1440]) {
         await checkLayoutAndAccessibility(page, width);
@@ -208,7 +214,9 @@ for (const theme of ["light", "dark"] as const) {
       await expect(alert).toBeVisible();
       await expect(identifier).toHaveValue(authV17FixtureIdentity.username);
       expect(fixture.state.counts.forgot).toBe(2);
-      await page.getByRole("button", { name: "Kembali ke log masuk", exact: true }).click();
+      const backToLogin = page.getByRole("link", { name: "Kembali ke log masuk", exact: true });
+      await expect(backToLogin).toHaveAttribute("href", "/login");
+      await backToLogin.click();
       await expectTheme(page, opposite(theme), ".auth-v17-login");
       await page.reload({ waitUntil: "domcontentloaded" });
       await expectTheme(page, opposite(theme), ".auth-v17-login");

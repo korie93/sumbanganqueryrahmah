@@ -4,6 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import postcss from "postcss";
 import { readThemeTokenSource } from "../lib/theme-token-source.test-helper";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +55,37 @@ test("public authentication routes do not warm the authenticated shell before lo
   assert.doesNotMatch(authenticatedEntrySource, /AuthenticatedAppShell\.preload\s*\(/);
 });
 
+test("route document metadata is committed before the new page's first style and paint", () => {
+  const source = readClientSource("../App.tsx");
+  const file = ts.createSourceFile("App.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let metadataEffect: ts.CallExpression | undefined;
+  const visit = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
+      && ["useEffect", "useLayoutEffect"].includes(node.expression.text)
+      && node.arguments[0]?.getText(file).includes("applyDocumentMetadata(")) metadataEffect = node;
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  assert.ok(metadataEffect, "Route metadata must remain synchronized with the current page");
+  assert.equal(metadataEffect.expression.getText(file), "useLayoutEffect",
+    "Changing the inherited document language after paint invalidates the new page's complete style tree again");
+});
+
+test("native auth snapshot selectors are restricted to the active document root", () => {
+  const stylesheet = postcss.parse(readClientSource("../components/auth/auth-view-transitions.css"));
+  const names = new Set<string>();
+  stylesheet.walkRules(rule => {
+    for (const selector of rule.selectors) {
+      const snapshot = selector.match(/::view-transition-(group|old|new)\(auth-form\)$/);
+      if (!snapshot) continue;
+      names.add(snapshot[1]!);
+      assert.ok(selector.startsWith('html[data-vt="auth"]::'),
+        "Document-only snapshot styles must not be attempted for every ordinary landing element");
+    }
+  });
+  assert.deepEqual([...names].sort(), ["group", "new", "old"], "Keep all three native form snapshot rules");
+});
+
 test("login shell avoids persistent compositor hints on large decorative layers", () => {
   const loginCss = readClientSource("../components/auth/AuthV17Layout.css");
 
@@ -62,18 +94,25 @@ test("login shell avoids persistent compositor hints on large decorative layers"
   assert.doesNotMatch(readFirstCssRuleBlock(loginCss, ".auth-v17-view"), /will-change:/);
 });
 
-test("forgot password route uses lightweight auth chrome without eager recovery preloading", () => {
+test("forgot password route uses persistent lightweight artwork without eager recovery module preloading", () => {
   const appSource = readClientSource("../App.tsx");
   const forgotPasswordSource = readClientSource("../pages/ForgotPassword.tsx");
   const publicAuthCss = readClientSource("../components/auth/AuthV17Layout.css");
+  const shellSource = readClientSource("../components/auth/AuthV17Layout.tsx");
+  const artworkCss = readClientSource("../components/auth/AuthBrandArtwork.css");
 
   assert.doesNotMatch(appSource, /ForgotPasswordPage\.preload\s*\(/);
   assert.match(forgotPasswordSource, /<AuthV17Layout/);
-  assert.match(publicAuthCss, /\.auth-v17\s*\{[^}]*--auth-illustration:\s*url\("\.\.\/\.\.\/assets\/auth-v17\/sqr-illustration\.webp"\)/);
-  assert.match(publicAuthCss, /\.auth-v17-art::before\s*\{[^}]*background:\s*var\(--auth-illustration\)/);
+  assert.match(shellSource, /<AuthBrandArtwork theme=\{surfaceTheme\} recoveryArtwork=\{recoveryArtwork\}/);
+  assert.doesNotMatch(publicAuthCss, /--auth-illustration|\.auth-v17-art::before/);
   // Neither standard nor minimal auth chrome should allocate a filtered backdrop.
   assert.doesNotMatch(publicAuthCss, /backdrop-filter:\s*(?:blur|saturate)\(/);
-  assert.doesNotMatch(publicAuthCss, /animation:[^;]*infinite|will-change:\s*(?:transform|opacity)/);
+  assert.doesNotMatch(publicAuthCss, /will-change:\s*(?:transform|opacity)/);
+  // A submit-only progress spinner is functional; decorative chrome stays idle.
+  for (const selector of [".auth-v17-brand-panel", ".auth-v17-art", ".auth-v17-view", ".auth-v17-help"]) {
+    assert.doesNotMatch(readFirstCssRuleBlock(publicAuthCss, selector), /animation:[^;]*infinite/);
+  }
+  assert.doesNotMatch(artworkCss, /will-change|backdrop-filter|animation:[^;]*infinite/);
   assert.match(readFirstCssRuleBlock(publicAuthCss, ".auth-v17-view"), /background:\s*transparent;/);
 });
 
@@ -117,7 +156,7 @@ test("login page exposes real labels and a stable primary heading", () => {
   const otpSource = readClientSource("../components/auth/AuthOtpInput.tsx");
 
   assert.match(loginSource, /<AuthV17Layout/);
-  assert.match(authLayout, /<h1 id="auth-v17-title">\{title\}<\/h1>/);
+  assert.match(authLayout, /<h1 id="auth-v17-title" ref=\{titleRef\} tabIndex=\{-1\}>\{title\}<\/h1>/);
   assert.equal((authLayout.match(/<h1\b/g) ?? []).length, 1);
   assert.match(loginSource, /<label htmlFor="login-username" className="public-auth-field-label/);
   assert.match(loginSource, /<label htmlFor="login-password" className="public-auth-field-label/);

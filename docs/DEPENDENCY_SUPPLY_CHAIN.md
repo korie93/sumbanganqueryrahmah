@@ -140,6 +140,7 @@ Current overrides:
 | Package | Reason |
 | --- | --- |
 | `@babel/core` | Pins the patched Babel 7 line for ESLint tooling until `eslint-plugin-react-hooks` resolves the fixed release transitively. |
+| `@opentelemetry/instrumentation-http` | Pins 0.222.0 for incoming query redaction (GHSA-3v2p-hm54-8qcq). Remove after the direct auto-instrumentation dependency selects a patched HTTP package without an override. |
 | `gaxios` | Pins the compatible patch that removes deprecated runtime cleanup dependencies from GCP metadata detection. |
 | `qs` | Pins patched query-string parsing behavior for transitive Express middleware until all upstream packages converge. |
 | `lodash` | Pins patched lodash template handling for transitive consumers and keeps npm audit clean across nested packages. |

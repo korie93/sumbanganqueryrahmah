@@ -260,11 +260,13 @@ test("Reset art stays decorative in invalid, retry and success states without ch
 async function expectForgotIllustration(page: Page, theme: Theme) {
   await expect(page.locator(".auth-v17")).toHaveClass(/(?:^|\s)auth-v17-recovery-artwork(?:\s|$)/);
   await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-  const art = page.locator(".auth-v17-art.auth-v17-art--recovery");
+  const art = page.locator(".auth-v17-art.auth-brand-artwork");
   const image = page.locator("img.auth-v17-recovery-illustration");
   await expect(art).toHaveAttribute("aria-hidden", "true");
   await expect(image).toHaveCount(1);
-  await expect(image).toBeVisible();
+  const compact = page.viewportSize()!.width < 768;
+  if (compact) await expect(art).toBeHidden();
+  else await expect(image).toBeVisible();
   await expect(image).toHaveAttribute("src", imagePaths[theme]);
   await expect(image).toHaveAttribute("alt", "");
   await expect(image).toHaveAttribute("aria-hidden", "true");
@@ -282,8 +284,12 @@ async function expectForgotIllustration(page: Page, theme: Theme) {
   expect(imageState.source).toBe(imagePaths[theme]);
   expect(imageState.naturalRatio).toBe(1);
   expect(imageState.objectFit).toBe("contain");
-  expect(imageState.width).toBeGreaterThan(0);
-  expect(imageState.height).toBeGreaterThan(0);
+  await expect(image).toHaveAttribute("data-active", "true");
+  await expect(art.locator(".auth-v17-signin-illustration")).toHaveAttribute("data-active", "false");
+  if (!compact) {
+    expect(imageState.width).toBeGreaterThan(0);
+    expect(imageState.height).toBeGreaterThan(0);
+  }
   expect(imageState.tabIndex, "Decorative art adds no keyboard stop").toBe(-1);
   const oldArtHidden = await art.evaluate(element => {
     const pseudo = getComputedStyle(element, "::before");
@@ -371,7 +377,7 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       const before = fixture.state.counts.forgot;
       await page.locator('form button[type="submit"]').click();
       const status = page.locator('.public-auth-status-card--success[role="status"]');
-      await expect(status).toBeFocused();
+      await expect(page.getByRole("heading", { name: "Permintaan diterima", exact: true })).toBeFocused();
       await expect(status).toContainText("Jika akaun wujud");
       await expect(status).toContainText("permintaan anda telah dihantar untuk semakan");
       await expect(page.getByRole("heading", { name: "Permintaan diterima", exact: true })).toBeVisible();
@@ -401,21 +407,21 @@ test("Forgot request confirmation retains themed illustration and generic workfl
       expect(fixture.state.counts.forgot).toBe(before + 1);
 
       await page.locator('form button[type="submit"]').click();
-      await expect(status).toBeFocused();
+      await expect(page.getByRole("heading", { name: "Request received", exact: true })).toBeFocused();
       expect(fixture.state.counts.forgot).toBe(before + 2);
-      const backToLogin = page.getByRole("button", { name: "Back to sign in", exact: true });
-      await expect(backToLogin).toHaveAttribute("type", "button");
+      const backToLogin = page.getByRole("link", { name: "Back to sign in", exact: true });
+      await expect(backToLogin).toHaveAttribute("href", "/login");
       await backToLogin.focus();
       await backToLogin.press("Enter");
       await expect(page.locator(".auth-v17-login")).toBeVisible();
       await expect(page.locator(".auth-v17")).not.toHaveClass(/(?:^|\s)auth-v17-recovery-artwork(?:\s|$)/);
-      await expect(page.locator(".auth-v17-recovery-illustration")).toHaveCount(0);
+      await expect(page.locator(".auth-v17-recovery-illustration")).toHaveAttribute("data-active", "false");
       const loginArt = page.locator(".auth-v17-art");
       await expect(loginArt).toHaveCount(1);
-      expect(await loginArt.evaluate(element => {
-        const style = getComputedStyle(element, "::before");
-        return style.display !== "none" && style.content !== "none" && style.backgroundImage !== "none";
-      }), "Login retains its original artwork").toBe(true);
+      const signinImage = loginArt.locator(".auth-v17-signin-illustration");
+      await expect(signinImage).toHaveAttribute("data-active", "true");
+      if (width < 768) await expect(loginArt).toBeHidden();
+      else await expect(signinImage).toBeVisible();
       expect(fixture.state.counts.login).toBe(0);
       expect(fixture.state.counts.forgot).toBe(before + 2);
     }

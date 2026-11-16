@@ -547,6 +547,9 @@ for (const theme of visualThemes) {
 
 async function installMockPublicApi(page: Page) {
   // Public snapshots never need a live session or backend state.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+  });
   await page.route("**/api/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
     if (pathname === "/api/health/connectivity" && route.request().method() === "GET") return route.fulfill({

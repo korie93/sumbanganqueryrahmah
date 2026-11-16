@@ -276,7 +276,7 @@ for (const theme of ["light", "dark"] as const) {
       await metadata(page);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
       await page.screenshot({ path: testInfo.outputPath(`login-${theme}-${width}.png`), fullPage: true });
-      await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+      await page.getByRole("link", { name: "Laman utama", exact: true }).click();
       await expect(brand).toBeVisible();
       await metadata(page);
     }

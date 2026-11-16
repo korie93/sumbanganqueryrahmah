@@ -142,7 +142,7 @@ test("favicon status grey PNG works offline under application CSP and survives S
     if (message.type() === "error" && /content security policy|violates.*directive/i.test(message.text())) cspErrors.push(message.text());
   });
   const f = await fixture(page, baseURL!);
-  await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+  await page.getByRole("link", { name: "Laman utama", exact: true }).click();
   const brand = page.getByRole("banner").getByRole("link", { name: "SQR", exact: true });
   await expect(brand).toBeVisible();
   const login = page.getByRole("navigation", { name: "Main", exact: true }).getByRole("link", { name: "Log in", exact: true });
@@ -158,7 +158,7 @@ test("favicon status grey PNG works offline under application CSP and survives S
     await img.decode(); return [img.naturalWidth, img.naturalHeight];
   });
   expect(decoded).toEqual([32, 32]);
-  await page.getByRole("button", { name: "Laman utama", exact: true }).click();
+  await page.getByRole("link", { name: "Laman utama", exact: true }).click();
   await expect(brand).toBeVisible();
   await checkLinks(page, "offline");
   await page.clock.fastForward(40_100);
