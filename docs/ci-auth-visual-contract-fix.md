@@ -86,3 +86,35 @@ SHA-256 `8f762976cf7e1a9c7fb1b802438cea57641a32a6454aa12019f829694b9e618d`.
 Semakan khusus mengesahkan signature PNG, CRC setiap chunk dan hanya IHDR/IDAT/IEND
 (tiada metadata teks). Dua dapatan palsu sahaja diterima untuk hash tepat ini;
 guard asal tidak diubah dan fail staged lain tetap melalui pengimbas asal.
+
+## Susulan: kegagalan repo hygiene pada 0656a802
+
+Run `43809716593` gagal di **Verify repo hygiene**, sebelum smoke UI bermula.
+Semakan manual PNG di atas hanya menyelesaikan commit lokal; pengimbas CI masih
+menganggap semua fail ialah teks UTF-8. `readFileSync(..., "utf8")` tidak melemparkan
+ralat untuk imej: bait tidak sah diganti, manakala urutan asterisk termampat kekal.
+Ini menghasilkan dua padanan palsu pada PNG yang sama.
+
+Pembetulan kekal kini menghantar bait asal daripada repo hygiene, secret scan dan
+kedua-dua mod pre-commit kepada pengimbas bersama. Kandungan dengan NUL atau UTF-8
+tidak sah dikelaskan sebagai binari. Hanya heuristik masked placeholder yang
+bersifat teks dikecualikan bagi binari; pengesanan token penyedia, private-key
+marker, assignment rahsia dan larangan path kekal. Teks yang dinamakan `.png`
+masih ditolak. Tiada allowlist nama fail/hash atau pengecualian screenshot diperlukan.
+
+Bukti pengesahan susulan (Node 24 dalam sandbox terasing, data rekaan):
+
+- Regresi menggunakan PNG sebenar gagal sebelum pembetulan dengan dua dapatan CI
+  yang sama: `auth-smooth-tests-a43fe487942b`.
+- 25/25 ujian lulus: `auth-smooth-tests-6b2db672364c`. Ini termasuk arahan CLI
+  repo hygiene, secret scan, pre-commit `--files` dan `--staged` pada repo Git
+  sementara; semua menerima PNG dan menolak masked text serta token rekaan.
+  Ujian juga memastikan `--staged` membaca index walaupun working tree sudah bersih.
+- `npm run verify:repo-hygiene` dan `npm run verify:secrets` lulus untuk semua
+  4,074 fail tracked: `auth-smooth-tests-c94df255dd51`. Snapshot sumber read-only
+  menggunakan inventori tracked sebenar dan index Git scratch terasing tanpa
+  metadata/kredensial Git host. Tiada pengecualian manual PNG digunakan.
+
+Perubahan terhad kepada skrip pemeriksaan dan ujian. UI/PNG, backend, dependency
+dan workflow CI tidak berubah. Pipeline remote penuh masih perlu dijalankan pada
+commit pembetulan ini.

@@ -23,10 +23,10 @@ const trackedFiles = trackedFilesResult.stdout
 
 for (const filePath of trackedFiles) {
   try {
-    const text = readFileSync(filePath, "utf8");
-    findings.push(...findHighConfidenceSecretTokens({ filePath, text }));
+    const bytes = readFileSync(filePath);
+    findings.push(...findHighConfidenceSecretTokens({ filePath, bytes }));
   } catch {
-    // Ignore binary or unreadable files. Secret scanning targets tracked text sources.
+    // Ignore unreadable files. Binary content is classified by the secret scanner.
   }
 }
 

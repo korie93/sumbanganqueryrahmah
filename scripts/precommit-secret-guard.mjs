@@ -7,9 +7,9 @@ const args = process.argv.slice(2);
 const filesModeIndex = args.indexOf("--files");
 const stagedMode = args.includes("--staged") || filesModeIndex < 0;
 
-function runGit(argsForGit) {
+function runGit(argsForGit, encoding = "utf8") {
   return spawnSync(gitCommand, argsForGit, {
-    encoding: "utf8",
+    encoding,
     maxBuffer: 8 * 1024 * 1024,
   });
 }
@@ -29,8 +29,8 @@ function readStagedFilePaths() {
     .filter(Boolean);
 }
 
-function readStagedFileText(filePath) {
-  const result = runGit(["show", `:${filePath}`]);
+function readStagedFileBytes(filePath) {
+  const result = runGit(["show", `:${filePath}`], null);
   if (result.status !== 0 || result.error) {
     return "";
   }
@@ -38,13 +38,13 @@ function readStagedFileText(filePath) {
   return result.stdout;
 }
 
-function readWorkingTreeFileText(filePath) {
+function readWorkingTreeFileBytes(filePath) {
   if (!existsSync(filePath)) {
     return "";
   }
 
   try {
-    return readFileSync(filePath, "utf8");
+    return readFileSync(filePath);
   } catch {
     return "";
   }
@@ -56,7 +56,7 @@ const filePaths = stagedMode
 
 const files = filePaths.map((filePath) => ({
   filePath,
-  text: stagedMode ? readStagedFileText(filePath) : readWorkingTreeFileText(filePath),
+  bytes: stagedMode ? readStagedFileBytes(filePath) : readWorkingTreeFileBytes(filePath),
 }));
 const findings = findPreCommitSecretFindings({ files });
 

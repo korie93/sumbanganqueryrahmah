@@ -121,8 +121,8 @@ export function findPreCommitSecretFindings({ files }) {
       findings.push(`${filePath} is private key/secret material and must not be committed.`);
     }
 
-    const text = String(file.text || "");
-    findings.push(...findHighConfidenceSecretTokens({ filePath, text }));
+    const text = file.bytes ? file.bytes.toString("utf8") : String(file.text || "");
+    findings.push(...findHighConfidenceSecretTokens({ filePath, text, bytes: file.bytes }));
     findings.push(...findGenericSecretAssignments({ filePath, text }));
   }
 

@@ -1,3 +1,5 @@
+import { isUtf8 } from "node:buffer";
+
 const ALLOWED_SECRET_VALUE_PATTERNS = [
   /^$/,
   /^null$/i,
@@ -98,6 +100,7 @@ const HIGH_CONFIDENCE_SECRET_TOKEN_RULES = [
   {
     label: "masked secret placeholder",
     regex: /\*{6,}/g,
+    textOnly: true,
   },
 ];
 
@@ -217,13 +220,20 @@ export function findUnsafeAutomationKillPatterns(params) {
 
 export function findHighConfidenceSecretTokens(params) {
   const filePath = String(params?.filePath || "");
-  const text = String(params?.text || "");
+  const bytes = params?.bytes;
+  const text = bytes ? bytes.toString("utf8") : String(params?.text || "");
+  // UTF-8 decoding replaces invalid bytes instead of throwing. Classify the
+  // original bytes, not the extension: renamed text must still be scanned.
+  const binary = bytes && (bytes.includes(0) || !isUtf8(bytes));
   const findings = [];
   const lines = text.split(/\r?\n/);
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     for (const rule of HIGH_CONFIDENCE_SECRET_TOKEN_RULES) {
+      // Random compressed bytes are not masked prose. Provider tokens and
+      // private-key markers are still checked, including inside binary files.
+      if (binary && rule.textOnly) continue;
       rule.regex.lastIndex = 0;
       if (rule.regex.test(line)) {
         findings.push(`${filePath}:${index + 1} potential committed ${rule.label}`);

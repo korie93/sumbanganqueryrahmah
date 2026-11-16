@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   findForbiddenTypeScriptTypeSafetyPatterns,
   findHighConfidenceSecretTokens,
@@ -110,6 +111,30 @@ test("repo hygiene flags masked secret placeholders", () => {
 
   assert.equal(findings.length, 1);
   assert.match(findings[0], /masked secret placeholder/i);
+});
+
+test("secret scanning does not interpret compressed PNG bytes as masked text", () => {
+  const filePath = "tests/visual/__snapshots__/app.visual.spec.ts/login-dark.png";
+  const bytes = readFileSync(filePath);
+  assert.ok(bytes.includes(Buffer.from("*".repeat(6))), "Reproduce the exact CI false positive");
+  assert.deepEqual(findHighConfidenceSecretTokens({ filePath, bytes, text: bytes.toString("utf8") }), []);
+});
+
+test("masked text remains blocked even when renamed to a PNG", () => {
+  const bytes = Buffer.from("*".repeat(6));
+  assert.match(findHighConfidenceSecretTokens({ filePath: "image.png", bytes })[0], /masked secret placeholder/);
+});
+
+test("provider tokens and private keys remain detectable inside binary content", () => {
+  const token = "ghp_" + "a".repeat(36);
+  const privateKey = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
+  for (const prefix of [Buffer.from([0]), Buffer.from([255, 254])]) {
+    const bytes = Buffer.concat([prefix, Buffer.from(`\n${token}\n${privateKey}\n`)]);
+    const findings = findHighConfidenceSecretTokens({ filePath: "image.png", bytes });
+    assert.equal(findings.length, 2);
+    assert.match(findings[0], /GitHub token/);
+    assert.match(findings[1], /private key block/);
+  }
 });
 
 test("repo hygiene allows generated CI placeholders during secret scanning", () => {
