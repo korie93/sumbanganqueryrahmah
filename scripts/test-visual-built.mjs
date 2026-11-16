@@ -64,14 +64,17 @@ export async function startVisualBuiltServer(publicDirectory) {
   const indexFile = await realpath(path.join(root, "index.html"));
   const inside = (file) => file.startsWith(`${root}${path.sep}`);
   assert.ok(inside(indexFile) && (await stat(indexFile)).isFile(), "Built index must be a file inside the public directory");
-  const server = createServer(async (request, response) => {
+  // Fixtures can reuse this handler directly instead of proxying request URLs
+  // through another HTTP client. Files remain confined to the same public root.
+  const serve = async (request, response, { immutableAssets = false } = {}) => {
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     if (!["GET", "HEAD"].includes(request.method)) return void response.writeHead(405).end();
     try {
+      if (!request.url.startsWith("/") || request.url.startsWith("//")) return void response.writeHead(404).end();
       const pathname = decodeURIComponent(new URL(request.url, "http://fixture.invalid").pathname);
       const segments = pathname.split("/");
-      if (pathname.includes("\\") || pathname.includes("\0") || segments.some((part) => part.startsWith("."))
+      if (pathname.startsWith("//") || pathname.includes("\\") || pathname.includes("\0") || segments.some((part) => part.startsWith("."))
         || ["/api", "/internal", "/ws", "/socket.io"].some((namespace) => isRequestNamespace(pathname, namespace))) {
         return void response.writeHead(404).end();
       }
@@ -86,17 +89,22 @@ export async function startVisualBuiltServer(publicDirectory) {
       // Match the production shell: an unknown SPA document still renders the
       // app, but must retain HTTP 404 rather than conceal failures in CI tests.
       const status = extension || (isKnownAppDocumentPath(pathname) && pathname.toLowerCase() !== "/404") ? 200 : 404;
+      if (immutableAssets && status === 200 && /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|webp)$/.test(pathname)) {
+        response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
       response.writeHead(status).end(request.method === "HEAD" ? undefined : await readFile(resolved));
     } catch {
       response.writeHead(404).end();
     }
-  });
+  };
+  const server = createServer(serve);
   server.on("upgrade", (_request, socket) => socket.destroy());
   await new Promise((resolve, reject) => {
     server.once("error", reject);
     server.listen(0, "127.0.0.1", resolve);
   });
   return {
+    serve,
     origin: `http://127.0.0.1:${server.address().port}`,
     close: () => new Promise((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());

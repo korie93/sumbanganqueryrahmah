@@ -118,3 +118,38 @@ Bukti pengesahan susulan (Node 24 dalam sandbox terasing, data rekaan):
 Perubahan terhad kepada skrip pemeriksaan dan ujian. UI/PNG, backend, dependency
 dan workflow CI tidak berubah. Pipeline remote penuh masih perlu dijalankan pada
 commit pembetulan ini.
+
+## Susulan CodeQL pada 520a4da5
+
+CI `43847414936` dan CodeQL `43847414584` kedua-duanya lulus. Namun API Code
+scanning bagi branch ini masih mengandungi 40 amaran terbuka: 3 SSRF, 22 missing
+rate limiting, 12 bad HTML filter, 2 incomplete sanitization dan 1 regex injection.
+Status job lulus tidak bermakna semua amaran itu selesai.
+
+Amaran terbaru [#82](https://github.com/korie93/sumbanganqueryrahmah/security/code-scanning/82)
+menunjuk `fetch(upstream)` dalam fixture cold-start auth. Kod terdahulu sudah
+mengesahkan origin dan menolak redirect; belum ada bukti eksploit production.
+Walau bagaimanapun, permintaan keluar itu tidak diperlukan. Fixture kini menggunakan
+handler `serve` daripada penyaji build secara langsung, tanpa membina atau
+mengambil URL upstream daripada permintaan masuk. Handler yang sama mengekalkan
+sempadan direktori, penolakan API/dotfile, GET/HEAD sahaja dan status dokumen.
+Immutable cache hanya diaktifkan untuk aset yang berjaya, dengan CSP asal dikekalkan.
+Pendekatan ini menghapuskan sink HTTP dalam aliran #82, bukan menyembunyikan query
+atau mengecualikan direktori ujian daripada CodeQL.
+
+Bukti:
+
+- Regresi direct-serving gagal sebelum pembetulan: `auth-smooth-tests-a14db92b4a73`.
+- 14/14 ujian penyaji build dan fixture auth lulus: `auth-smooth-tests-66ea3680f502`.
+  Ujian menutup pelayan upstream sebelum meminta aset melalui handler langsung,
+  kemudian mengesahkan cache, CSP, MIME, HEAD dan penolakan path/mutasi.
+- Build frontend lulus: `auth-smooth-build-c5be7c817054`.
+- Browser auth V17 penuh lulus: `auth-smooth-tests-e168bf717424`,
+  `AUTH_V17_BUILT_PASS (38 checks)`, termasuk cache/preload, MFA, recovery dan CSP.
+
+Baki 39 amaran belum dibaiki atau ditutup dalam perubahan terfokus ini. Sebahagian
+regex berada dalam assertion/normalisasi ujian, manakala laluan AI dipasang selepas
+middleware rate limit global. Itu bukti konteks awal, bukan pengesahan semua
+amaran tersebut palsu. Dua fixture SSRF lama (#70/#71) juga masih memerlukan
+semakan berasingan. CodeQL CLI tidak tersedia lokal; penutupan #82 mesti disahkan
+oleh analisis GitHub selepas push. Tiada perubahan backend, permission atau UI.

@@ -206,18 +206,11 @@ async function verifyLoginResourceHints() {
             "Content-Type": json !== undefined ? "application/json" : contentType ?? "text/plain" })
             .end(json !== undefined ? JSON.stringify(json) : body);
         },
-        continue: async () => {
-          const upstream = new URL(url.pathname + url.search, server.origin);
-          assert.equal(upstream.origin, server.origin);
-          const asset = await fetch(upstream, { redirect: "error", signal: AbortSignal.timeout(10_000) });
-          const immutable = asset.ok && /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|webp)$/.test(url.pathname);
-          response.writeHead(asset.status, {
-            "Content-Type": asset.headers.get("content-type") ?? "application/octet-stream",
-            "Cache-Control": immutable ? "public, max-age=31536000, immutable" : "no-store",
-            "X-Content-Type-Options": "nosniff",
-            // Confine this unrouted browser to the synthetic HTTP origin too.
-            "Content-Security-Policy": "default-src 'self'; img-src 'self' data: blob:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'",
-          }).end(Buffer.from(await asset.arrayBuffer()));
+        continue: () => {
+          // No outbound request: use the bounded build-file handler directly.
+          // Confine this unrouted browser to the synthetic HTTP origin too.
+          response.setHeader("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'self'");
+          return server.serve(request, response, { immutableAssets: true });
         },
       });
       if (loginScriptPattern.test(url.pathname)) {
