@@ -40,6 +40,7 @@ async function startupServer(baseURL: string | undefined) {
       || /^\/assets\/[A-Za-z0-9_-]+\.(?:js|css|png|webp|svg|woff2?)$/.test(url.pathname)
       || /^\/landing-next\/[A-Za-z0-9_-]+\.svg$/.test(url.pathname)
       || /^\/brand\/[A-Za-z0-9_-]+\.(?:svg|png|ico)$/.test(url.pathname)
+      || /^\/illustrations\/reset-password-(?:light|dark)\.webp$/.test(url.pathname)
       || ["/site.webmanifest", "/favicon.ico"].includes(url.pathname);
     if (!staticPath || !["GET", "HEAD"].includes(request.method ?? "")) {
       unexpected.push(`${request.method} ${url.pathname}`); return json(response, { ok: false }, 403);
@@ -183,7 +184,7 @@ test("Login startup completes public hints before app execution and retains the 
   const fixture = await startupServer(baseURL);
   let context: BrowserContext | undefined;
   try {
-    context = await browser.newContext({ baseURL: fixture.origin, viewport: { width: 390, height: 844 },
+    context = await browser.newContext({ baseURL: fixture.origin, viewport: { width: 1280, height: 900 },
       colorScheme: "light", reducedMotion: "no-preference", serviceWorkers: "block" });
     const page = await context.newPage(), errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
@@ -209,7 +210,10 @@ test("Login startup completes public hints before app execution and retains the 
     await expect(page.locator(".sqr-landing-next")).toHaveCount(0);
     const art = page.locator(".auth-v17-art");
     await expect(art).toBeVisible();
-    expect(await art.evaluate(element => getComputedStyle(element, "::before").backgroundImage)).toContain(illustration);
+    const image = art.locator(".auth-v17-signin-illustration");
+    await expect(image).toHaveAttribute("src", illustration!);
+    await expect(image).toHaveAttribute("data-active", "true");
+    await expect.poll(() => image.evaluate((element: HTMLImageElement) => element.complete && element.naturalWidth > 0)).toBe(true);
     const logo = page.locator('.auth-v17-brand img[src="/brand/sqr-full-logo-light.svg"]');
     await expect.poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true);
     const appliedStyles = await page.locator('link[rel="stylesheet"][href]')

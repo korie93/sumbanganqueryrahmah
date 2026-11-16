@@ -97,7 +97,11 @@ async function checkLayoutAndAccessibility(page: Page, width: number) {
   const back = await page.locator('.auth-v17-topline > a.auth-v17-back[href="/"]').boundingBox();
   const languages = await page.locator(".auth-v17-lang").boundingBox();
   expect(back && languages).toBeTruthy();
-  expect(box!.x).toBeGreaterThanOrEqual(back!.x + back!.width);
+  if (width < 380) {
+    expect(box!.y, "Narrow toolbar wraps below the full-width back link").toBeGreaterThanOrEqual(back!.y + back!.height);
+  } else {
+    expect(box!.x).toBeGreaterThanOrEqual(back!.x + back!.width);
+  }
   expect(box!.x + box!.width).toBeLessThanOrEqual(languages!.x + 1);
   expect(languages!.x + languages!.width).toBeLessThanOrEqual(width);
   await page.evaluate(axeSource);

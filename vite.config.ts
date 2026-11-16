@@ -109,6 +109,8 @@ export default defineConfig({
                 // otherwise the entry eagerly imports the entire auth chunk.
                 || /\/client\/src\/lib\/(?:auth-navigation-preload|public-auth-arrival|view-transition)\.ts$/.test(normalizedId)
                 || /\/client\/src\/app\/lazy-pages\.tsx$/.test(normalizedId)
+                // Landing uses the native navigation link too, without auth chrome.
+                || /\/client\/src\/components\/auth\/AuthLink\.tsx$/.test(normalizedId)
                 || /\/client\/src\/app\/maintenance-client-policy\.ts$/.test(normalizedId)
                 // The entry resolves theme before React mounts. Keep this pure
                 // hook out of lazy AuthV17Layout's dependency ownership.

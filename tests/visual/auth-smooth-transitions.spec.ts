@@ -410,6 +410,10 @@ for (const theme of ["light", "dark"] as const) {
         }
         for (const locale of ["ms", "en"] as const) {
           await page.getByRole("button", { name: locale === "en" ? "English" : "Bahasa Melayu", exact: true }).click();
+          // Full-page capture temporarily changes Chromium's layout viewport.
+          // Capture and settle before measuring navigation, never inside its window.
+          if (locale === "en") await recordScreenshot(page, testInfo, `login-${theme}-${viewport.width}`);
+          await settle(page);
           const brand = await page.locator(".auth-v17-brand-panel").elementHandle();
           const topbar = await page.locator(".auth-v17-topline").elementHandle();
           const images = await page.locator(".auth-v17-art img").elementHandles();
@@ -418,7 +422,6 @@ for (const theme of ["light", "dark"] as const) {
             (window as unknown as ProbeWindow).__authTransitionProbe.shifts.length = 0;
             return performance.now();
           });
-          if (locale === "en") await recordScreenshot(page, testInfo, `login-${theme}-${viewport.width}`);
           const navigationRequestedAt = await page.evaluate(() => performance.now());
           await navigateAuth(page, "forgot-password");
           const after = await geometry(page);
@@ -435,7 +438,7 @@ for (const theme of ["light", "dark"] as const) {
           });
           const shifts = observed.shifts;
           report(testInfo, `${viewport.width}/${locale}`, { before, after, identity, imageCount: images.length, shifts,
-            shiftsResetAt, navigationRequestedAt, screenshotWindow: locale === "en" ? { from: shiftsResetAt, to: navigationRequestedAt } : null,
+            shiftsResetAt, navigationRequestedAt,
             observed });
           if (!baseline) {
             expect(identity.brand, "Brand node survives route navigation").toBe(true);

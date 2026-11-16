@@ -120,7 +120,10 @@ test("Forgot explicit invalid submits focus the identifier without an API reques
       // A short window/keyboard viewport puts this compact form's first field
       // genuinely above the submit button's visible area on either layout.
       await page.setViewportSize({ width, height: 200 });
-      await submit.scrollIntoViewIfNeeded();
+      await identifier.evaluate(element => window.scrollTo({
+        top: window.scrollY + element.getBoundingClientRect().bottom + 1, behavior: "instant",
+      }));
+      await nextPaint(page);
       expect(await identifier.evaluate(element => element.getBoundingClientRect().bottom <= 0)).toBe(true);
       await submit.click();
       await expectAccessibleInvalid(identifier, "forgot-password-identifier-error");

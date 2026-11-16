@@ -297,6 +297,7 @@ test("entry navigation ownership cannot pull lazy auth presentation into startup
   for (const file of [
     "lib/auth-navigation-preload.ts", "lib/public-auth-arrival.ts",
     "lib/view-transition.ts", "app/lazy-pages.tsx",
+    "components/auth/AuthLink.tsx",
   ]) {
     for (const id of [`/repo/client/src/${file}`, `C:\\repo\\client\\src\\${file.replace(/\//g, "\\")}`]) {
       assert.equal(shared.name(id), "public-runtime", `${file} is already required by App`);
@@ -304,7 +305,7 @@ test("entry navigation ownership cannot pull lazy auth presentation into startup
     }
     assert.equal(shared.name(`/repo/client/src/${file.replace(/\.(tsx?)$/, ".test.$1")}`), undefined);
   }
-  for (const file of ["pages/AuthEntry.tsx", "pages/Login.tsx", "pages/ForgotPassword.tsx", "pages/Viewer.tsx", "components/auth/AuthLink.tsx"]) {
+  for (const file of ["pages/AuthEntry.tsx", "pages/Login.tsx", "pages/ForgotPassword.tsx", "pages/Viewer.tsx"]) {
     assert.equal(shared.name(`/repo/client/src/${file}`), undefined, "Route and presentation modules must remain lazy");
   }
 });
