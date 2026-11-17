@@ -60,7 +60,7 @@ test("collection account content remains escaped when rendered", () => {
     }),
   );
 
-  assert.equal(markup.includes("<script>"), false);
+  assert.doesNotMatch(markup, /<script\b/i);
   assert.equal(markup.includes("&lt;script&gt;"), true);
 });
 
@@ -114,7 +114,7 @@ test("Card No preserves established full/masked text and escapes markup without 
       canSeeSourceFile: false,
       row: { _collectionStatus: { ...recordedStatus, latestCardNumber } },
     }));
-    assert.doesNotMatch(markup, /<script>/);
+    assert.doesNotMatch(markup, /<script\b/i);
     assert.ok(markup.includes(latestCardNumber.includes("<") ? "&lt;script&gt;" : "4181XXXXXXXX3188"));
   }
   for (const state of ["not_recorded", "unavailable"]) {

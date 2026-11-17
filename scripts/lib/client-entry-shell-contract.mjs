@@ -9,7 +9,7 @@ const BOOT_SHELL_JS_FILE_PATH = "client/public/boot-shell.js";
 
 const STYLE_TAG_PATTERN = /<style\b[^>]*>/gi;
 const INLINE_STYLE_ATTRIBUTE_PATTERN = /\sstyle\s*=\s*(?:"[^"]*"|'[^']*')/gi;
-const SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+const SCRIPT_TAG_PATTERN = /<script\b([^>]*)>([\s\S]*?)(?:<\/script\s*[^>]*>|$)/gi;
 
 // JSON-LD is an inert data block, not executable bootstrap code. Do not allow
 // event handlers, arbitrary types, invalid JSON, or a script-closing injection.

@@ -147,6 +147,6 @@ test("compact matching layout wraps long errors without clamping or hiding infor
   assert.match(source, /dark:text-emerald-300/);
   assert.match(source, /dark:text-amber-300/);
   const markup = render({ status: "error", errorKind: "other", error: '<script>alert("synthetic")</script>' });
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script\b/i);
   assert.match(markup, /&lt;script&gt;/);
 });

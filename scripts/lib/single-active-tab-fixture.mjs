@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createServer, request as httpRequest } from "node:http";
+import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createInterface } from "node:readline";
@@ -51,23 +51,18 @@ export async function startSingleActiveTabFixture({ publicDirectory = path.join(
   let releaseMe = null;
   let closed = false;
 
-  const server = createServer(async (request, response) => {
+  const serve = async (request, response) => {
     response.setHeader("X-Content-Type-Options", "nosniff");
+    if (!request.url.startsWith("/") || request.url.startsWith("//") || request.url.includes("\\")) return void response.writeHead(404).end();
     const url = new URL(request.url, "http://fixture.invalid");
     const endpoint = `${request.method} ${url.pathname}`;
     try {
       if (!url.pathname.startsWith("/api/")) {
         if (!["GET", "HEAD"].includes(request.method)) return void response.writeHead(405).end();
-        const upstream = httpRequest(new URL(`${url.pathname}${url.search}`, staticServer.origin), { method: request.method }, (incoming) => {
-          response.writeHead(incoming.statusCode, { ...incoming.headers, "set-cookie": state.authenticated
-            ? ["sqr_auth_hint=1; Path=/; SameSite=Lax", "sqr_csrf=synthetic-tab-csrf; Path=/; SameSite=Lax"]
-            : ["sqr_auth_hint=; Max-Age=0; Path=/; SameSite=Lax"] });
-          incoming.pipe(response);
-        });
-        upstream.on("error", () => { if (!response.headersSent) response.writeHead(502); response.end(); });
-        request.on("aborted", () => upstream.destroy());
-        upstream.end();
-        return;
+        response.setHeader("Set-Cookie", state.authenticated
+          ? ["sqr_auth_hint=1; Path=/; SameSite=Lax", "sqr_csrf=synthetic-tab-csrf; Path=/; SameSite=Lax"]
+          : ["sqr_auth_hint=; Max-Age=0; Path=/; SameSite=Lax"]);
+        return await staticServer.serve(request, response);
       }
       state.requests.push(endpoint);
       if (endpoint === "GET /api/health/connectivity") return void response.writeHead(204, { "X-SQR-Connectivity": "ok" }).end();
@@ -151,7 +146,8 @@ export async function startSingleActiveTabFixture({ publicDirectory = path.join(
       if (!response.headersSent) json(response, { ok: false, message: "Synthetic fixture contract failed" }, 500);
       else response.end();
     }
-  });
+  };
+  const server = createServer(serve);
   server.on("upgrade", (request, socket, head) => {
     if (request.url !== "/ws" || !state.authenticated) return socket.destroy();
     state.websocketConnections += 1;
@@ -167,7 +163,7 @@ export async function startSingleActiveTabFixture({ publicDirectory = path.join(
     throw error;
   }
   return {
-    origin: `http://127.0.0.1:${server.address().port}`, state,
+    origin: `http://127.0.0.1:${server.address().port}`, state, serve,
     holdMe() {
       assert.equal(releaseMe, null, "Only one synthetic identity gate may be pending");
       state.meGate = new Promise((resolve) => { releaseMe = resolve; });

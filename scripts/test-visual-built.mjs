@@ -32,7 +32,8 @@ export function parseVisualBuiltArgs(args) {
       const value = args[++index];
       assert.ok(typeof value === "string" && value.length > 0 && value.length <= 200
         && !value.startsWith("-") && !/[\0\r\n]/.test(value), "--grep requires one bounded test-name expression");
-      assert.doesNotThrow(() => new RegExp(value), "--grep must be a valid expression");
+      // Playwright owns grep compilation and syntax errors. This wrapper only
+      // bounds the argument and forwards it literally via spawn (no shell).
       grep = true;
       forwarded.push(arg, value);
     } else {

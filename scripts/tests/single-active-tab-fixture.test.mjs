@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { createServer, request as httpRequest } from "node:http";
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,6 +8,7 @@ import { PassThrough, Writable } from "node:stream";
 import test from "node:test";
 import { WebSocket } from "ws";
 import { tsImport } from "tsx/esm/api";
+import { startGeneralSearchEmptyFixture } from "../lib/general-search-empty-fixture.mjs";
 import {
   attachSingleActiveTabFixtureControl,
   parseSingleActiveTabFixtureArgs,
@@ -17,7 +19,55 @@ import {
 
 const syntheticHtml = "<!doctype html><title>Synthetic single-tab fixture</title>";
 
-async function createFixture(t) {
+for (const startFixture of [startSingleActiveTabFixture, startGeneralSearchEmptyFixture]) {
+  test(`${startFixture.name} never forwards authority-shaped request paths`, async (t) => {
+    const fixture = await createFixture(t, startFixture);
+    let outgoingRequests = 0;
+    const canary = createServer((_request, response) => {
+      outgoingRequests++;
+      response.end("unexpected outgoing request");
+    });
+    await new Promise(resolve => canary.listen(0, "127.0.0.1", resolve));
+    t.after(() => new Promise(resolve => { canary.close(resolve); canary.closeAllConnections(); }));
+    const authority = `127.0.0.1:${canary.address().port}`;
+    for (const target of [`//${authority}/probe`, `/safe/..//${authority}/probe`, `/safe/%2e%2e//${authority}/probe`, `/\\${authority}/probe`, "/\\["]) {
+      const status = await new Promise((resolve, reject) => {
+        const request = httpRequest({ hostname: "127.0.0.1", port: new URL(fixture.origin).port, path: target }, response => {
+          response.resume();
+          response.on("end", () => resolve(response.statusCode));
+        });
+        request.on("error", reject);
+        request.end();
+      });
+      assert.equal(status, 404, target);
+    }
+    assert.equal(outgoingRequests, 0);
+  });
+}
+
+test("General Search wrapper preserves CSP, assets, synthetic authentication and empty results", async (t) => {
+  const fixture = await createFixture(t, startGeneralSearchEmptyFixture);
+  const document = await fetch(`${fixture.origin}/general-search`);
+  assert.equal(await document.text(), syntheticHtml);
+  assert.match(document.headers.get("set-cookie"), /sqr_auth_hint=1/);
+  assert.match(document.headers.get("content-security-policy"), /require-trusted-types-for 'script'/);
+  const asset = await fetch(`${fixture.origin}/assets/synthetic.js`);
+  assert.equal(await asset.text(), "export const synthetic = true;");
+  const head = await fetch(`${fixture.origin}/general-search`, { method: "HEAD" });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), "");
+  const me = await fetch(`${fixture.origin}/api/me`);
+  assert.equal((await me.json()).user.id, "enterprise-empty-synthetic-account");
+  for (const endpoint of ["/api/search/global", "/api/search/advanced"]) {
+    const result = await fetch(fixture.origin + endpoint);
+    assert.deepEqual((await result.json()).rows, []);
+  }
+  const logout = await fetch(`${fixture.origin}/api/auth/logout`, { method: "POST", body: "{}" });
+  assert.equal(logout.status, 200);
+  assert.equal((await fetch(`${fixture.origin}/api/me`)).status, 401);
+});
+
+async function createFixture(t, startFixture = startSingleActiveTabFixture) {
   const parent = await realpath(os.tmpdir());
   const directory = await mkdtemp(path.join(parent, "sqr-single-tab-fixture-test-"));
   let fixture;
@@ -31,7 +81,7 @@ async function createFixture(t) {
   await writeFile(path.join(directory, "index.html"), syntheticHtml);
   await mkdir(path.join(directory, "assets"));
   await writeFile(path.join(directory, "assets/synthetic.js"), "export const synthetic = true;");
-  fixture = await startSingleActiveTabFixture({ publicDirectory: directory });
+  fixture = await startFixture({ publicDirectory: directory });
   return fixture;
 }
 

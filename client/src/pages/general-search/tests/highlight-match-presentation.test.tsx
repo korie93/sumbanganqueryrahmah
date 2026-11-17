@@ -18,5 +18,13 @@ test("search highlights preserve regex characters, escaping, leading zeroes and 
   const markup = renderToStaticMarkup(highlightMatch("0000(A+B)<script>", "(A+B)"));
   assert.match(markup, /^0000<mark /);
   assert.match(markup, />\(A\+B\)<\/mark>&lt;script&gt;$/);
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script\b/i);
+});
+
+test("search highlights escape mixed-case scripts and scripts with attributes", () => {
+  for (const payload of ['<SCRIPT>alert(1)</SCRIPT>', '<ScRiPt src="/synthetic.js"></sCrIpT >', '<script\tdata-test="1">x</script>']) {
+    const markup = renderToStaticMarkup(highlightMatch(payload, ""));
+    assert.doesNotMatch(markup, /<script\b/i);
+    assert.ok(markup.includes("&lt;"));
+  }
 });

@@ -111,7 +111,7 @@ test("monthly ledger tolerates missing and loading targets and escapes supplied 
   ]) {
     const markup = render(data, props);
     assert.equal(rows(markup).length, 2);
-    assert.doesNotMatch(markup, /<script>|Infinity|NaN|undefined/);
+    assert.doesNotMatch(markup, /<script\b|Infinity|NaN|undefined/i);
     assert.match(markup, /&lt;script&gt;/);
   }
 });

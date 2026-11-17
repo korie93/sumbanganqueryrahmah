@@ -39,7 +39,7 @@ test("monthly quality diagnostics keep four original signals and escape supplied
     })),
   });
   assert.match(markup, /Signal 3/);
-  assert.doesNotMatch(markup, /Signal 4|<script>/);
+  assert.doesNotMatch(markup, /Signal 4|<script\b/i);
   assert.match(markup, /&lt;script&gt;signal-3&lt;\/script&gt;/);
   assert.match(markup, />5 review<\/span>/);
   assert.equal(render(null), "");

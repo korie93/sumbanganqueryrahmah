@@ -56,5 +56,5 @@ test("closed picker has a labeled dialog trigger with current-column description
   assert.match(trigger, /aria-describedby="viewer-filter-column-value-2"/);
   assert.match(trigger, /data-testid="select-filter-column-2"/);
   assert.match(markup, /&lt;script&gt;/);
-  assert.doesNotMatch(markup, /<script>|<input|role="option"/);
+  assert.doesNotMatch(markup, /<script\b|<input|role="option"/i);
 });

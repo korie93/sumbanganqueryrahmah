@@ -10,7 +10,8 @@ test("built visual runner accepts only bounded explicit snapshot, grep and singl
   assert.deepEqual(parseVisualBuiltArgs([]), []);
   const args = ["--update-snapshots", "--grep", "dashboard|settings", "--workers=1"];
   assert.deepEqual(parseVisualBuiltArgs(args), args);
-  for (const args of [["--config=other.ts"], ["--grep"], ["--grep", ""], ["--grep", "["],
+  assert.deepEqual(parseVisualBuiltArgs(["--grep", "["]), ["--grep", "["], "Playwright validates regex syntax");
+  for (const args of [["--config=other.ts"], ["--grep"], ["--grep", ""],
     ["--grep", "x".repeat(201)], ["--grep", "--help"], ["--grep", "foo\nbar"],
     ["--workers=2"], ["--headed"], ["--update-snapshots", "--update-snapshots"], ["--grep", "a", "--grep", "b"]]) {
     assert.throws(() => parseVisualBuiltArgs(args));

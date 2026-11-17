@@ -77,7 +77,7 @@ test("monthly disabled actions explain existing comparison, target and data gate
 test("monthly scope escapes server-provided text and disappears when export actions are absent", () => {
   assert.ok(defaults.data);
   const markup = render({ data: { ...defaults.data, nickname: "<script>unsafe</script>" } });
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script\b/i);
   assert.match(markup, /&lt;script&gt;unsafe&lt;\/script&gt;/);
   const hidden = render({ onExportCsv: undefined, onPrintReport: undefined });
   assert.doesNotMatch(hidden, /monthly-comparison-export-context/);
