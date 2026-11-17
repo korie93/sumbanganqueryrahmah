@@ -1,10 +1,24 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   collectClientEntryShellContractMatches,
   formatClientEntryShellContractReport,
   isInertApplicationSchema,
 } from "../lib/client-entry-shell-contract.mjs";
+
+test("entry shell rejects inline scripts with browser-accepted closing variants or no closing tag", (t) => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), "sqr-entry-script-test-"));
+  t.after(() => rmSync(repoRoot, { recursive: true, force: true }));
+  mkdirSync(path.join(repoRoot, "client"));
+  for (const closing of ["</script>", "</SCRIPT >", '</script foo="bar">', "</script\t>", ""]) {
+    writeFileSync(path.join(repoRoot, "client/index.html"), `<ScRiPt>alert(1)${closing}`);
+    const { matches } = collectClientEntryShellContractMatches({ repoRoot });
+    assert.equal(matches.filter(match => match.label.includes("inline <script>")).length, 1, closing);
+  }
+});
 
 test("only strictly inert valid application JSON-LD is exempt from inline executable code checks", () => {
   const attrs = ' id="sqr-application-schema" type="application/ld+json"';

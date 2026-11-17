@@ -17,7 +17,12 @@ const base: ComponentProps<typeof AIConversationCard> = {
 const render = (changes: Partial<typeof base>) => renderToStaticMarkup(createElement(AIConversationCard, { ...base, ...changes }));
 function visibleFeedback(markup: string) {
   return [...markup.matchAll(/<div\b[^>]*data-ai-feedback="true"[^>]*>([\s\S]*?)<\/div>/g)]
-    .map(match => match[1]!.replace(/<[^>]*>/g, ""));
+    // Read the feedback text node; never strip tags into a new HTML string.
+    .map(match => {
+      const text = match[1]!.match(/<span\b[^>]*>([^<>]*)<\/span>/);
+      assert.ok(text, "Feedback contains one escaped text node");
+      return text[1];
+    });
 }
 
 test("visible AI feedback is quiet when idle and keeps the reset control available", () => {
@@ -44,6 +49,7 @@ test("typing feedback ignores a stale slow flag and queue text remains escaped",
   assert.ok(!typingRegion.includes("text-amber-700"));
   const markup = render({ ...typing, gateNotice: '<script>alert("test")</script>' });
   assert.equal(visibleFeedback(markup).length, 1);
+  assert.ok(visibleFeedback(markup)[0]!.startsWith("&lt;script&gt;"));
   assert.ok(markup.includes("&lt;script&gt;"));
   assert.doesNotMatch(markup, /<script\b/);
 });

@@ -49,7 +49,7 @@ test("change review escapes text and wraps long identifiers and filenames withou
   assert.ok(markup.includes("Receipt &lt;script&gt;"));
   assert.ok(markup.includes("&lt;img src=x onerror=alert(1)&gt;"));
   assert.ok(markup.includes(longValue));
-  assert.doesNotMatch(markup, /<script>|<img /);
+  assert.doesNotMatch(markup, /<script\b|<img /i);
   assert.equal((markup.match(/\[overflow-wrap:anywhere\]/g) ?? []).length, 3);
   assert.match(markup, /<details[^>]*min-w-0 max-w-full/);
   assert.match(markup, /<dl class="grid min-w-0 gap-3 sm:grid-cols-2"/);

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { createServer, request as httpRequest } from "node:http";
+import { createServer } from "node:http";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { startSingleActiveTabFixture } from "./single-active-tab-fixture.mjs";
 
 // Local-only synthetic preview of the actual built application. No backend,
 // dotenv, database, credentials or application test bypass is involved.
-export async function startGeneralSearchEmptyFixture({ port = 0 } = {}) {
+export async function startGeneralSearchEmptyFixture({ port = 0, publicDirectory } = {}) {
   assert.ok(Number.isSafeInteger(port) && port >= 0 && port <= 65535);
-  const fixture = await startSingleActiveTabFixture();
+  const fixture = await startSingleActiveTabFixture({ publicDirectory });
   fixture.state.user.id = "enterprise-empty-synthetic-account";
   const canonical = new URL("../../docs/design/general-search-enterprise-final/", import.meta.url);
   const markup = readFileSync(new URL("empty-state.html", canonical), "utf8");
@@ -22,6 +22,7 @@ export async function startGeneralSearchEmptyFixture({ port = 0 } = {}) {
     `style-src-elem 'self' ${styleHashes.join(" ")}`, "style-src-attr 'none'", "object-src 'none'",
     "frame-src 'self' blob:", "trusted-types default sqr-ui dompurify", "require-trusted-types-for 'script'"].join("; ");
   const server = createServer((request, response) => {
+    if (!request.url.startsWith("/") || request.url.startsWith("//") || request.url.includes("\\")) return void response.writeHead(404).end();
     const url = new URL(request.url, "http://fixture.invalid");
     response.setHeader("Cache-Control", "no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
@@ -47,14 +48,9 @@ export async function startGeneralSearchEmptyFixture({ port = 0 } = {}) {
         pagination: { mode: "offset", page, pageSize, limit: pageSize, offset: (page - 1) * pageSize,
           total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: page > 1 } }));
     }
-    const upstream = httpRequest(new URL(`${url.pathname}${url.search}`, fixture.origin), { method: request.method,
-      headers: { "content-type": request.headers["content-type"] || "application/json" } }, (incoming) => {
-      response.writeHead(incoming.statusCode, { ...incoming.headers, "Content-Security-Policy": csp });
-      incoming.pipe(response);
-    });
-    upstream.on("error", () => { if (!response.headersSent) response.writeHead(502); response.end(); });
-    request.on("aborted", () => upstream.destroy());
-    request.pipe(upstream);
+    // Share the synthetic handler, not a network proxy controlled by a URL path.
+    response.setHeader("Content-Security-Policy", csp);
+    return void fixture.serve(request, response);
   });
   try {
     await new Promise((resolve, reject) => { server.once("error", reject); server.listen(port, "127.0.0.1", resolve); });

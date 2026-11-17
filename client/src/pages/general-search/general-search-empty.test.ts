@@ -26,10 +26,12 @@ interface SvgNode {
 // Compare the actual SSR output, not JSX spelling. Attribute order, self-closing
 // syntax, HTML comments and indentation are not part of the supplied artwork.
 function normalizeSvg(markup: string): SvgNode {
-  const source = markup.replace(/<!--[\s\S]*?-->/g, "");
   const roots: SvgNode[] = [];
   const stack: SvgNode[] = [];
-  for (const match of source.matchAll(/<(\/?)([A-Za-z][\w:-]*)([^>]*?)(\/?)>/g)) {
+  // Consume comments as tokens instead of deleting them: deletion can join
+  // separate fragments into markup that was not present in the source.
+  for (const match of markup.matchAll(/<!--[\s\S]*?--!?>|<(\/?)([A-Za-z][\w:-]*)([^<>]*?)(\/?)>/g)) {
+    if (match[0].startsWith("<!--")) continue;
     const [, closing, tag, attributeText, selfClosing] = match;
     if (closing) {
       assert.equal(stack.pop()?.tag, tag, "SVG element nesting stays valid");
@@ -59,6 +61,13 @@ function normalizeSvg(markup: string): SvgNode {
 function flattenSvg(node: SvgNode): SvgNode[] {
   return [node, ...node.children.flatMap(flattenSvg)];
 }
+
+test("SVG comparison ignores comment tokens without inventing tags across comment boundaries", () => {
+  const clean = normalizeSvg('<svg><path d="M0 0"/></svg>');
+  assert.deepEqual(normalizeSvg('<svg><!-- <circle/> --><path d="M0 0"/></svg>'), clean);
+  assert.deepEqual(normalizeSvg('<svg><!-- <circle/> --!><path d="M0 0"/></svg>'), clean);
+  assert.equal(normalizeSvg('<svg><pa<!--comment-->th/></svg>').children.length, 0);
+});
 
 // CSS imports are Vite concerns; evaluate the real component against React's
 // SSR runtime, with only that stylesheet import omitted from this unit harness.

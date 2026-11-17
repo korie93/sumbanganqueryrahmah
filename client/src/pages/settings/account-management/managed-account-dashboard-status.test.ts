@@ -58,7 +58,7 @@ test("Dashboard nickname status permits wrapping and escapes nickname text", () 
   assert.match(markup, /max-w-full min-w-0/);
   assert.match(markup, /<span class="min-w-0 break-words">/);
   assert.match(markup, /&lt;script&gt;/);
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script\b/i);
 });
 
 test("Dashboard nickname status preserves the existing active-link fallback label", () => {

@@ -11,7 +11,8 @@ export function createJsonTestApp(): Express {
 }
 
 export async function startTestServer(app: Express) {
-  const server = app.listen(0);
+  // Synthetic auth headers must never be reachable on the developer's LAN.
+  const server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address() as AddressInfo | null;
   if (!address) {

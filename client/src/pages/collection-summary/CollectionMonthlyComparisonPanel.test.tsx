@@ -297,7 +297,7 @@ test("Monthly comparison keeps long staff names and export scope intact without 
   assert.match(markup, /Synthetic Collector with a deliberately long staff nickname &lt;script&gt;safe&lt;\/script&gt;/);
   assert.match(markup, /Export \/ print scope: 2026-04 to 2026-05/);
   assert.match(markup, /aria-readonly="true"/);
-  assert.doesNotMatch(markup, /<script>|Infinity|NaN|undefined/);
+  assert.doesNotMatch(markup, /<script\b|Infinity|NaN|undefined/i);
 });
 
 test("CollectionMonthlyComparisonPanel highlights anomaly months for audit review", () => {

@@ -136,7 +136,7 @@ test("recovery metadata is escaped and kept complete without a truncation contra
   const username = `long.${"managed".repeat(30)}<script>alert(1)</script>`;
   const markup = render({ ...account, username });
   assert.ok(markup.includes(username.replace(/</g, "&lt;").replace(/>/g, "&gt;")));
-  assert.doesNotMatch(markup, /<script>/);
+  assert.doesNotMatch(markup, /<script\b/i);
   const css = readFileSync(new URL("./CredentialRecoveryLayout.css", import.meta.url), "utf8");
   assert.match(css, /overflow-wrap: anywhere/);
   assert.doesNotMatch(css, /text-overflow:\s*ellipsis|overflow:\s*hidden/);
