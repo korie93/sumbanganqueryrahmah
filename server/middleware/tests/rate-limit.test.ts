@@ -8,7 +8,7 @@ import { createCsrfProtectionMiddleware } from "../../http/csrf";
 import { createApiProtectionMiddleware } from "../../internal/apiProtection";
 import { getInternalMetricsSnapshot } from "../../internal/metrics";
 import { logger } from "../../lib/logger";
-import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
+import { createRateLimitedTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { RedisRateLimitStore, RedisRateLimitStoreUnavailableError } from "../redis-rate-limit-store";
 import {
   buildAuthRouteRateLimitSubject,
@@ -490,7 +490,7 @@ test("combined CSRF, adaptive protection, and canonical/legacy login guards allo
   clearAdaptiveRateLimitCooldownsForTests();
   t.mock.method(logger, "info", () => undefined);
   t.mock.method(logger, "warn", () => undefined);
-  const app = express();
+  const app = createRateLimitedTestApp();
   app.set("trust proxy", "loopback");
   app.use(express.json());
   app.use(createCsrfProtectionMiddleware());

@@ -3,9 +3,23 @@ import type { Server } from "node:http";
 import { AddressInfo } from "node:net";
 import express, { type Express, type RequestHandler } from "express";
 import type { AuthenticatedRequest, AuthenticatedUser } from "../../auth/guards";
+import { createPreAuthRateLimiter, handlePreAuthRateLimitError } from "../../middleware/pre-auth-rate-limit";
+import { BoundedMemoryRateLimitStore } from "../../middleware/redis-rate-limit-store";
+
+export function createRateLimitedTestApp(requestsPerMinute?: number): Express {
+  const app = express();
+  // Real bounded admission control for synthetic HTTP servers, including
+  // /fixture paths. Never connect a fixture to a configured shared Redis store.
+  app.use(createPreAuthRateLimiter({
+    allPaths: true,
+    store: new BoundedMemoryRateLimitStore(Date.now),
+    ...(requestsPerMinute === undefined ? {} : { requestsPerMinute }),
+  }), handlePreAuthRateLimitError);
+  return app;
+}
 
 export function createJsonTestApp(): Express {
-  const app = express();
+  const app = createRateLimitedTestApp();
   app.use(express.json());
   return app;
 }

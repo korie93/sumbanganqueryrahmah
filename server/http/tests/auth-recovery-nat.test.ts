@@ -7,7 +7,7 @@ import { runtimeConfig } from "../../config/runtime";
 import { createCsrfProtectionMiddleware } from "../../http/csrf";
 import { createApiProtectionMiddleware } from "../../internal/apiProtection";
 import { logger } from "../../lib/logger";
-import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
+import { createRateLimitedTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { createAuthRouteRateLimiters, clearAdaptiveRateLimitCooldownsForTests, stopAdaptiveRateLimitCooldownSweep } from "../../middleware/rate-limit";
 import type { AuthRecoveryRateLimitStorage } from "../../middleware/auth-rate-limit-subjects";
 import { RedisRateLimitStore, RedisRateLimitStoreUnavailableError } from "../../middleware/redis-rate-limit-store";
@@ -20,7 +20,7 @@ async function harness(t: test.TestContext, withProtection = false, lookupThrows
   clearAdaptiveRateLimitCooldownsForTests();
   t.mock.method(logger, "warn", () => undefined);
   t.mock.method(logger, "info", () => undefined);
-  const app = express();
+  const app = createRateLimitedTestApp();
   app.use(express.json());
   let lookups = 0;
   const records = new Map(Array.from({ length: 600 }, (_, i) => [hashOpaqueToken(`recovery-${i}`), { userId: `staff-${i}` }]));
