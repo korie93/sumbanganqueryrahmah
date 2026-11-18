@@ -1,3 +1,5 @@
+import { patchedPicomatchFindings } from "./picomatch-vendor.mjs";
+
 const severityRank = new Map([
   ["info", 0],
   ["low", 1],
@@ -200,6 +202,7 @@ function isExternalPackageSource(resolved) {
 }
 
 const documentedOverrideReasons = new Map([
+  ["picomatch", "Uses the checksum-verified local 4.0.7 source patch for GHSA-fc5q-39xc-vjpf; no unpatched advisory exception."],
   [
     "@opentelemetry/instrumentation-http",
     "Pins the incoming HTTP query-redaction fix for GHSA-3v2p-hm54-8qcq while auto-instrumentations-node still requests the affected 0.221 line.",
@@ -290,23 +293,30 @@ function isDocumentedSecurityPatchRange(packageName, value) {
   return Boolean(policy?.pattern.test(String(value || "")));
 }
 
-export function analyzeDependencyAuditReport(report) {
+export function analyzeDependencyAuditReport(report, verifiedPicomatch) {
   const validationFailure = validateDependencyAuditReport(report);
   if (validationFailure) {
     return { allowed: [], failures: [validationFailure] };
   }
   const failures = [];
 
+  const patched = patchedPicomatchFindings(report, verifiedPicomatch);
+  const allowed = [];
+
   for (const vulnerability of Object.values(report.vulnerabilities)) {
+    if (patched.has(vulnerability.name)) {
+      allowed.push({ name: vulnerability.name, severity: vulnerability.severity, reason: "GHSA-fc5q-39xc-vjpf is mitigated by the verified local Picomatch source patch (dev-only)." });
+      continue;
+    }
     if (severityRank.get(vulnerability.severity) >= severityRank.get("moderate")) {
       failures.push(formatVulnerability(vulnerability));
     }
   }
 
-  return { allowed: [], failures };
+  return { allowed, failures };
 }
 
-export function analyzeDependencyAuditExecution(result) {
+export function analyzeDependencyAuditExecution(result, verifiedPicomatch) {
   const fail = (message) => ({ allowed: [], failures: [message] });
   if (!isRecord(result)) {
     return fail("npm audit did not return a process result.");
@@ -339,7 +349,7 @@ export function analyzeDependencyAuditExecution(result) {
   } catch {
     return fail("npm audit returned invalid or truncated JSON.");
   }
-  const analysis = analyzeDependencyAuditReport(report);
+  const analysis = analyzeDependencyAuditReport(report, verifiedPicomatch);
   if (result.status === 1 && analysis.failures.length === 0 && report.metadata.vulnerabilities.total === 0) {
     return fail("npm audit exited with status 1 but reported no vulnerabilities.");
   }

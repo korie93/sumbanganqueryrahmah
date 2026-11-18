@@ -264,7 +264,8 @@
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "8.1.6"
+    "vite": "8.1.6",
+    "picomatch": "file:vendor/picomatch/picomatch-4.0.7-sqr.1.tgz"
   },
   "overrides": {
     "@opentelemetry/instrumentation-http": "0.222.0",
@@ -277,7 +278,8 @@
     "ip-address": "^10.7.4",
     "js-yaml": "^4.3.2",
     "minimatch": "11.0.1",
-    "glob": "14.0.2"
+    "glob": "14.0.2",
+    "picomatch": "$picomatch"
   },
   "allowScripts": {
     "bcrypt@6.0.0": true,

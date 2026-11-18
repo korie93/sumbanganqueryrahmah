@@ -48,6 +48,15 @@ test("pre-commit guard allows normal source files without secrets", () => {
   assert.deepEqual(findings, []);
 });
 
+test("reviewed glob parser statements are scoped to their exact file and value", () => {
+  const filePath = "vendor/picomatch/package/lib/parse.js";
+  const text = "token.output = value;";
+  assert.deepEqual(findGenericSecretAssignments({ filePath, text }), []);
+  assert.deepEqual(findGenericSecretAssignments({ filePath: path.resolve(filePath), text }), []);
+  assert.equal(findGenericSecretAssignments({ filePath: "client/other.js", text }).length, 1);
+  assert.equal(findGenericSecretAssignments({ filePath, text: "token.output = 'unexpected-value';" }).length, 1);
+});
+
 test("pre-commit guard detects high-confidence and generic secret patterns", () => {
   const awsKeyPrefix = "AKIA";
   const privateKeyHeader = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");

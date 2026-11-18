@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { verifyPicomatchVendor } from "./lib/picomatch-vendor.mjs";
 import {
   analyzeDependencyAuditExecution,
   analyzePackageLockSources,
@@ -32,7 +33,17 @@ const result = await runDependencyAuditWithRetry(() => npmExecPath
   onRetry: (attempt, maximum) => console.warn(`Dependency audit temporary transport failure; retrying (${attempt}/${maximum}).`),
 });
 
-const { allowed, failures } = analyzeDependencyAuditExecution(result);
+let verifiedPicomatch;
+const patchFailures = [];
+try {
+  const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+  if (manifest.overrides?.picomatch) verifiedPicomatch = verifyPicomatchVendor({ manifest, lock });
+} catch {
+  patchFailures.push("Unable to verify the local Picomatch security patch; run a clean npm ci and inspect vendor integrity.");
+}
+const { allowed, failures } = analyzeDependencyAuditExecution(result, verifiedPicomatch);
+failures.push(...patchFailures);
 let packageSourceResult = { allowed: [], failures: [] };
 let packageOverridesResult = { failures: [] };
 let securityCriticalPinResult = { failures: [] };
@@ -71,7 +82,7 @@ if (
 }
 
 if (allowed.length > 0) {
-  console.warn("Dependency audit passed with documented dev-only exceptions:");
+  console.warn("Dependency audit passed with verified dev-only source patches:");
   for (const finding of allowed) {
     console.warn(`- ${finding.name} [${finding.severity}]: ${finding.reason}`);
   }

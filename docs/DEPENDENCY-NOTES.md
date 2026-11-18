@@ -8,6 +8,16 @@ npm run audit:dependencies
 
 That command runs `npm audit --json`, fails on moderate-or-higher advisories, rejects unexpected external tarballs, enforces documented package overrides, and checks exact pins for security-critical runtime packages.
 
+## 2026-11-18 Picomatch local security patch
+
+Release run 44150619903 failed on GHSA-fc5q-39xc-vjpf and eleven inherited
+tooling findings. Upstream 4.0.7 has no official fix at review time. The local
+`vendor/picomatch` archive guards wildcard repetition inside repeated extglobs
+while retaining upstream package identity and APIs. See its README for the
+intentional literalization behavior and removal plan. The audit verifies the
+installed patch and accepts only the exact mitigated advisory's dev-only chain;
+all other moderate+ findings and integrity failures remain blocking.
+
 ## 2026-11-15 incoming HTTP telemetry query redaction
 
 [CI run 43684580154](https://github.com/korie93/sumbanganqueryrahmah/actions/runs/43684580154)
@@ -567,6 +577,7 @@ Operational notes:
 | `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. | Quadratic-complexity YAML merge-key DoS advisory class in older transitive parser versions. | ESLint resolves patched `js-yaml` transitively and `npm run audit:dependencies` stays clean without the override. |
 | `minimatch` | Pins patched minimatch 11; `scripts/lib/eslint-plugin-minimatch-compat.mjs` preserves legacy React plugins' callable API. | Glob preprocessing amplification, GHSA-g3hv-75wg-m249. | All consumers resolve a patched release and legacy plugins support its object API or remove their dependency. |
 | `glob` | Pins patched glob 14 with cancellation and minimatch 11 compatibility. | AbortSignal traversal bypass, GHSA-3g3m-2fjr-6pw4. | c8 and test-exclude resolve glob 14.0.2 or newer without the override. |
+| `picomatch` | Uses `$picomatch` to resolve the local, checksum-verified dev patch. | GHSA-fc5q-39xc-vjpf; unsafe single-branch repeated extglobs. | An official fixed version passes the retained security and tooling compatibility regressions. |
 
 Quarterly review checklist:
 
