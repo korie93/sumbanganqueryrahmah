@@ -1,4 +1,4 @@
-# Picomatch 4.0.7 — SQR source patch 1
+# Picomatch 4.0.7 — SQR source patch 2
 
 This is a local, MIT-licensed source patch, not an official upstream release.
 Package name and version remain `picomatch@4.0.7`; the advisory is not hidden by
@@ -6,12 +6,17 @@ renaming or inventing a clean upstream version.
 
 Source: the existing installed 4.0.7 package (upstream
 https://github.com/micromatch/picomatch/tree/4.0.7). All ten upstream package files
-are retained. Only `lib/parse.js` changes. No dependency or lifecycle script is added.
+are retained. The patches affect `lib/parse.js` and `lib/utils.js`. No dependency or lifecycle script is added.
 `files.sha256.json` pins all installed bytes; the audit verifier also pins that
 manifest and the archive independently. `package/` is the reviewable source;
 the tarball is the installable copy. Preserve bytes when checking out on Windows.
 
 ## Fix and compatibility boundary
+
+Revision 2 addresses CodeQL alert #83 in `scan(..., { unescape: true })`.
+The unescaper uses a forward-only lookahead to locate bracket spans. It
+preserves backslashes inside complete spans, handles line terminators, and
+avoids searching the same remaining suffix from each opening bracket.
 
 For GHSA-fc5q-39xc-vjpf, the parser records the position of its latest wildcard
 star as it emits the token. A repeated extglob

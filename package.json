@@ -265,7 +265,7 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.59.2",
     "vite": "8.1.6",
-    "picomatch": "file:vendor/picomatch/picomatch-4.0.7-sqr.1.tgz"
+    "picomatch": "file:vendor/picomatch/picomatch-4.0.7-sqr.2.tgz"
   },
   "overrides": {
     "@opentelemetry/instrumentation-http": "0.222.0",
