@@ -18,10 +18,19 @@
   object-position: center;
   pointer-events: none;
   user-select: none;
+  /* The supplied artwork has an opaque canvas. Blend that canvas into the
+     existing isolated brand panel without cropping or recoloring the asset. */
+  mix-blend-mode: multiply;
   opacity: 0;
   transform: scale(0.98);
   transition: opacity var(--dur-slow, 360ms) var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1)),
     transform var(--dur-slow, 360ms) var(--ease-out, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+.auth-v17 .auth-brand-artwork > img[data-artwork-theme="dark"] {
+  /* Follow the decoded frame, not the requested shell theme: a light frame
+     retained during a slow dark-image load must never become a white box. */
+  mix-blend-mode: lighten;
 }
 
 .auth-v17 .auth-brand-artwork > img[data-active="true"] {

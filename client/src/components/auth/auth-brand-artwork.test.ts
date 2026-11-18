@@ -24,6 +24,7 @@ test("both prefetched auth scenes reserve dimensions and stay hidden until decod
       assert.equal(images.length, 2);
       assert.match(markup, /class="auth-v17-art auth-brand-artwork" aria-hidden="true"/);
       for (const image of images) {
+        assert.match(image, new RegExp(`data-artwork-theme="${theme}"`));
         assert.match(image, /alt="" aria-hidden="true" loading="eager" decoding="async" fetchpriority="low"/);
         assert.doesNotMatch(image, /tabindex|fetchPriority=/);
       }
