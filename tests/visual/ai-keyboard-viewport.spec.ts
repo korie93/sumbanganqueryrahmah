@@ -189,6 +189,25 @@ test("AI keyboard behavior scroll: latest follows resize while earlier reading s
   expect(chat.requestCount()).toBe(1); expect(chat.fixture.errors).toEqual([]); expect(chat.fixture.unexpected).toEqual([]);
 });
 
+test("AI keyboard reflow keeps following after the browser clamps the scroll position", async ({ page, baseURL }) => {
+  const chat = await openFloating(page, baseURL, cases[0]);
+  // Model two layouts in a single frame: landscape wraps fewer lines, then
+  // the keyboard reduces the space available before the scroll event arrives.
+  const geometry = await chat.log.evaluate(node => {
+    const log = node as HTMLElement;
+    const before = log.scrollTop;
+    log.style.width = "828px";
+    log.style.flex = "none";
+    log.style.height = "260px";
+    const clamped = log.scrollTop;
+    log.style.height = "76px";
+    return { before, clamped, gap: log.scrollHeight - log.scrollTop - log.clientHeight };
+  });
+  expect(geometry.clamped).toBeLessThan(geometry.before);
+  expect(geometry.gap).toBeGreaterThan(48);
+  await expect.poll(async () => (await measure(page)).gap).toBeLessThanOrEqual(2);
+});
+
 test("AI keyboard behavior rotation: touch landscape preserves focus, draft and reading", async ({ page, baseURL }) => {
   const chat = await openFloating(page, baseURL, cases[0]);
   await keyboard(page, 300);

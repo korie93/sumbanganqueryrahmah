@@ -4,9 +4,10 @@ import { installFixture } from "./helpers/save-collection-fixture";
 type Surface = "full" | "floating";
 
 async function openChat(page: Page, baseURL: string | undefined, surface: Surface, answer: string,
-  options: { theme?: "light" | "dark"; width?: number } = {}) {
+  options: { theme?: "light" | "dark"; width?: number; controlledClock?: boolean } = {}) {
   const fixture = await installFixture(page, baseURL, {
     role: "superuser", aiEnabled: true, theme: options.theme ?? (surface === "full" ? "light" : "dark"),
+    controlledClock: options.controlledClock ?? false,
   });
   await page.setViewportSize({ width: options.width ?? (surface === "full" ? 1366 : 375), height: 900 });
   await page.addInitScript(() => {
@@ -293,7 +294,7 @@ for (const surface of ["full", "floating"] as const) {
   test(`AI reading controls selection ${surface}: selecting transcript text pauses follow during reveal`, async ({ page, baseURL }) => {
     const answer = Array.from({ length: 150 }, (_, index) => `Baris ${index + 1}: RECORD 000123 ialah teks sintetik untuk dipilih semasa jawapan bertambah.`).join("\n");
     expect(Buffer.byteLength(answer, "utf8")).toBeLessThanOrEqual(16000);
-    const chat = await openChat(page, baseURL, surface, answer);
+    const chat = await openChat(page, baseURL, surface, answer, { controlledClock: true });
     await chat.input.fill("Semakan pilihan teks sintetik"); await chat.send.click();
     const assistant = chat.log.getByRole("article", { name: "Mesej pembantu AI", exact: true });
     await expect.poll(() => chat.log.evaluate((node) => node.scrollHeight - node.clientHeight)).toBeGreaterThan(100);
@@ -328,7 +329,8 @@ for (const surface of ["full", "floating"] as const) {
     });
     try {
     // Measure a complete visible word, then use an actual double-click to select
-    // it. No selection range or application state is injected by the fixture.
+    // it in the same reveal frame, then let the reply continue growing.
+    await page.clock.pauseAt(await page.evaluate(() => Date.now() + 100));
     const point = await chat.log.evaluate((node) => {
       const bounds = node.getBoundingClientRect();
       const spans = Array.from(node.querySelectorAll<HTMLElement>(".ai-markdown-paragraph > span"));
@@ -356,8 +358,11 @@ for (const surface of ["full", "floating"] as const) {
       return { text: selection?.toString() ?? "", inside: Boolean(selection?.anchorNode && selection.focusNode
         && node.contains(selection.anchorNode) && node.contains(selection.focusNode)), scrollTop: node.scrollTop };
     });
-    expect(selected.text).toBe(clicked.word); expect(selected.inside).toBe(true);
+    // Chromium on Windows can include the following space in a native double-click.
+    expect([clicked.word, clicked.word + " "]).toContain(selected.text);
+    expect(selected.inside).toBe(true);
     const lengthAtSelection = (await assistant.last().textContent())?.length ?? 0;
+    await page.clock.resume();
     await expect.poll(async () => (await assistant.last().textContent())?.length ?? 0).toBeGreaterThan(lengthAtSelection + 80);
     await expect(chat.log).toHaveAttribute("aria-busy", "true");
     const during = await chat.log.evaluate((node) => ({ text: window.getSelection()?.toString() ?? "", scrollTop: node.scrollTop }));
