@@ -83,7 +83,7 @@ export class RedisRateLimitStoreUnavailableError extends Error {
   }
 }
 
-class BoundedMemoryRateLimitStore implements Store {
+export class BoundedMemoryRateLimitStore implements Store {
   readonly localKeys = true;
   private readonly cache = new LRUCache<string, FallbackRateLimitEntry>({
     max: REDIS_RATE_LIMIT_FALLBACK_MAX_KEYS,

@@ -1,5 +1,9 @@
 # Baki amaran CodeQL — 17 November 2026
 
+Susulan pembaikan 22 amaran rate limiting, keputusan regresi dan status CI
+direkodkan dalam [goal CodeQL rate limit](codeql-rate-limit-goal.md).
+Laporan di bawah mengekalkan hasil semakan kumpulan terdahulu.
+
 ## Skop dan keputusan
 
 Semakan bermula pada `a3e3e574fd8cc8e0d5a2c2dcfca06139a04289a1`, branch

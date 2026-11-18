@@ -22,6 +22,7 @@ test("local HTTP pipeline keeps security middleware in reviewed order", () => {
     "app.use(createForwardedForTrustProxyWarningMiddleware({",
     "app.use(createGlobalRequestTimeoutMiddleware({",
     "app.use(\"/api\", (_req, res, next) => {",
+    "app.use(createPreAuthRateLimiter(), handlePreAuthRateLimitError);",
     "app.use(createCsrfProtectionMiddleware());",
     "app.use(createRateLimitIdentityMiddleware());",
     "app.use(adaptiveRateLimit);",

@@ -7,6 +7,7 @@ import { createForwardedForTrustProxyWarningMiddleware } from "../http/forwarded
 import { createGlobalRequestTimeoutMiddleware } from "../http/global-request-timeout";
 import { buildApiErrorResponse } from "../http/api-error-response";
 import { createSensitiveApiResponseSanitizerMiddleware } from "../http/response-sanitizer";
+import { createPreAuthRateLimiter, handlePreAuthRateLimitError } from "../middleware/pre-auth-rate-limit";
 import { registerLocalHttpBodyParsers } from "./local-http-body-parsers";
 import { registerLocalHttpCompression } from "./local-http-compression";
 import { registerLocalHttpObservability } from "./local-http-observability";
@@ -42,7 +43,8 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
   // 2. CORS and private upload subtree blocking
   // 3. API response sanitizer before observability/error paths
   // 4. request identity, proxy warning, timeout, and API no-store cache headers
-  // 5. CSRF, then signed quota identity (not authorization), before protection
+  // 5. coarse network flood ceiling before CSRF and signed quota identity
+  // 6. existing identity-aware quotas and system protection
   registerLocalHttpSecurityHeaders(app);
   registerLocalHttpCompression(app);
   registerLocalHttpBodyParsers(app, {
@@ -83,6 +85,7 @@ export function registerLocalHttpPipeline(app: Express, options: LocalHttpPipeli
     next();
   });
 
+  app.use(createPreAuthRateLimiter(), handlePreAuthRateLimitError);
   app.use(createCsrfProtectionMiddleware());
   app.use(createRateLimitIdentityMiddleware());
   app.use(adaptiveRateLimit);

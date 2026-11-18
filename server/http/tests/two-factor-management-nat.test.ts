@@ -10,7 +10,7 @@ import {
   createAuthRouteRateLimiters,
   stopAdaptiveRateLimitCooldownSweep,
 } from "../../middleware/rate-limit";
-import { startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
+import { createRateLimitedTestApp, startTestServer, stopTestServer } from "../../routes/tests/http-test-utils";
 import { runtimeConfig } from "../../config/runtime";
 import { RedisRateLimitStore, RedisRateLimitStoreUnavailableError } from "../../middleware/redis-rate-limit-store";
 
@@ -21,7 +21,7 @@ async function harness(t: test.TestContext, withProtection = false) {
   clearAdaptiveRateLimitCooldownsForTests();
   t.mock.method(logger, "warn", () => undefined);
   t.mock.method(logger, "info", () => undefined);
-  const app = express();
+  const app = createRateLimitedTestApp();
   app.use(express.json());
   app.set("trust proxy", ["loopback"]);
   app.use(createCsrfProtectionMiddleware());

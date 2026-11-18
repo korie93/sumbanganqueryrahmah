@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import express from "express";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -10,7 +9,7 @@ import { createCsrfProtectionMiddleware } from "../../http/csrf";
 import { registerLocalHttpBodyParsers } from "../../internal/local-http-body-parsers";
 import { registerAuthRoutes } from "../auth.routes";
 import { createOwnCredentialsStorageDouble } from "./auth-route-self-service-doubles";
-import { createTestAuthenticateToken, createTestRequireRole, startTestServer, stopTestServer } from "./http-test-utils";
+import { createRateLimitedTestApp, createTestAuthenticateToken, createTestRequireRole, startTestServer, stopTestServer } from "./http-test-utils";
 
 const pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==";
 const upload = { fileName: "photo.png", mimeType: "image/png", contentBase64: pngBase64 };
@@ -20,7 +19,7 @@ async function fixture() {
   const previous = runtimeConfig.app.uploadsRootDir;
   runtimeConfig.app.uploadsRootDir = root;
   const state = createOwnCredentialsStorageDouble({ user: { createdAt: new Date("2026-03-01T00:00:00Z") } });
-  const app = express();
+  const app = createRateLimitedTestApp();
   registerLocalHttpBodyParsers(app, { collectionBodyLimit: "1mb", defaultBodyLimit: "8kb", importBodyLimit: "1mb" });
   app.use(createCsrfProtectionMiddleware({ allowedOrigins: ["http://localhost"] }));
   let limiterCalls = 0;

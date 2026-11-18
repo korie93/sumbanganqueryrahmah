@@ -150,6 +150,7 @@ Current overrides:
 | `js-yaml` | Pins patched YAML parsing for ESLint transitive config loading until `@eslint/eslintrc` resolves the patched range by default. |
 | `minimatch` | Pins patched minimatch 11 with bounded glob preprocessing; the checked-in ESLint adapter preserves the callable API expected by legacy React plugins. |
 | `glob` | Pins patched glob 14 so cancellation stops traversal and coverage discovery supports minimatch 11 until upstream consumers update. |
+| `picomatch` | Selects the reviewed local source patch through `$picomatch`; the audit verifies archive and installed files before accepting the exact mitigated dev-only advisory chain. See `vendor/picomatch/README.md`. |
 
 When removing an override, remove its entry from this table and from the audit
 helper in the same dependency-only PR.

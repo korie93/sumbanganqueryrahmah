@@ -1,4 +1,5 @@
 import { basename } from "node:path/posix";
+import { isAbsolute, relative } from "node:path";
 import { findHighConfidenceSecretTokens } from "./repo-hygiene.mjs";
 
 const GENERIC_SECRET_ASSIGNMENT_PATTERN =
@@ -27,6 +28,20 @@ const ALLOWED_HOOK_SECRET_VALUES = [
 const NON_SECRET_STATUS_KEYS = new Set([
   "must_change_password",
   "password_reset_by_superuser",
+]);
+
+// Here "token" means a glob parser token. Match the complete reviewed statement
+// and path so that changed values and other assignments still get checked.
+const GLOB_TOKEN_STATEMENTS = new Map([
+  ["vendor/picomatch/package/lib/parse.js", new Set([
+    "token.prev = prev;", "token.parens = state.parens;", "token.output = state.output;",
+    "token.output = '.*?';", "token.output = nodot + token.output;", "token.output = value;",
+  ])],
+  ["vendor/picomatch/package/lib/scan.js", new Set([
+    "token.depth = token.isGlobstar ? Infinity : 1;",
+    "token = { value: '', depth: 0, isGlob: false };",
+    "state.tokens = tokens;",
+  ])],
 ]);
 
 export const CONVENTIONAL_COMMIT_PATTERN =
@@ -72,6 +87,8 @@ export function isForbiddenPrivateMaterialPath(filePath) {
 
 export function findGenericSecretAssignments({ filePath, text }) {
   const normalizedFilePath = normalizeRepoPath(filePath);
+  const repoPath = isAbsolute(normalizedFilePath) ? normalizeRepoPath(relative(process.cwd(), normalizedFilePath)) : normalizedFilePath;
+  const reviewedStatements = GLOB_TOKEN_STATEMENTS.get(repoPath);
   const findings = [];
   const lines = String(text || "").split(/\r?\n/u);
 
@@ -91,7 +108,7 @@ export function findGenericSecretAssignments({ filePath, text }) {
     if (!isEnvStyleSecretKey(key)) {
       continue;
     }
-    if (NON_SECRET_STATUS_KEYS.has(key.toLowerCase())) {
+    if (NON_SECRET_STATUS_KEYS.has(key.toLowerCase()) || reviewedStatements?.has(line.trim())) {
       continue;
     }
     if (isAllowedHookSecretValue(value)) {

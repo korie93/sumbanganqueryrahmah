@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import http from "node:http";
 import test from "node:test";
-import express from "express";
+import { createRateLimitedTestApp } from "../../server/routes/tests/http-test-utils";
 import { createCorsMiddleware } from "../../server/http/cors";
 import { createCsrfProtectionMiddleware } from "../../server/http/csrf";
 
@@ -10,7 +10,7 @@ const origin = "https://sqr.audit.invalid";
 const csrf = "a".repeat(64); // Synthetic double-submit fixture, never a credential.
 
 test("cookie mutations cannot reach a sink through absent, cross-site or lookalike provenance", async (t) => {
-  const app = express();
+  const app = createRateLimitedTestApp();
   let mutations = 0;
   app.use(createCorsMiddleware([origin]));
   app.use(createCsrfProtectionMiddleware({ allowedOrigins: [origin] }));
