@@ -64,25 +64,6 @@ export function useAIMessageFollow({ containerRef, messages, streamingText, acti
     };
   }, [containerRef, setFollowing]);
 
-  useEffect(() => {
-    const element = containerRef.current;
-    if (!element) return;
-    const onScroll = () => {
-      if (!visibleRef.current) return;
-      if (selectionGuardRef.current?.isPaused()) {
-        lastTopRef.current = element.scrollTop;
-        saveReadingPosition(element);
-        return;
-      }
-      if (isNearAIMessageBottom(element)) setFollowing(true);
-      else if (isReadingEarlierAIMessages(element, lastTopRef.current)) setFollowing(false);
-      lastTopRef.current = element.scrollTop;
-      saveReadingPosition(element);
-    };
-    element.addEventListener("scroll", onScroll, { passive: true });
-    return () => element.removeEventListener("scroll", onScroll);
-  }, [containerRef, saveReadingPosition, setFollowing]);
-
   const scrollToLatest = useCallback(() => {
     const element = containerRef.current;
     if (!visibleRef.current || !element || selectionGuardRef.current?.isPaused()) return;
@@ -99,15 +80,33 @@ export function useAIMessageFollow({ containerRef, messages, streamingText, acti
 
   useEffect(() => {
     const element = containerRef.current;
-    if (!element || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(() => {
-      // Keyboard/rotation changes the log's height without changing messages.
-      // Readers who scrolled back retain their position and the jump control.
+    if (!element) return;
+    let width = element.clientWidth;
+    let height = element.clientHeight;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+      width = element.clientWidth;
+      height = element.clientHeight;
       if (visibleRef.current && followingRef.current) scrollToLatest();
     });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [containerRef, scrollToLatest]);
+    const onScroll = () => {
+      if (!visibleRef.current) return;
+      if (!selectionGuardRef.current?.isPaused()) {
+        // Rotation can clamp scrollTop and emit scroll before ResizeObserver.
+        // Compare positions only within the same layout when deciding to detach.
+        const resizing = observer && (element.clientWidth !== width || element.clientHeight !== height);
+        if (isNearAIMessageBottom(element)) setFollowing(true);
+        else if (!resizing && isReadingEarlierAIMessages(element, lastTopRef.current)) setFollowing(false);
+      }
+      lastTopRef.current = element.scrollTop;
+      saveReadingPosition(element);
+    };
+    observer?.observe(element);
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      element.removeEventListener("scroll", onScroll);
+      observer?.disconnect();
+    };
+  }, [containerRef, saveReadingPosition, scrollToLatest, setFollowing]);
 
   useEffect(() => {
     if (messages.length === 0 && !streamingText) {
