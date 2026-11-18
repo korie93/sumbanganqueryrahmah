@@ -7,7 +7,8 @@ test.use({ serviceWorkers: "block" });
 // Compare the painted bitmap corners with the same panel behind them.
 // Measuring the contained image avoids accidentally sampling its letterbox.
 async function checkPaintedEdges(page: Page) {
-  const clip = await page.locator('.auth-brand-artwork img[data-active="true"]').evaluate((img: HTMLImageElement) => {
+  const image = page.locator('.auth-brand-artwork img[data-active="true"]');
+  const clip = await image.evaluate((img: HTMLImageElement) => {
     const rect = img.getBoundingClientRect();
     const ratio = Math.min(rect.width / img.naturalWidth, rect.height / img.naturalHeight);
     const width = Math.floor(img.naturalWidth * ratio), height = Math.floor(img.naturalHeight * ratio);
@@ -15,7 +16,23 @@ async function checkPaintedEdges(page: Page) {
   });
   const shot = { clip, scale: "css" as const, animations: "disabled" as const };
   const painted = await page.screenshot(shot);
-  const backdrop = await page.screenshot({ ...shot, style: ".auth-brand-artwork img { visibility: hidden !important; }" });
+  // The production CSP blocks Playwright's injected screenshot stylesheet.
+  // Change only the active image's visibility so the panel retains its layout.
+  const previous = await image.evaluate((img: HTMLImageElement) => {
+    const value = img.style.visibility;
+    const priority = img.style.getPropertyPriority("visibility");
+    img.style.setProperty("visibility", "hidden", "important");
+    return { value, priority };
+  });
+  let backdrop: Buffer;
+  try {
+    await expect(image).toHaveCSS("visibility", "hidden");
+    backdrop = await page.screenshot(shot);
+  } finally {
+    await image.evaluate((img: HTMLImageElement, { value, priority }) => {
+      img.style.setProperty("visibility", value, priority);
+    }, previous);
+  }
   const difference = await page.evaluate(async ([a, b]) => {
     async function pixels(encoded: string) {
       const blob = new Blob([Uint8Array.from(atob(encoded), c => c.charCodeAt(0))], { type: "image/png" });

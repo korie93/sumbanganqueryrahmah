@@ -279,8 +279,8 @@ for (const width of [320, 722, 1440]) {
         expect(artwork.naturalHeight).toBeGreaterThan(0);
         if (theme === "dark") {
           expect(artwork.filter, "Preserve the supplied dark illustration's original colors").toBe("none");
-          expect(artwork.blend).toBe("normal");
         }
+        expect(artwork.blend).toBe(theme === "dark" ? "lighten" : "multiply");
         const boxes = await shell.evaluate(element => Object.fromEntries([
           ".auth-v17-brand-panel", ".auth-v17-logo", ".auth-v17-art", ".auth-v17-side", ".auth-v17-wrap",
           ".login-form", '[data-testid="input-username"]', '[data-testid="input-password"]', '[data-testid="button-login"]',
