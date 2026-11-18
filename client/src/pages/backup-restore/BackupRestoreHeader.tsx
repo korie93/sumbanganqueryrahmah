@@ -1,4 +1,5 @@
 import { Database, Download, FileText, Loader2, Plus, RefreshCw } from "lucide-react";
+import { useState, type KeyboardEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -29,6 +30,16 @@ export function BackupRestoreHeader({
   onRefresh,
 }: BackupRestoreHeaderProps) {
   const isMobile = useIsMobile();
+  const [exportOpen, setExportOpen] = useState(false);
+
+  // Handle a quick Enter → Escape even before the popover's document
+  // dismiss listener is ready, whether focus has moved inside yet or not.
+  function closeExportOnEscape(event: KeyboardEvent) {
+    if (!exportOpen || event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setExportOpen(false);
+  }
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-[1.75rem] border border-border/60 bg-background/95 p-4 shadow-[0_20px_36px_-30px_hsl(222_47%_11%_/_0.18)]">
@@ -62,19 +73,20 @@ export function BackupRestoreHeader({
       )}
 
       <div className={`flex w-full gap-2 ${isMobile ? "grid grid-cols-2" : "flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end"}`}>
-        <Popover>
+        <Popover open={exportOpen} onOpenChange={setExportOpen}>
           <PopoverTrigger asChild>
             <Button
               className="w-full rounded-xl sm:w-auto"
               variant="outline"
               disabled={loading || visibleBackupsLength === 0 || exportingPdf}
               data-testid="button-export-backups"
+              onKeyDown={closeExportOnEscape}
             >
               {exportingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Export
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-48" align="end">
+          <PopoverContent className="w-48" align="end" onKeyDown={closeExportOnEscape}>
             <div className="space-y-1">
               <Button
                 variant="ghost"

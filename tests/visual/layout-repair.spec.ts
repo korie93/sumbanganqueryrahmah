@@ -67,6 +67,14 @@ for (const theme of themes) {
         await page.keyboard.press("Enter");
         await expect(page.getByTestId("button-export-csv")).toBeVisible();
         await page.keyboard.press("Escape");
+        await expect(exportButton).toHaveAttribute("aria-expanded", "false");
+        await expect(page.getByTestId("button-export-csv")).toBeHidden();
+        await expect(exportButton).toBeFocused();
+        // A keyboard user can dismiss immediately after reopening, before
+        // animations or focus transfer finish.
+        await page.keyboard.press("Enter");
+        await page.keyboard.press("Escape");
+        await expect(exportButton).toHaveAttribute("aria-expanded", "false");
         await expect(exportButton).toBeFocused();
         expect(rejectedWrites).toEqual([]);
         await checkFixture(page, fixture);
