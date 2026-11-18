@@ -4,16 +4,16 @@ import signinDark from "@/assets/auth-v17/sqr-illustration-dark.webp";
 import "./AuthBrandArtwork.css";
 
 type Variant = "signin" | "recovery";
-type Frame = { src: string; width: number; height: number };
+type Frame = { src: string; width: number; height: number; theme: "light" | "dark" };
 type Frames = Record<Variant, Frame>;
 type Props = { theme: "light" | "dark"; recoveryArtwork: boolean };
 const variants: Variant[] = ["signin", "recovery"];
 
 function artwork(theme: Props["theme"]): Frames {
   return {
-    signin: theme === "dark" ? { src: signinDark, width: 1359, height: 1157 }
-      : { src: signinLight, width: 1780, height: 1516 },
-    recovery: { src: `/illustrations/reset-password-${theme}.webp`, width: 640, height: 640 },
+    signin: theme === "dark" ? { src: signinDark, width: 1359, height: 1157, theme }
+      : { src: signinLight, width: 1780, height: 1516, theme },
+    recovery: { src: `/illustrations/reset-password-${theme}.webp`, width: 640, height: 640, theme },
   };
 }
 
@@ -112,6 +112,7 @@ export function AuthBrandArtwork({ theme, recoveryArtwork }: Props) {
       decoding="async"
       {...{ fetchpriority: "low" }}
       data-active={active === name}
+      data-artwork-theme={frames[name].theme}
       onLoad={event => loaded(name, frames[name].src, event.currentTarget)}
       onError={() => { failed.current.add(frames[name].src); }}
     />)}
