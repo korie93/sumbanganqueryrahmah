@@ -3,7 +3,6 @@
 
 const {
   REGEX_BACKSLASH,
-  REGEX_REMOVE_BACKSLASH,
   REGEX_SPECIAL_CHARS,
   REGEX_SPECIAL_CHARS_GLOBAL
 } = require('./constants');
@@ -27,10 +26,33 @@ exports.isWindows = () => {
   return false;
 };
 
+const isLineTerminator = ch => ch === '\n' || ch === '\r' || ch === '\u2028' || ch === '\u2029';
+
 exports.removeBackslashes = str => {
-  return str.replace(REGEX_REMOVE_BACKSLASH, match => {
-    return match === '\\' ? '' : match;
-  });
+  if (!str.includes('\\')) return str;
+  const parts = [];
+  let start = 0;
+  let lookahead = 0;
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '[') {
+      // Keep complete bracket expressions verbatim. A failed search up to
+      // the next line break (or end) also rules out all later opens in it.
+      lookahead = Math.max(lookahead, i + 1);
+      while (lookahead < str.length) {
+        const ch = str[lookahead];
+        if (ch !== '\\' && str[lookahead + 1] === ']') {
+          i = lookahead + 1;
+          break;
+        }
+        if (isLineTerminator(ch)) break;
+        lookahead++;
+      }
+    } else if (str[i] === '\\' && i + 1 < str.length && !isLineTerminator(str[i + 1])) {
+      parts.push(str.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return parts.length ? parts.join('') + str.slice(start) : str;
 };
 
 exports.escapeLast = (input, char, lastIdx) => {

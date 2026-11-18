@@ -61,7 +61,7 @@ test("patch verifier rejects missing, altered or additional package files and al
   cpSync("vendor/picomatch", path.join(cwd, "vendor/picomatch"), { recursive: true });
   cpSync("vendor/picomatch/package", path.join(cwd, "node_modules/picomatch"), { recursive: true });
   assert.ok(verifyPicomatchVendor({ cwd, manifest, lock }));
-  for (const relative of ["node_modules/picomatch/lib/parse.js", "vendor/picomatch/files.sha256.json", "vendor/picomatch/picomatch-4.0.7-sqr.1.tgz"]) {
+  for (const relative of ["node_modules/picomatch/lib/parse.js", "vendor/picomatch/files.sha256.json", "vendor/picomatch/picomatch-4.0.7-sqr.2.tgz"]) {
     const file = path.join(cwd, relative), bytes = readFileSync(file);
     rmSync(file); // The sandbox source copy deliberately has read-only modes.
     writeFileSync(file, "tampered");

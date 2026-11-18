@@ -8,6 +8,25 @@ import test from "node:test";
 const require = createRequire(import.meta.url);
 const pm = require("picomatch");
 
+test("glob unescaping preserves bracket, newline and trailing escape semantics", () => {
+  const { removeBackslashes } = require("picomatch/lib/utils");
+  const legacy = input => input.replace(pm.constants.REGEX_REMOVE_BACKSLASH, match => match === "\\" ? "" : match);
+  const alphabet = ["a", "\\", "[", "]", "\n"];
+  const compare = input => {
+    assert.equal(removeBackslashes(input), legacy(input), JSON.stringify(input));
+    if (input.length < 5) for (const ch of alphabet) compare(input + ch);
+  };
+  compare("");
+  for (const newline of ["\n", "\r", "\r\n", "\u2028", "\u2029"]) {
+    for (const input of ["[a\\" + newline + "]\\b", "[a\\" + newline + "x]\\b", "\\" + newline]) {
+      assert.equal(removeBackslashes(input), legacy(input));
+    }
+  }
+  const result = pm.scan("dir/file\\*.js/[a\\-z]/*.t\\s", { unescape: true });
+  assert.equal(result.base, "dir/file*.js");
+  assert.equal(result.glob, "[a\\-z]/*.ts");
+});
+
 // Only short strings; establish unsafe compilation without running a DoS payload.
 test("repeated extglobs cannot nest wildcard repetition, including single branches", () => {
   for (const pattern of ["+(*)", "+(*a)", "*(*a)", "+(a*)", "+(*?a)", "+(@(*a))", "+(*a|b)"]) {

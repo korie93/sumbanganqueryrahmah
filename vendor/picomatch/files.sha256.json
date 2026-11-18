@@ -6,7 +6,7 @@
   "lib/parse.js": "34f17ddcc5f273111e28a065e2ea21515d6be093d3e6c333c7978e1487dc25b5",
   "lib/picomatch.js": "fdd249d7ffff853f3bb1c77eafc8baa1a437bea85a94c35877b83c6a40d9ca94",
   "lib/scan.js": "6457a1764e5c2e543cc3a0c00ce12ebb3764097628868198370b64d4e642aaae",
-  "lib/utils.js": "f04604f70cd1a3f6ace80b84766468674ff38b4bb83818d2ef1d81fc6355f935",
+  "lib/utils.js": "746541ce68d47b4c3e2a986e5c0d8c42593aca4fe0a9b913216044d280b8dd9a",
   "package.json": "479b70b87aa7b44344d62c8a459ae7e53dd2bca6c61f1396bd55e63e9de73fc6",
   "posix.js": "5695ff5dfcd5a338a40630bd506056f2950bcb08fe1cc068519cbbfe60add480"
 }

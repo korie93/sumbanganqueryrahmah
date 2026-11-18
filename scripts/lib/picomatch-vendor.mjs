@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { lstatSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-export const PICOMATCH_SOURCE = "file:vendor/picomatch/picomatch-4.0.7-sqr.1.tgz";
-export const PICOMATCH_INTEGRITY = "sha512-W8OJjGOSbuAmiubAZ6knQg/7T5UJMl4viEu8hBecndTFN/RJxyAvP+GLxDG5jgxqtcGMG45DPupZiMcKceOuEA==";
+export const PICOMATCH_SOURCE = "file:vendor/picomatch/picomatch-4.0.7-sqr.2.tgz";
+export const PICOMATCH_INTEGRITY = "sha512-BMfH7qO6v1cqss6F6uQpP0WpbLR40zK/KV81qkQJVptAja8BNUsNPJ4YhYriZ3OOMWCM8KRrPnEFvQEpBRsEnA==";
 export const PICOMATCH_ADVISORY = "https://github.com/advisories/GHSA-fc5q-39xc-vjpf";
 
 // Read data only; never load or execute package code during the audit.
@@ -16,7 +16,7 @@ export function verifyPicomatchVendor({ cwd = process.cwd(), manifest, lock } = 
     throw new Error("Picomatch vendor archive integrity mismatch.");
   }
   const hashBytes = readFileSync(path.join(cwd, "vendor/picomatch/files.sha256.json"));
-  if (createHash("sha256").update(hashBytes).digest("hex") !== "1e355a58f8e5887df63f46d878e834a0aa729e7e02f639bd0738dfcbd4d14539") throw new Error("Picomatch manifest integrity mismatch.");
+  if (createHash("sha256").update(hashBytes).digest("hex") !== "79cc4d2b99a367699d8744951e2b804678fe7d6ed7a6a80d797a302c73893e8a") throw new Error("Picomatch manifest integrity mismatch.");
   const hashes = JSON.parse(hashBytes.toString("utf8"));
   const expected = ["LICENSE", "README.md", "index.js", "lib/constants.js", "lib/parse.js", "lib/picomatch.js", "lib/scan.js", "lib/utils.js", "package.json", "posix.js"].sort();
   if (JSON.stringify(Object.keys(hashes).sort()) !== JSON.stringify(expected)
