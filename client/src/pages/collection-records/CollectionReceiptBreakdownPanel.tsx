@@ -2,6 +2,7 @@ import { useContext, useEffect, useId, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import type { CollectionReceiptBreakdown } from "@shared/collection-receipt-breakdown";
 import { getCollectionReceiptBreakdown } from "@/lib/api/collection-records";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 import type { CollectionRecord } from "@/lib/api";
 import type { ViewCollectionReceipt } from "./types";
 import { SharedReceiptComparison } from "./SharedReceiptComparison";
@@ -88,7 +89,7 @@ export function CollectionReceiptBreakdownPanel({ record, onViewReceipt }: Panel
   return (
     <section className="min-w-0 border-t border-border text-sm">
       <h3>
-        <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)}
+        <button type="button" {...getAriaExpandedProps(open)} aria-controls={id} onClick={() => setOpen(!open)}
           className="flex min-h-11 w-full items-center justify-between gap-2 rounded-sm text-left font-semibold focus-visible:outline-ring">
           {t("common.collection.breakdown.title")}
           <ChevronDown aria-hidden="true" className={open ? "size-4 rotate-180" : "size-4"} />
