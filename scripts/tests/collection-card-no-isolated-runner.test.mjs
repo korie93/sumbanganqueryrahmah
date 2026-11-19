@@ -55,13 +55,14 @@ test("Collection Card baseline reproduction is explicit while default verificati
 test("Collection Card browser explicitly selects the full desktop view before checking positional card cells", () => {
   const fullViewIndex = browser.indexOf('const fullView = page.getByRole("group", { name: "Paparan rekod", exact: true })');
   const selectIndex = browser.indexOf("await fullView.click()", fullViewIndex);
-  const headingIndex = browser.indexOf('name: "Card Number", exact: true', selectIndex);
+  const headingIndex = browser.indexOf("await cardHeader.waitFor()", selectIndex);
   const firstQueryIndex = browser.indexOf('const byIc = await queryUi(');
   assert.ok(fullViewIndex >= 0 && selectIndex > fullViewIndex);
   assert.ok(headingIndex > selectIndex && firstQueryIndex > headingIndex);
   assert.match(browser, /getByRole\("button", \{ name: "Lengkap", exact: true \}\)/);
   assert.match(browser, /assert\.equal\(await fullView\.getAttribute\("aria-pressed"\), "true"\)/);
-  assert.match(browser, /td:nth-child\(5\)/);
+  assert.ok(browser.includes('getByRole("columnheader", { name: /^(?:Nombor kad|Card Number)$/ })'));
+  assert.ok(browser.includes("cardHeader.evaluate(header => header.cellIndex)"));
   assert.match(browser, /assert\.deepEqual\([\s\S]*expectedCards,[\s\S]*without rounding or clipping digits/);
 });
 

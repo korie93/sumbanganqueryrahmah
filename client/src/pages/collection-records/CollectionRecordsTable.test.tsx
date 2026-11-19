@@ -82,7 +82,7 @@ test("record loading preserves its exact accessible status markup", () => {
   assert.equal(markup, '<div role="status" class="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">Loading records...</div>');
 });
 
-test("mobile collection keeps complete record fields under details and respects action access", () => {
+test("mobile collection opens details through the name and respects action access", () => {
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {
     configurable: true,
@@ -103,18 +103,10 @@ test("mobile collection keeps complete record fields under details and respects 
       }),
     );
     const markup = render(true, true);
-    assert.match(markup, /<details/);
-    assert.match(markup, /<summary[^>]*>Record details/);
+    assert.match(markup, /<button[^>]*aria-haspopup="dialog"[^>]*>Siti Aminah<\/button>/);
+    assert.doesNotMatch(markup, /<details|<summary|role="dialog"/);
     assert.match(markup, /00009007199254740993/);
-    assert.match(markup, /880101105432/);
-    assert.match(markup, /0123456789/);
-    assert.match(markup, /Billing Principal \(OSP\)/);
-    assert.deepEqual([...markup.matchAll(/<dt[^>]*>(.*?)<\/dt>/g)].map((match) => match[1]), [
-      "Account Number", "Card Number", "IC Number", "Customer Phone", "Batch", "TOTAL DUE",
-      "Billing Principal (OSP)", "CP Status", "Aging / Match", "Staff Nickname", "Source File",
-    ]);
-    assert.match(markup, /<dd class="break-all">880101105432<\/dd>/);
-    assert.match(markup, /<dd>SW.AFIQAH_1332<\/dd>/);
+    assert.deepEqual([...markup.matchAll(/<dt[^>]*>(.*?)<\/dt>/g)].map((match) => match[1]), ["Nombor kad", "Nombor akaun", "Jumlah dibayar", "Tarikh bayaran"]);
     assert.match(markup, /View Receipt/);
     assert.match(markup, /aria-label="Actions for record 1"/);
     assert.doesNotMatch(render(false, false), /aria-label="Actions for record/);
@@ -194,7 +186,9 @@ for (const layout of ["desktop", "mobile"] as const) {
       assert.match(highlightedRecords[0]!, /<span class="sr-only">Last opened record<\/span>/);
       assert.equal((markup.match(/Last opened record/g) ?? []).length, 1);
       assert.doesNotMatch(markup, /aria-selected|data-state="selected"/);
-      for (const identifier of ["00009007199254740993", firstRecord.icNumber, firstRecord.customerPhone, firstRecord.accountNumber]) {
+      const identifiers = ["00009007199254740993", firstRecord.accountNumber];
+      if (layout === "desktop") identifiers.push(firstRecord.icNumber, firstRecord.customerPhone);
+      for (const identifier of identifiers) {
         assert.ok(highlightedRecords[0]!.includes(identifier));
       }
 
@@ -232,11 +226,11 @@ function getDesktopHeaders(markup: string) {
 test("desktop defaults to eight compact columns with complete authorized Account and Card strings", () => {
   const markup = renderDesktopRecords();
   assert.deepEqual(getDesktopHeaders(markup), [
-    "No.", "Customer Name", "Account / Card", "Amount", "Payment Date", "Receipt", "Staff Nickname", "Actions",
+    "Customer Name", "Kad / Akaun", "Amount", "Payment Date", "Receipt", "No.", "Staff Nickname", "Actions",
   ]);
   assert.match(markup, /collection-records-table--compact min-w-\[64rem\] table-fixed/);
-  assert.match(markup, /<dt[^>]*>Account<\/dt><dd>0000007788<\/dd>/);
-  assert.match(markup, /<dt[^>]*>Card<\/dt><dd>00009007199254740993<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Nombor akaun<\/dt><dd>0000007788<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Nombor kad<\/dt><dd>00009007199254740993<\/dd>/);
   assert.match(markup, /<dl class="space-y-1\.5 whitespace-normal wrap-anywhere"/);
   assert.match(markup, /<td[^>]*whitespace-normal wrap-anywhere[^>]*>SW\.AFIQAH_1332<\/td>/);
   assert.doesNotMatch(markup, /880101105432|0123456789|IC Number|Customer Phone Number|TOTAL DUE/);
@@ -248,8 +242,8 @@ test("desktop defaults to eight compact columns with complete authorized Account
 test("full desktop view retains all eighteen columns and full supplied record values", () => {
   const markup = renderDesktopRecords({ viewMode: "full" });
   assert.deepEqual(getDesktopHeaders(markup), [
-    "No.", "Customer Name", "IC Number", "Account Number", "Card Number", "Customer Phone Number", "Batch", "Amount",
-    "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Payment Date", "Receipt", "Staff Nickname", "Source File", "Actions",
+    "Customer Name", "Nombor kad", "Nombor akaun", "Amount", "Payment Date", "Receipt", "No.", "IC Number", "Customer Phone Number", "Batch",
+    "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Staff Nickname", "Fail sumber", "Actions",
   ]);
   assert.equal((markup.match(/<td\b/g) ?? []).length, 18);
   for (const value of ["0000007788", "00009007199254740993", collectionRecord.icNumber, collectionRecord.customerPhone]) {
@@ -306,6 +300,6 @@ test("compact desktop retains per-row delete checks and last-opened markers by s
 
 test("compact desktop uses existing placeholders for missing Account or Card identifiers", () => {
   const markup = renderDesktopRecords({ paginatedRecords: [{ ...collectionRecord, accountNumber: "", cardNumber: null }] });
-  assert.match(markup, /<dt[^>]*>Account<\/dt><dd>-<\/dd>/);
-  assert.match(markup, /<dt[^>]*>Card<\/dt><dd>-<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Nombor akaun<\/dt><dd>-<\/dd>/);
+  assert.match(markup, /<dt[^>]*>Nombor kad<\/dt><dd>-<\/dd>/);
 });

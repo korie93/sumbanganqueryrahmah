@@ -1,4 +1,6 @@
 import { Suspense, lazy, memo, useMemo, useRef, useState } from "react";
+import { useAuthLocale } from "@/components/auth/useAuthLocale";
+import { CollectionRecordsTranslation } from "@/pages/collection-records/collection-records-translation";
 import { Filter } from "lucide-react";
 import { ActiveFilterChips } from "@/components/data/ActiveFilterChips";
 import { LazyDialogFallback } from "@/components/LazySuspenseFallback";
@@ -125,6 +127,7 @@ function CollectionRecordsToolbarFallback() {
 }
 
 function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
+  const { t } = useAuthLocale();
   const isMobile = useIsMobile();
   const [filtersOpen, setFiltersOpen] = useState(false);
   const filtersTriggerRef = useRef<HTMLButtonElement>(null);
@@ -175,6 +178,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
   };
 
   return (
+    <CollectionRecordsTranslation.Provider value={t}>
     <div ref={pageFocusRef} tabIndex={-1} className="space-y-4" data-testid="collection-records-page">
       <section aria-label="View Rekod Collection" className="space-y-4">
         <div className="flex flex-wrap items-end gap-2" data-floating-ai-avoid="true">
@@ -248,7 +252,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
             viewModel.filters.onFilter();
           }}
           lastViewedRecordId={lastViewedRecordId}
-          onRecordDetailsToggle={(record) => markViewed(record.id)}
+          onOpenRecord={(record) => markViewed(record.id)}
           onViewReceipt={(record, launcher) => {
             rememberReceiptLauncher(launcher);
             markViewed(record.id);
@@ -351,6 +355,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         <Suspense fallback={<LazyDialogFallback label="Loading all collection records dialog..." />}>
           <ViewAllRecordsDialog
             {...viewModel.viewAll}
+            onOpenRecord={(record) => markViewed(record.id)}
             onViewReceipt={(record) => {
               rememberReceiptLauncher();
               markViewed(record.id);
@@ -360,6 +365,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
         </Suspense>
       ) : null}
     </div>
+    </CollectionRecordsTranslation.Provider>
   );
 }
 

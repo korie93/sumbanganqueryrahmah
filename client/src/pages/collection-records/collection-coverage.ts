@@ -15,8 +15,8 @@ export function getCollectionCpStatusLabel(
   return `${base} · POOL requires revalidation`;
 }
 
-export function formatCollectionOptionalAmount(value: string | null | undefined) {
-  return value === null || value === undefined || value === "" ? "-" : formatAmountRM(value);
+export function formatCollectionOptionalAmount(value: string | number | null | undefined, missing = "-") {
+  return value === null || value === undefined || String(value).trim() === "" ? missing : formatAmountRM(value);
 }
 
 export function formatCollectionMaskedCard(last4: string | null | undefined) {
@@ -26,6 +26,7 @@ export function formatCollectionMaskedCard(last4: string | null | undefined) {
 
 export function getCollectionMatchAccuracyLabel(
   value: number | null | undefined,
+  missing = "-",
 ) {
-  return typeof value === "number" && Number.isFinite(value) ? `${value}%` : "-";
+  return typeof value === "number" && Number.isFinite(value) ? `${value}%` : missing;
 }

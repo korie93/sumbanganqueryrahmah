@@ -1,7 +1,9 @@
+import { useContext } from "react";
 import { cn } from "@/lib/utils";
 import type { CollectionRecord, CollectionRecordReceipt } from "@/lib/api";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
-import { formatAmountRM } from "@/pages/collection/utils";
+import { formatCollectionOptionalAmount } from "./collection-coverage";
+import { CollectionRecordsTranslation } from "./collection-records-translation";
 
 type ReceiptPreviewRecordDetailsProps = {
   id: string;
@@ -11,6 +13,15 @@ type ReceiptPreviewRecordDetailsProps = {
   isMobile: boolean;
 };
 
+function ReceiptDetail({ label, value, amount = false }: { label: string; value: string; amount?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs leading-4 text-muted-foreground">{label}</dt>
+      <dd className={cn("mt-0.5 wrap-anywhere text-sm leading-5", amount && "font-semibold tabular-nums")}>{value}</dd>
+    </div>
+  );
+}
+
 export function ReceiptPreviewRecordDetails({
   id,
   record,
@@ -18,62 +29,39 @@ export function ReceiptPreviewRecordDetails({
   showDetails,
   isMobile,
 }: ReceiptPreviewRecordDetailsProps) {
+  const t = useContext(CollectionRecordsTranslation);
   if (!record) {
     return null;
   }
+  const missing = t("common.collection.records.missing");
 
   return (
     <div
       id={id}
       role="region"
-      aria-label="Receipt and collection details"
+      aria-label={t("common.collection.receipts.details")}
       hidden={!showDetails}
       tabIndex={0}
       className={cn("max-h-[30vh] shrink-0 overflow-y-auto rounded-md border border-border/60 bg-background/40 px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", isMobile ? "mx-3 mt-2" : "mt-2")}
     >
-      {selectedReceipt ? (
-        <p className="mb-3 break-all text-xs text-muted-foreground">
-          {selectedReceipt.originalFileName} · {selectedReceipt.originalMimeType}
-        </p>
-      ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="break-words">
-          <p className="text-2xs uppercase tracking-wide text-muted-foreground">Customer</p>
-          <p className="text-sm font-medium">{record.customerName}</p>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+        <ReceiptDetail label={t("common.collection.receipts.recordedPayment")} value={formatCollectionOptionalAmount(record.amount, missing)} amount />
+        <ReceiptDetail label={t("common.collection.receipts.allReceiptsTotal")} value={formatCollectionOptionalAmount(record.receiptTotalAmount, missing)} amount />
+        <ReceiptDetail label={t("common.collection.receipts.customer")} value={record.customerName?.trim() || missing} />
+        <ReceiptDetail label={t("common.collection.receipts.paymentDate")} value={formatIsoDateToDDMMYYYY(record.paymentDate)} />
+      </dl>
+      {selectedReceipt && (
+        <div className="mt-3 border-t border-border pt-3">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4 [&>div:last-child]:col-span-2">
+            <ReceiptDetail label={t("common.collection.receipts.thisReceiptAmount")} value={formatCollectionOptionalAmount(selectedReceipt.receiptAmount, missing)} amount />
+            <ReceiptDetail label={t("common.collection.receipts.receiptDate")} value={selectedReceipt.receiptDate ? formatIsoDateToDDMMYYYY(selectedReceipt.receiptDate) : missing} />
+            <ReceiptDetail label={t("common.collection.receipts.reference")} value={selectedReceipt.receiptReference?.trim() || missing} />
+          </dl>
+          <p className="mt-2 wrap-anywhere text-xs text-muted-foreground">
+            {[selectedReceipt.originalFileName, selectedReceipt.originalMimeType].filter(Boolean).join(" · ")}
+          </p>
         </div>
-        <div>
-          <p className="text-2xs uppercase tracking-wide text-muted-foreground">Payment Date</p>
-          <p className="text-sm font-medium">{formatIsoDateToDDMMYYYY(record.paymentDate)}</p>
-        </div>
-        <div>
-          <p className="text-2xs uppercase tracking-wide text-muted-foreground">Total Paid</p>
-          <p className="text-sm font-medium">{formatAmountRM(record.amount)}</p>
-        </div>
-        <div>
-          <p className="text-2xs uppercase tracking-wide text-muted-foreground">Receipt Total</p>
-          <p className="text-sm font-medium">{formatAmountRM(record.receiptTotalAmount)}</p>
-        </div>
-        {selectedReceipt ? (
-          <>
-            <div>
-              <p className="text-2xs uppercase tracking-wide text-muted-foreground">Receipt Amount</p>
-              <p className="text-sm font-medium">
-                {selectedReceipt.receiptAmount ? formatAmountRM(selectedReceipt.receiptAmount) : "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-2xs uppercase tracking-wide text-muted-foreground">Receipt Date</p>
-              <p className="text-sm font-medium">
-                {selectedReceipt.receiptDate ? formatIsoDateToDDMMYYYY(selectedReceipt.receiptDate) : "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-2xs uppercase tracking-wide text-muted-foreground">Reference</p>
-              <p className="break-words text-sm font-medium">{selectedReceipt.receiptReference || "-"}</p>
-            </div>
-          </>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }

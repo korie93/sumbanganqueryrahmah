@@ -8,8 +8,8 @@ import { ReceiptPreviewToolbar } from "../ReceiptPreviewToolbar";
 import { ReceiptPreviewRecordDetails } from "../ReceiptPreviewRecordDetails";
 
 const receipts = [
-  { id: "first", originalFileName: "bank-transfer.png", originalMimeType: "image/png" },
-  { id: "second", originalFileName: "cash-receipt.pdf", originalMimeType: "application/pdf" },
+  { id: "first", originalFileName: "bank-transfer.png", originalMimeType: "image/png", receiptAmount: "0.00" },
+  { id: "second", originalFileName: "cash-receipt.pdf", originalMimeType: "application/pdf", receiptAmount: null },
 ] as CollectionRecordReceipt[];
 
 test("receipt choices expose filenames, count and the selected pressed state", () => {
@@ -20,13 +20,13 @@ test("receipt choices expose filenames, count and the selected pressed state", (
     isMobile: true,
     onSelectReceipt: () => undefined,
   }));
-  assert.match(markup, /Receipt 2 of 2/);
-  assert.match(markup, /aria-label="Choose receipt" aria-busy="true"/);
+  assert.match(markup, /Resit 2 daripada 2/);
+  assert.match(markup, /aria-label="Pilih resit" aria-busy="true"/);
   const buttons = markup.match(/<button\b[^>]*>/g) || [];
   assert.equal(buttons.length, 2);
-  assert.match(buttons[0], /aria-label="Receipt 1: bank-transfer.png"/);
+  assert.match(markup, /1 · RM\s*0\.00<\/span><span class="sr-only">, bank-transfer.png/);
   assert.match(buttons[0], /aria-pressed="false"/);
-  assert.match(buttons[1], /aria-label="Receipt 2: cash-receipt.pdf"/);
+  assert.match(markup, /2 · cash-receipt.pdf<\/span>/);
   assert.match(buttons[1], /aria-pressed="true"/);
   assert.doesNotMatch(markup, /disabled=/);
 });
@@ -54,7 +54,7 @@ test("details toggle controls the actual record details region and zoom is clear
   const record = { customerName: "Customer", paymentDate: "2026-10-01", amount: "20.00", receiptTotalAmount: "20.00" } as CollectionRecord;
   const closed = renderToStaticMarkup(createElement(ReceiptPreviewRecordDetails, { id: detailsId, record, selectedReceipt: receipts[0], showDetails: false, isMobile: true }));
   const open = renderToStaticMarkup(createElement(ReceiptPreviewRecordDetails, { id: detailsId, record, selectedReceipt: receipts[0], showDetails: true, isMobile: true }));
-  assert.match(closed, /id="receipt-details-test" role="region" aria-label="Receipt and collection details" hidden=""/);
+  assert.match(closed, /id="receipt-details-test" role="region" aria-label="Butiran resit dan kutipan" hidden=""/);
   assert.doesNotMatch(open, /hidden=""/);
   assert.match(open, /tabindex="0"/);
   assert.match(open, /focus-visible:ring-2/);

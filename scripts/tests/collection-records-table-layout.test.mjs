@@ -57,6 +57,10 @@ test("pinned identity and actions preserve full identifiers, pagination and perm
   assert.match(markup.rows, /<td[^>]*collection-records-table-actions/);
   assert.match(markup.rows, /aria-label="Actions for record 51"/);
   assert.doesNotMatch(markup.readonly, /aria-label="Actions for record/);
+  for (const html of [markup.readonly, markup.compactReadonly]) {
+    assert.match(html, /<button[^>]*aria-haspopup="dialog"[^>]*>Synthetic Customer<\/button>/);
+    assert.doesNotMatch(html, /role="dialog"/);
+  }
   assert.doesNotMatch(markup.readonly, /collection-records-table-actions|collection-records-table-scroll--actions/);
 });
 
@@ -68,7 +72,7 @@ test("compact records keep primary fields in eight columns without coloring amou
       assert.ok(content.includes(value));
     }
     assert.doesNotMatch(content, /2140px|text-success/);
-    assert.doesNotMatch(content, /<th[^>]*>(?:IC Number|Customer Phone Number|TOTAL DUE|Billing Principal \(OSP\)|CP Status|Aging|Match|Source File)<\/th>/);
+    assert.doesNotMatch(content, /<th[^>]*>(?:IC Number|Customer Phone Number|TOTAL DUE|Billing Principal \(OSP\)|CP Status|Aging|Match|Fail sumber)<\/th>/);
     assert.doesNotMatch(content, /000000000001<\/td>|0100000000<\/td>/);
   }
   assert.match(markup.compact, /aria-label="Actions for record 51"/);

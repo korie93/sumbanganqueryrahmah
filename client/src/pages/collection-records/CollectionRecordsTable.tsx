@@ -1,19 +1,9 @@
+import { CollectionRecordCard } from "./CollectionRecordCard";
 import { Suspense, lazy, useState } from "react";
-import { ChevronDown, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
-import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
-import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
-import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
-import { formatAmountRM } from "@/pages/collection/utils";
-import {
-  formatCollectionOptionalAmount,
-  getCollectionCpStatusLabel,
-  getCollectionMatchAccuracyLabel,
-} from "@/pages/collection-records/collection-coverage";
-import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionRecordActions } from "./CollectionRecordActions";
 import { CollectionRecordsEmptyState, type CollectionRecordsEmptyStateProps } from "./CollectionRecordsEmptyState";
 
@@ -31,7 +21,7 @@ export interface CollectionRecordsTableProps extends CollectionRecordsEmptyState
   canEdit: boolean;
   lastViewedRecordId?: string | null | undefined;
   onViewReceipt: (record: CollectionRecord, launcher?: HTMLElement) => void;
-  onRecordDetailsToggle?: ((record: CollectionRecord, open: boolean) => void) | undefined;
+  onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
   onEdit: (record: CollectionRecord, launcher?: HTMLElement) => void;
   onDelete: (record: CollectionRecord, launcher?: HTMLElement) => void;
   canDeleteRow: (record: CollectionRecord) => boolean;
@@ -53,7 +43,7 @@ export function CollectionRecordsTable({
   canEdit,
   lastViewedRecordId = null,
   onViewReceipt,
-  onRecordDetailsToggle,
+  onOpenRecord,
   onEdit,
   onDelete,
   canDeleteRow,
@@ -87,99 +77,26 @@ export function CollectionRecordsTable({
     return (
       <div className="min-h-[180px] space-y-3">
         {paginatedRecords.map((record, index) => (
-            <article
-              key={record.id}
-              data-last-viewed={record.id === lastViewedRecordId ? "true" : undefined}
-              aria-label={buildCollectionRecordRowAriaLabel({
-                formattedAmount: formatAmountRM(record.amount),
-                formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
-                record,
-                recordNumber: pageOffset + index + 1,
-              })}
-              className="space-y-3 rounded-lg border border-border bg-card p-4 data-[last-viewed=true]:bg-muted data-[last-viewed=true]:shadow-[inset_3px_0_0_hsl(var(--primary))]"
-              role="group"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-1">
-                  <p className="text-xs text-muted-foreground">
-                    Record #{pageOffset + index + 1}
-                    {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
-                  </p>
-                  <h3 className="break-words text-base font-semibold text-foreground">
-                    {record.customerName}
-                  </h3>
-                  <p className="text-sm font-medium tabular-nums text-foreground">
-                    {formatAmountRM(record.amount)}
-                  </p>
-                </div>
-                <p className="shrink-0 text-xs text-muted-foreground">
-                  {formatIsoDateToDDMMYYYY(record.paymentDate)}
-                </p>
-              </div>
-
-              <dl className="grid gap-2 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Account Number</dt>
-                  <dd className="break-all">{record.accountNumber || "-"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Card Number</dt>
-                  <dd className="break-all">{getCollectionCardNumberLabel(record.cardNumber)}</dd>
-                </div>
-              </dl>
-              <details
-                className="group border-t border-border"
-                onToggle={(event) => onRecordDetailsToggle?.(record, event.currentTarget.open)}
-              >
-                <summary className="flex min-h-11 cursor-pointer items-center justify-between text-sm font-medium text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring">
-                  Record details
-                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
-                </summary>
-              <dl className="grid gap-3 pb-3 text-sm">
-                {([
-                  ["IC Number", record.icNumber || "-", "break-all"],
-                  ["Customer Phone", record.customerPhone || "-"],
-                  ["Batch", record.batch || "-"],
-                  ["TOTAL DUE", formatCollectionOptionalAmount(record.totalDue)],
-                  ["Billing Principal (OSP)", formatCollectionOptionalAmount(record.billingPrincipalOsp)],
-                  ["CP Status", getCollectionCpStatusLabel(record), "font-medium"],
-                  ["Aging / Match", `${record.agingBucket || "-"} / ${getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy)}`],
-                  ["Staff Nickname", record.collectionStaffNickname || "-"],
-                  ["Source File", getCollectionRecordSourceLabel(record), "break-words"],
-                ] as [string, string, string?][]).map(([label, value, className]) => (
-                  <div key={label} className="space-y-1">
-                    <dt className="text-xs text-muted-foreground">{label}</dt>
-                    <dd className={className}>{value}</dd>
-                  </div>
-                ))}
-              </dl>
-              </details>
-
-              <div className="flex flex-wrap items-center gap-2" data-floating-ai-avoid="true">
-                {(record.receipts?.length || 0) > 0 ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 flex-1 justify-center rounded-md"
-                    onClick={(event) => onViewReceipt(record, event.currentTarget)}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    {(record.receipts?.length || 0) > 1 ? `View Receipt (${record.receipts.length})` : "View Receipt"}
-                  </Button>
-                ) : null}
-                {canEdit || canDeleteRow(record) ? (
-                  <CollectionRecordActions
-                    record={record}
-                    recordNumber={pageOffset + index + 1}
-                    canEdit={canEdit}
-                    canDelete={canDeleteRow(record)}
-                    onEdit={onEdit}
-                    onDelete={onDelete}
-                  />
-                ) : null}
-              </div>
-            </article>
-          ))}
+          <CollectionRecordCard
+            key={record.id}
+            record={record}
+            number={pageOffset + index + 1}
+            lastViewed={record.id === lastViewedRecordId}
+            onOpenRecord={onOpenRecord}
+            onViewReceipt={onViewReceipt}
+          >
+            {canEdit || canDeleteRow(record) ? (
+              <CollectionRecordActions
+                record={record}
+                recordNumber={pageOffset + index + 1}
+                canEdit={canEdit}
+                canDelete={canDeleteRow(record)}
+                onEdit={onEdit}
+                onDelete={onDelete}
+              />
+            ) : null}
+          </CollectionRecordCard>
+        ))}
       </div>
     );
   }
@@ -212,6 +129,7 @@ export function CollectionRecordsTable({
         pageOffset={pageOffset}
         canEdit={canEdit}
         lastViewedRecordId={lastViewedRecordId}
+        onOpenRecord={onOpenRecord}
         onViewReceipt={onViewReceipt}
         onEdit={onEdit}
         onDelete={onDelete}

@@ -448,7 +448,7 @@ test("Adaptive receipt preview cannot publish an old upgrade after switching rec
     const firstSource = await expectOnlySource(page, first);
     await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
     await expect.poll(() => fixture.heldUpgrades).toBe(1);
-    await dialog.getByRole("button", { name: `Receipt 2: ${media[1]!.fileName}`, exact: true }).click();
+    await dialog.getByRole("button").and(dialog.getByTitle(media[1]!.fileName, { exact: true })).click();
     const second = await readyImage(dialog, 1);
     const secondSource = await expectOnlySource(page, second);
     expect(secondSource).not.toBe(firstSource);
