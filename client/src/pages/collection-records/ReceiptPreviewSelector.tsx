@@ -1,7 +1,10 @@
+import { useContext } from "react";
 import { Button } from "@/components/ui/button";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import type { CollectionRecordReceipt } from "@/lib/api";
+import { formatCollectionOptionalAmount } from "./collection-coverage";
+import { CollectionRecordsTranslation } from "./collection-records-translation";
 
 type ReceiptPreviewSelectorProps = {
   receipts: CollectionRecordReceipt[];
@@ -18,31 +21,38 @@ export function ReceiptPreviewSelector({
   isMobile,
   onSelectReceipt,
 }: ReceiptPreviewSelectorProps) {
+  const t = useContext(CollectionRecordsTranslation);
   if (receipts.length <= 1) return null;
   const selectedIndex = receipts.findIndex((receipt) => receipt.id === selectedReceipt?.id);
 
   return (
     <div className={cn("min-w-0 shrink-0", isMobile ? "mx-3 mt-2" : "mt-2")}>
-      <p className="mb-2 text-xs text-muted-foreground">
-        Receipt {Math.max(0, selectedIndex) + 1} of {receipts.length}
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Choose receipt" aria-busy={loading}>
-        {receipts.map((receipt, index) => (
-          <Button
-            key={receipt.id}
-            type="button"
-            size="sm"
-            variant={selectedReceipt?.id === receipt.id ? "default" : "outline"}
-            onClick={() => onSelectReceipt(receipt.id)}
-            {...getAriaPressedProps(selectedReceipt?.id === receipt.id)}
-            aria-label={`Receipt ${index + 1}: ${receipt.originalFileName || "Unnamed receipt"}`}
-            title={receipt.originalFileName || `Receipt ${index + 1}`}
-            className="max-w-[12rem] shrink-0 gap-2"
-          >
-            <span className="shrink-0">{index + 1}.</span>
-            <span className="truncate">{receipt.originalFileName || "Receipt"}</span>
-          </Button>
-        ))}
+      {selectedIndex >= 0 && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {t("common.collection.receipts.position", { current: selectedIndex + 1, total: receipts.length })}
+        </p>
+      )}
+      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label={t("common.collection.receipts.choose")} aria-busy={loading}>
+        {receipts.map((receipt, index) => {
+          const amount = formatCollectionOptionalAmount(receipt.receiptAmount, "");
+          const filename = receipt.originalFileName?.trim() || t("common.collection.receipts.unnamed");
+          const selected = selectedReceipt?.id === receipt.id;
+          return (
+            <Button
+              key={receipt.id}
+              type="button"
+              size="sm"
+              variant={selected ? "default" : "outline"}
+              onClick={() => onSelectReceipt(receipt.id)}
+              {...getAriaPressedProps(selected)}
+              title={filename}
+              className="max-w-[12rem] shrink-0 tabular-nums"
+            >
+              <span className="truncate">{index + 1} · {amount || filename}</span>
+              {amount && <span className="sr-only">{", "}{filename}</span>}
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

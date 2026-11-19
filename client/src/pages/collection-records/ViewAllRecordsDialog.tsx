@@ -1,5 +1,5 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
-import { ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { CollectionRecordCard } from "./CollectionRecordCard";
+import { Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
 import {
@@ -13,11 +13,7 @@ import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
-import { buildCollectionRecordRowAriaLabel } from "@/pages/collection-records/collection-record-row-aria";
-import { getCollectionRecordSourceLabel } from "@/pages/collection-records/collection-source-label";
-import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { formatAmountRM } from "@/pages/collection/utils";
-import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
 
 const VIEW_ALL_PAGE_SIZE_OPTIONS = [...STANDARD_PAGE_SIZE_OPTIONS];
@@ -40,6 +36,7 @@ export interface ViewAllRecordsDialogProps {
   onOpenChange: (open: boolean) => void;
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
+  onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
   onViewReceipt: (record: CollectionRecord) => void;
   toDisplayDate: (value: string) => string;
 }
@@ -65,25 +62,12 @@ export function ViewAllRecordsDialog({
   onOpenChange,
   onPageChange,
   onPageSizeChange,
+  onOpenRecord,
   onViewReceipt,
   toDisplayDate,
 }: ViewAllRecordsDialogProps) {
   const isMobile = useIsMobile();
   const dialogDescription = `Dari ${toDisplayDate(fromDate)} hingga ${toDisplayDate(toDate)}`;
-  const [expandedRecordIds, setExpandedRecordIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    setExpandedRecordIds([]);
-  }, [open, page, pageSize, viewAllRecords]);
-
-  const toggleRecordExpanded = useCallback((recordId: string) => {
-    setExpandedRecordIds((previous) =>
-      previous.includes(recordId)
-        ? previous.filter((value) => value !== recordId)
-        : [...previous, recordId],
-    );
-  }, []);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -172,115 +156,15 @@ export function ViewAllRecordsDialog({
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {viewAllRecords.map((record, index) => {
-                        const isExpanded = expandedRecordIds.includes(record.id);
-                        const recordDetailsId = `view-all-record-details-${record.id}`;
-                        return (
-                          <article
-                            key={`view-all-${record.id}`}
-                            aria-label={buildCollectionRecordRowAriaLabel({
-                              formattedAmount: formatAmountRM(record.amount),
-                              formattedPaymentDate: formatIsoDateToDDMMYYYY(record.paymentDate),
-                              record,
-                              recordNumber: (page - 1) * pageSize + index + 1,
-                            })}
-                            className="space-y-3 rounded-2xl border border-border/70 bg-background p-4 shadow-sm"
-                            role="group"
-                          >
-                            <div className="space-y-2">
-                              <p className="text-2xs font-semibold uppercase tracking-label-md text-muted-foreground">
-                                Record {(page - 1) * pageSize + index + 1}
-                              </p>
-                              <div className="space-y-1">
-                                <p className="break-words text-base font-semibold">{record.customerName}</p>
-                                <p className="text-base font-semibold text-primary">{formatAmountRM(record.amount)}</p>
-                              </div>
-                            </div>
-
-                            {isExpanded ? (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => toggleRecordExpanded(record.id)}
-                                aria-expanded="true"
-                                aria-controls={recordDetailsId}
-                              >
-                                <ChevronUp className="mr-2 h-4 w-4" />
-                                Show less
-                              </Button>
-                            ) : (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                className="w-full"
-                                onClick={() => toggleRecordExpanded(record.id)}
-                                aria-expanded="false"
-                                aria-controls={recordDetailsId}
-                              >
-                                <ChevronDown className="mr-2 h-4 w-4" />
-                                Show more
-                              </Button>
-                            )}
-
-                            {isExpanded ? (
-                              <>
-                                <dl
-                                  id={recordDetailsId}
-                                  className="grid gap-2 rounded-xl border border-border/60 bg-muted/10 p-3 text-sm"
-                                >
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">IC Number</dt>
-                                    <dd className="break-words">{record.icNumber}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Account Number</dt>
-                                    <dd className="break-words">{record.accountNumber || "-"}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Card Number</dt>
-                                    <dd className="break-all">{getCollectionCardNumberLabel(record.cardNumber)}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Customer Phone</dt>
-                                    <dd className="break-words">{record.customerPhone}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Batch</dt>
-                                    <dd>{record.batch}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Payment Date</dt>
-                                    <dd>{formatIsoDateToDDMMYYYY(record.paymentDate)}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Staff Nickname</dt>
-                                    <dd className="break-words">{record.collectionStaffNickname}</dd>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <dt className="text-xs uppercase tracking-label-md text-muted-foreground">Source File</dt>
-                                    <dd className="break-words">{getCollectionRecordSourceLabel(record)}</dd>
-                                  </div>
-                                </dl>
-
-                                {(record.receipts?.length || 0) > 0 ? (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="w-full"
-                                    onClick={() => onViewReceipt(record)}
-                                  >
-                                    <Eye className="mr-2 h-4 w-4" />
-                                    {(record.receipts?.length || 0) > 1
-                                      ? `View Receipt (${record.receipts.length})`
-                                      : "View Receipt"}
-                                  </Button>
-                                ) : null}
-                              </>
-                            ) : null}
-                          </article>
-                        );
-                      })}
+                      {viewAllRecords.map((record, index) => (
+                        <CollectionRecordCard
+                          key={record.id}
+                          record={record}
+                          number={(page - 1) * pageSize + index + 1}
+                          onOpenRecord={onOpenRecord}
+                          onViewReceipt={onViewReceipt}
+                        />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -291,6 +175,7 @@ export function ViewAllRecordsDialog({
                     viewAllRecords={viewAllRecords}
                     page={page}
                     pageSize={pageSize}
+                    onOpenRecord={onOpenRecord}
                     onViewReceipt={onViewReceipt}
                   />
                 </Suspense>

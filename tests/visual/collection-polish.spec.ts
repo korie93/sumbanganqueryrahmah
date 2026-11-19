@@ -580,7 +580,7 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   await expect(full).toHaveAttribute("aria-pressed", "true");
   await expect(compact).toHaveAttribute("aria-pressed", "false");
   await expect(table.getByRole("columnheader")).toHaveCount(18);
-  for (const heading of ["IC Number", "Customer Phone Number", "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Source File"]) {
+  for (const heading of ["IC Number", "Customer Phone Number", "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Fail sumber"]) {
     await expect(table.getByRole("columnheader", { name: heading, exact: true })).toHaveCount(1);
   }
   await expect(row.getByText("880101105432", { exact: true })).toHaveCount(1);
@@ -591,6 +591,28 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   await compact.click();
   await expect(table.getByRole("columnheader")).toHaveCount(8);
   expect(fixture.saves).toBe(0);
+  expect(fixture.unexpected).toEqual([]);
+  expect(fixture.errors).toEqual([]);
+});
+
+test("Collection names open the selected read-only row even when two customers have the same name", async ({ page, baseURL }) => {
+  const name = "Synthetic Customer";
+  const fixture = await installFixture(page, baseURL, {
+    count: 2, role: "manager", recordOverrides: { customerName: name, cardNumber: "••••0993" },
+  });
+  await openRecords(page);
+  const triggers = page.getByRole("button", { name, exact: true });
+  await expect(triggers).toHaveCount(2);
+  await triggers.nth(1).press("Space");
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await expect(dialog.getByText("SYNTHETIC-ACCOUNT-2", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("••••0993", { exact: true })).toBeVisible();
+  await expect(dialog).not.toContainText("SYNTHETIC-ACCOUNT-1");
+  await expect(dialog.getByRole("button")).toHaveCount(1);
+  await expect(dialog.getByText("Tiada resit", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(triggers.nth(1)).toBeFocused();
+  expect(fixture.mutations).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });
@@ -913,18 +935,18 @@ for (const theme of ["light", "dark"] as const) test(`Collection return ${theme}
   const recordA = cards.nth(6);
   const recordB = cards.nth(7);
   for (const card of [recordA, recordB]) {
-    const details = card.locator("details");
-    const summary = details.locator("summary");
+    const summary = card.getByRole("button", { name: /^Synthetic Customer/ });
+    const details = page.getByRole("dialog", { name: await summary.innerText(), exact: true });
     await summary.scrollIntoViewIfNeeded();
     await summary.focus();
     const beforeDetails = await recordScrollPositions(page);
     expect(beforeDetails.some((position) => position.top > 0)).toBe(true);
     const summaryTop = (await bounds(summary)).y;
     await page.keyboard.press("Enter");
-    await expect(details).toHaveAttribute("open", "");
-    await expectLastOpened(page, card);
-    await page.keyboard.press("Enter");
-    await expect(details).not.toHaveAttribute("open", "");
+    await expect(details).toBeVisible();
+    await expect(details.getByRole("button", { name: "Lihat resit", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(details).toHaveCount(0);
     await expect(summary).toBeFocused();
     await expect(summary).toBeInViewport();
     await expectLastOpened(page, card);
@@ -1133,8 +1155,12 @@ for (const width of [320, 390]) test(`Collection polish mobile records preserve 
   await testInfo.attach(`records-export-context-${width}`, {
     body: await page.getByRole("group", { name: "Record Actions", exact: true }).screenshot(), contentType: "image/png",
   });
-  await page.getByText("Record details", { exact: true }).click();
-  await expect(page.getByText("00009007199254740993", { exact: true })).toBeVisible();
+  const name = page.getByRole("button", { name: "Synthetic Customer 1", exact: true });
+  await name.click();
+  const details = page.getByRole("dialog", { name: "Synthetic Customer 1", exact: true });
+  await expect(details.getByText("00009007199254740993", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(name).toBeFocused();
   await assertPageFits(page);
   await testInfo.attach(`records-mobile-${width}`, {
     body: await page.getByTestId("collection-records-page").locator("article").screenshot(), contentType: "image/png",

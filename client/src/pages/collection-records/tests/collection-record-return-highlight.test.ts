@@ -27,5 +27,5 @@ test("return marker context includes every table filter, role and pagination wit
   }
   const hook = readFileSync("client/src/pages/collection-records/useCollectionRecordReturnHighlight.ts", "utf8");
   assert.doesNotMatch(hook, /localStorage|sessionStorage|setTimeout|scrollIntoView|scrollTo\(/);
-  assert.match(page, /onRecordDetailsToggle=\{\(record\) => markViewed\(record\.id\)\}/);
+  assert.match(page, /onOpenRecord=\{\(record\) => markViewed\(record\.id\)\}/);
 });

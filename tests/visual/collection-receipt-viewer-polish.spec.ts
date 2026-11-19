@@ -54,6 +54,7 @@ async function syntheticPng(page: Page, width: number, height: number) {
 }
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
+  locale?: "ms" | "en"; verifyMissingAmounts?: boolean;
   theme?: "light" | "dark"; firstFailure?: "http" | "decode"; holdFirst?: boolean;
 } = {}) {
   expect(baseURL, "Use npm run test:visual:built").toBeTruthy();
@@ -69,13 +70,14 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     receipts: media.map((entry, index) => ({
       id: entry.id, collectionRecordId: recordId, storagePath: `/synthetic/${entry.id}`,
       originalFileName: entry.fileName, originalMimeType: entry.mimeType, originalExtension: entry.id === "pdf" ? ".pdf" : ".png",
-      fileSize: files[index]!.length, receiptAmount: "125.00", extractedAmount: null, extractionStatus: "unprocessed",
+      fileSize: files[index]!.length, receiptAmount: ["80.00", "0.00", null][index], extractedAmount: null, extractionStatus: "unprocessed",
       extractionConfidence: null, receiptDate: "2026-10-14", receiptReference: `SYNTHETIC-${entry.id}`, fileHash: null, createdAt: now,
     })),
-    archivedReceipts: [], receiptTotalAmount: "375.00", receiptValidationStatus: "unverified", receiptValidationMessage: null,
+    archivedReceipts: [], receiptTotalAmount: "80.00", receiptValidationStatus: "unverified", receiptValidationMessage: null,
     receiptCount: media.length, duplicateReceiptFlag: false, createdByLogin: "synthetic.viewer", collectionStaffNickname: nickname,
     createdAt: now, updatedAt: now, sourceImportId: "synthetic-source", sourceFilename: "Synthetic source.xlsx",
-    totalDue: "150.00", billingPrincipalOsp: "125.00", cpStatus: "cp", agingBucket: "D3",
+    totalDue: options.verifyMissingAmounts ? null : "150.00", billingPrincipalOsp: options.verifyMissingAmounts ? "0.00" : "125.00",
+    sourceMatchAccuracy: options.locale === "en" ? 0 : null, cpStatus: "cp", agingBucket: "D3",
   };
   const fixture = { errors: [] as string[], unexpected: [] as string[], views: [] as string[], downloads: [] as string[], release: () => {} };
   const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
@@ -83,14 +85,15 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   await page.clock.setFixedTime(new Date(now));
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: "reduce" });
   await page.context().addCookies([{ name: "sqr_auth_hint", value: "1", url: origin }]);
-  await page.addInitScript(({ theme, staff, fixtureOrigin }) => {
+  await page.addInitScript(({ theme, staff, fixtureOrigin, locale }) => {
     // Init scripts also run in the native PDF frame. Seed only this app's
     // synthetic loopback origin, never browser-owned or unrelated documents.
     if (window !== window.top || location.origin !== fixtureOrigin) return;
     localStorage.setItem("theme", theme);
+    localStorage.setItem("sqr.auth.locale", locale);
     sessionStorage.setItem("collection_staff_nickname", staff);
     sessionStorage.setItem("collection_staff_nickname_auth", "1");
-  }, { theme: options.theme ?? "light", staff: nickname, fixtureOrigin: origin });
+  }, { theme: options.theme ?? "light", staff: nickname, fixtureOrigin: origin, locale: options.locale ?? "ms" });
   await page.context().routeWebSocket("**/*", (socket) => socket.close());
   await page.context().route("**/*", async (route) => {
     const request = route.request();
@@ -147,6 +150,102 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   return fixture;
 }
 
+for (const [width, theme] of [[320, "dark"], [390, "light"], [1024, "dark"], [1366, "light"]] as const) {
+  test(`Customer name opens collection details at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: width < 768 ? 568 : 900 });
+    const en = width === 390 || width === 1366;
+    const fixture = await installFixture(page, baseURL, { theme, locale: en ? "en" : "ms", verifyMissingAmounts: true });
+    const cardLabel = en ? "Card Number" : "Nombor kad";
+    const accountLabel = en ? "Account Number" : "Nombor akaun";
+    const sourceLabel = en ? "Source File" : "Fail sumber";
+    const missing = en ? "No information" : "Tiada maklumat";
+    await page.goto("/collection/records");
+    const name = "Synthetic Viewer Customer";
+    const modes = width < 768 ? ["list", "all"] : ["list", "full", "all"];
+    for (const mode of modes) {
+      if (mode === "full") await page.getByRole("button", { name: "Lengkap", exact: true }).click();
+      if (mode === "all") await page.getByRole("button", { name: "View All", exact: true }).click();
+      const parent = mode === "all" ? page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection" }) : page;
+      const trigger = parent.getByRole("button", { name, exact: true });
+      await expect(trigger).toBeVisible();
+      if (width < 768) {
+        const card = parent.locator("article").filter({ has: page.getByRole("button", { name, exact: true }) });
+        await expect(card.locator("dt")).toHaveText([cardLabel, accountLabel, "Jumlah dibayar", "Tarikh bayaran"]);
+        await expect(card.getByText(en ? "Row 1" : "Baris 1", { exact: true })).toHaveCount(1);
+        const marker = card.getByText("#1", { exact: true });
+        const nameBox = await trigger.boundingBox();
+        const markerBox = await marker.boundingBox();
+        expect(markerBox!.x).toBeGreaterThanOrEqual(nameBox!.x + nameBox!.width);
+        expect(markerBox!.y).toBeLessThan(nameBox!.y + nameBox!.height);
+        await expect(card.locator("details, summary")).toHaveCount(0);
+        await expect(card.getByRole("button", { name: /Show more|Record details/ })).toHaveCount(0);
+        await expect(card.getByRole("button", { name: "View Receipt (3)", exact: true })).toBeVisible();
+        await trigger.click();
+      }
+      else {
+        const headers = await parent.getByRole("columnheader").allTextContents();
+        const identifiers = mode === "list" ? [en ? "Card / Account" : "Kad / Akaun"] : [cardLabel, accountLabel];
+        const expected = ["Customer Name", ...identifiers, "Amount", "Payment Date", "Receipt"];
+        expect(headers.slice(0, expected.length)).toEqual(expected);
+        await trigger.press("Enter");
+      }
+      const dialog = page.getByRole("dialog", { name, exact: true });
+      await expect(dialog).toBeVisible();
+      if (width < 768) {
+        const close = dialog.getByRole("button", { name: "Close", exact: true });
+        await expect(close).toHaveCSS("width", "44px");
+        await expect(close).toHaveCSS("height", "44px");
+      }
+      await expect(dialog).toContainText("14/10/2026");
+      await expect(dialog.locator("dt")).toHaveCount(15);
+      await expect(dialog.locator("dl").first().locator("dt")).toHaveText([cardLabel, accountLabel, "Jumlah dibayar", "Tarikh bayaran"]);
+      for (const value of ["00009007199254740993", "SYNTHETIC-ID", "SYNTHETIC-ACCOUNT", "SYNTHETIC-PHONE", "Synthetic source.xlsx", nickname]) {
+        await expect(dialog.getByText(value, { exact: true })).toHaveCount(1);
+      }
+      const payment = dialog.locator("dt").filter({ hasText: /^Jumlah dibayar$/ }).locator("+ dd");
+      await expect(payment).toHaveCSS("font-weight", "600");
+      await expect(dialog.getByText("TOTAL DUE", { exact: true }).locator("+ dd")).toHaveCSS("font-weight", "400");
+      await expect(dialog.getByText("TOTAL DUE", { exact: true }).locator("+ dd")).toHaveText(missing);
+      await expect(dialog.getByText("Billing Principal (OSP)", { exact: true }).locator("+ dd")).toHaveText(/RM\s*0\.00/);
+      await expect(dialog.getByText("Match", { exact: true }).locator("+ dd")).toHaveText(en ? "0%" : missing);
+      for (const label of [accountLabel, cardLabel, sourceLabel]) {
+        const fullWidth = await dialog.getByText(label, { exact: true }).evaluate(term => {
+          const item = term.parentElement!;
+          return Math.abs(item.clientWidth - item.parentElement!.clientWidth) <= 1;
+        });
+        expect(fullWidth, label).toBe(width < 640);
+      }
+      expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+      if (mode === "list") await page.screenshot({ path: testInfo.outputPath(`record-details-${width}.png`) });
+      if (mode === "all") {
+        expect(fixture.views).toEqual([]);
+        const receipt = dialog.getByRole("button", { name: "Lihat 3 resit", exact: true });
+        await receipt.click();
+        await expectImage(page.getByRole("dialog", { name: "Receipt Preview", exact: true }));
+        await page.keyboard.press("Escape");
+        await expect(receipt).toBeFocused();
+      }
+      await dialog.getByText(sourceLabel, { exact: true }).scrollIntoViewIfNeeded();
+      if (mode === "all") await dialog.getByRole("button", { name: "Close" }).click();
+      else await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(trigger).toBeFocused();
+    }
+    expect(fixture.views.length).toBeGreaterThan(0);
+    if (width < 768) {
+      const list = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection" });
+      const receipt = list.getByRole("button", { name: "View Receipt (3)", exact: true });
+      await receipt.click();
+      const preview = page.getByRole("dialog", { name: "Receipt Preview", exact: true });
+      await expectImage(preview);
+      await page.keyboard.press("Escape");
+      await expect(receipt).toBeFocused();
+    }
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
 async function openPreview(page: Page) {
   await page.goto("/collection/records");
   await expect(page.getByTestId("collection-records-page")).toBeVisible();
@@ -157,6 +256,44 @@ async function openPreview(page: Page) {
   const dialog = page.getByRole("dialog", { name: "Receipt Preview", exact: true });
   await expect(dialog).toBeVisible();
   return { launcher, dialog };
+}
+
+for (const width of [320, 1366]) {
+  test(`Receipt amounts stay scoped to the selected file at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    const ms = width === 320;
+    await page.setViewportSize({ width, height: ms ? 740 : 900 });
+    const fixture = await installFixture(page, baseURL, { theme: ms ? "dark" : "light", locale: ms ? "ms" : "en" });
+    const { dialog } = await openPreview(page);
+    await expectImage(dialog);
+    await dialog.getByRole("button", { name: "Details", exact: true }).click();
+    const details = dialog.getByRole("region", { name: ms ? "Butiran resit dan kutipan" : "Receipt and collection details" });
+    const group = dialog.getByRole("group", { name: ms ? "Pilih resit" : "Choose receipt" });
+    const term = (label: string) => details.getByText(label, { exact: true }).locator("+ dd");
+    const recorded = term(ms ? "Bayaran direkodkan" : "Recorded payment");
+    const combined = term(ms ? "Jumlah semua resit" : "Total of all receipts");
+    const current = term(ms ? "Amaun resit ini" : "This receipt’s amount");
+    for (const [index, expected] of [/RM\s*80\.00/, /RM\s*0\.00/, ms ? "Tiada maklumat" : "No information"].entries()) {
+      const receipt = media[index]!;
+      const choice = group.getByRole("button").and(group.getByTitle(receipt.fileName, { exact: true }));
+      await choice.click();
+      await expect(choice).toHaveAttribute("aria-pressed", "true");
+      await expect(recorded).toHaveText(/RM\s*125\.00/);
+      await expect(combined).toHaveText(/RM\s*80\.00/);
+      await expect(current).toHaveText(expected);
+      await expect(term(ms ? "Rujukan" : "Reference")).toHaveText(`SYNTHETIC-${receipt.id}`);
+      await expect(details.getByText(receipt.fileName, { exact: false })).toBeAttached();
+      if (index === 0) {
+        const left = await recorded.boundingBox();
+        const right = await combined.boundingBox();
+        expect(right!.x).toBeGreaterThan(left!.x);
+        expect(Math.abs(right!.y - left!.y)).toBeLessThan(2);
+        expect(await details.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+        await page.screenshot({ path: testInfo.outputPath(`receipt-amounts-${width}.png`) });
+      }
+    }
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+  });
 }
 
 async function expectImage(dialog: Locator, name = media[0]!.fileName) {
@@ -201,14 +338,14 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   { width: 320, height: 740 }, { width: 393, height: 852 }, { width: 1366, height: 768 },
 ]) test(`Receipt viewer ${theme} ${viewport.width}px zoom rotation fit selection and Escape remain usable`, async ({ page, baseURL }) => {
   await page.setViewportSize(viewport);
-  const fixture = await installFixture(page, baseURL, { theme });
+  const fixture = await installFixture(page, baseURL, { theme, locale: "en" });
   const expectedPortraitViews = viewport.width < 768 ? ["portrait", "portrait"] : ["portrait"];
   const { launcher, dialog } = await openPreview(page);
   let image = await expectImage(dialog);
   const fitWidth = (await image.boundingBox())!.width;
   await expect(dialog.getByText("Receipt 1 of 3", { exact: true })).toBeVisible();
-  const portrait = dialog.getByRole("button", { name: `Receipt 1: ${media[0]!.fileName}`, exact: true });
-  const landscape = dialog.getByRole("button", { name: `Receipt 2: ${media[1]!.fileName}`, exact: true });
+  const portrait = dialog.getByRole("button", { name: /1 · RM\s*80\.00.*Synthetic portrait receipt/ });
+  const landscape = dialog.getByRole("button", { name: /2 · RM\s*0\.00.*Synthetic landscape receipt/ });
   await expect(portrait).toHaveAttribute("aria-pressed", "true");
   await expect(landscape).toHaveAttribute("aria-pressed", "false");
   await dialog.getByRole("button", { name: "Zoom in", exact: true }).click();
@@ -262,7 +399,7 @@ for (const width of [320, 393, 1366]) test(`Receipt viewer PDF ${width}px has on
   const fixture = await installFixture(page, baseURL);
   const { launcher, dialog } = await openPreview(page);
   await expectImage(dialog);
-  await dialog.getByRole("button", { name: `Receipt 3: ${media[2]!.fileName}`, exact: true }).click();
+  await dialog.getByRole("button", { name: `3 · ${media[2]!.fileName}`, exact: true }).click();
   const openPdf = dialog.getByRole("link", { name: "Open PDF", exact: true });
   await expect(openPdf).toHaveCount(1);
   await expect(openPdf).toHaveAttribute("href", /^blob:http:\/\/127\.0\.0\.1:/);

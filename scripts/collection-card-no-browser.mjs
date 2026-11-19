@@ -17,6 +17,8 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
   const pageErrors = [];
   const checks = [];
   const page = await context.newPage();
+  const cardHeader = page.getByRole("table", { name: "Collection records", exact: true })
+    .getByRole("columnheader", { name: /^(?:Nombor kad|Card Number)$/ });
   let phase = "unauthenticated access";
   let authenticated = false;
   page.setDefaultTimeout(15_000);
@@ -58,11 +60,12 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
     if (total) {
       await page.locator("tbody tr[aria-label]").first().waitFor();
       const expectedCards = payload.records.map((record) => record.cardNumber || "-");
-      await page.waitForFunction((cards) => {
-        const cells = Array.from(document.querySelectorAll("tbody tr[aria-label]"), (row) => row.querySelectorAll("td")[4]?.textContent?.trim());
+      const column = await cardHeader.evaluate(header => header.cellIndex);
+      await page.waitForFunction(({ column, cards }) => {
+        const cells = Array.from(document.querySelectorAll("tbody tr[aria-label]"), (row) => row.cells[column]?.textContent?.trim());
         return JSON.stringify(cells) === JSON.stringify(cards);
-      }, expectedCards);
-      assert.deepEqual(await page.locator("tbody tr[aria-label] td:nth-child(5)").allInnerTexts(), expectedCards,
+      }, { column, cards: expectedCards });
+      assert.deepEqual(await page.locator(`tbody tr[aria-label] td:nth-child(${column + 1})`).allInnerTexts(), expectedCards,
         "Real table Card No cells exactly match the returned strings without rounding or clipping digits");
     }
     else await emptyRecords.waitFor();
@@ -98,8 +101,7 @@ export async function runCollectionCardNoBrowser({ baseUrl, username, password, 
       await fullView.click();
       assert.equal(await fullView.getAttribute("aria-pressed"), "true");
     }
-    await page.getByRole("table", { name: "Collection records", exact: true })
-      .getByRole("columnheader", { name: "Card Number", exact: true }).waitFor();
+    await cardHeader.waitFor();
     mark("real authenticated View Rekod Collection mounted with 59 synthetic records");
     const byIc = await queryUi("990101019999", 52, "ic-existing-record");
     assert.ok(byIc.records.some((record) => record.cardNumber === cardA));
