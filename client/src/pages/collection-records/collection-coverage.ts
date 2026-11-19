@@ -1,10 +1,13 @@
 import type { CollectionRecord } from "@/lib/api";
+import type { translate } from "@/lib/i18n";
 import { formatAmountRM } from "@/pages/collection/utils";
 
 export function getCollectionCpStatusLabel(
-  record: Pick<CollectionRecord, "cpStatus"> & Partial<Pick<CollectionRecord, "effectiveSettlementSource" | "manualSettlement">>,
+  record: Pick<CollectionRecord, "cpStatus"> & Partial<Pick<CollectionRecord, "effectiveSettlementSource" | "manualSettlement" | "duplicateReceiptFlag">>,
+  t?: typeof translate,
 ) {
-  const base = record.cpStatus === "abort_cp" ? "Abort CP" : record.cpStatus === "cp" ? "CP" : "Unverified";
+  const status = record.cpStatus === "abort_cp" ? "Abort CP" : record.cpStatus === "cp" ? "CP" : "Unverified";
+  const base = record.duplicateReceiptFlag && t ? `${status} · ${t("common.collection.records.reviewDuplicateReceipt")}` : status;
   const manual = record.manualSettlement;
   if (!manual) return base;
   if (manual.status === "REVOKED") return `${base} · Manual revoked`;

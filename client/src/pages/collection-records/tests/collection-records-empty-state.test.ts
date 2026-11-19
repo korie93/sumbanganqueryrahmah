@@ -63,7 +63,7 @@ test("recovery recognizes every narrowing filter, but not sorting and pagination
     { hasSearch: true, hasFilters: false });
   const filtersToCheck: CollectionRecordFilters[] = [
     { from: "2026-10-01" }, { to: "2026-10-05" }, { nickname: "Synthetic" }, { leaderId: "team-1" },
-    { sourceImportIds: ["source-1"] }, { agingBuckets: ["D4"] }, { classifications: ["cp"] },
+    { sourceImportIds: ["source-1"] }, { agingBuckets: ["D4"] }, { classifications: ["cp"] }, { duplicateOnly: true },
   ];
   for (const filters of filtersToCheck) {
     const snapshot = { ...filters };
@@ -74,6 +74,7 @@ test("recovery recognizes every narrowing filter, but not sorting and pagination
 
 test("recovery follows role-filter normalization and all/default sentinel semantics", () => {
   const unauthorized = buildCollectionRecordFilterSnapshot({ canUseNicknameFilter: false, canUseTeamLeaderFilter: false,
+    canUseDuplicateFilter: false, duplicateOnly: true,
     nicknameFilter: "Synthetic", leaderFilter: "team-1", sourceImportFilter: "all", agingFilter: "all", classificationFilter: "all" });
   assert.deepEqual(getCollectionRecordsRecoveryState(unauthorized), { hasSearch: false, hasFilters: false });
   for (const specific of [{ sourceImportFilter: "source-1" }, { agingFilter: "D4" }, { classificationFilter: "abort_cp" }]) {

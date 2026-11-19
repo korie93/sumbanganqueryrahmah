@@ -3,6 +3,7 @@ import { useContext, type ReactNode } from "react";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CollectionRecord } from "@/lib/api";
+import type { ViewCollectionReceipt } from "./types";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatCollectionOptionalAmount } from "./collection-coverage";
 import { buildCollectionRecordRowAriaLabel } from "./collection-record-row-aria";
@@ -14,7 +15,7 @@ export function CollectionRecordCard({ record, number, lastViewed, onOpenRecord,
   number: number;
   lastViewed?: boolean;
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
-  onViewReceipt: (record: CollectionRecord, launcher: HTMLElement) => void;
+  onViewReceipt: ViewCollectionReceipt;
   children?: ReactNode;
 }) {
   const t = useContext(CollectionRecordsTranslation);

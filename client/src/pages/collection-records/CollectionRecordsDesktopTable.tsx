@@ -157,7 +157,7 @@ export function CollectionRecordsDesktopTable({
                     <TableCell className="py-2 whitespace-nowrap">{record.batch}</TableCell>
                     <TableCell className="py-2 whitespace-nowrap text-right tabular-nums">{formatCollectionOptionalAmount(record.totalDue, missing)}</TableCell>
                     <TableCell className="py-2 whitespace-nowrap text-right tabular-nums">{formatCollectionOptionalAmount(record.billingPrincipalOsp, missing)}</TableCell>
-                    <TableCell className="py-2 whitespace-nowrap font-medium">{getCollectionCpStatusLabel(record)}</TableCell>
+                    <TableCell className="py-2 font-medium">{getCollectionCpStatusLabel(record, t)}</TableCell>
                     <TableCell className="py-2 whitespace-nowrap">{record.agingBucket || "-"}</TableCell>
                     <TableCell className="py-2 whitespace-nowrap">{getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy, missing)}</TableCell>
                   </>

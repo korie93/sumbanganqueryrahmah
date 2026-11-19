@@ -3,6 +3,7 @@ import { Suspense, lazy, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
+import type { ViewCollectionReceipt } from "./types";
 import { getAriaPressedProps } from "@/lib/aria-state-props";
 import { CollectionRecordActions } from "./CollectionRecordActions";
 import { CollectionRecordsEmptyState, type CollectionRecordsEmptyStateProps } from "./CollectionRecordsEmptyState";
@@ -20,7 +21,7 @@ export interface CollectionRecordsTableProps extends CollectionRecordsEmptyState
   pageOffset: number;
   canEdit: boolean;
   lastViewedRecordId?: string | null | undefined;
-  onViewReceipt: (record: CollectionRecord, launcher?: HTMLElement) => void;
+  onViewReceipt: ViewCollectionReceipt;
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
   onEdit: (record: CollectionRecord, launcher?: HTMLElement) => void;
   onDelete: (record: CollectionRecord, launcher?: HTMLElement) => void;

@@ -3,6 +3,7 @@ import type {
   CollectionAmountMyrNumber,
   CollectionAmountMyrString,
 } from "../shared/collection-amount-types";
+import type { CollectionReceiptLink } from "../shared/collection-receipt-breakdown";
 import type {
   CollectionDailyCalendarStatus,
   CollectionDailyLeaveType,
@@ -65,6 +66,7 @@ export type CollectionReceiptExtractionStatus =
   | "error";
 
 export type CollectionReceiptDuplicateMatch = {
+  record?: CollectionReceiptLink;
   receiptId: string;
   collectionRecordId: string;
   originalFileName: string;

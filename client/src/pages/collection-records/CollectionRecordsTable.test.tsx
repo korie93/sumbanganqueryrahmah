@@ -143,6 +143,19 @@ test("desktop collection preserves full identifiers and receipt access with perm
   assert.match(render(false, true), /aria-label="Actions for record 51"/);
 });
 
+test("full records table explains an unverified payment with a duplicate receipt", () => {
+  const record = {
+    ...collectionRecord, amount: "140.00", totalDue: "40.00",
+    cpStatus: "unverified" as const, duplicateReceiptFlag: true,
+  };
+  const markup = renderToStaticMarkup(createElement(CollectionRecordsDesktopTable, {
+    viewMode: "full", loadingRecords: false, visibleRecords: [record], paginatedRecords: [record],
+    pageOffset: 0, canEdit: false, onViewReceipt: () => {}, onEdit: () => {},
+    onDelete: () => {}, canDeleteRow: () => false,
+  }));
+  assert.match(markup, /Unverified · Semak resit pendua<\/td>/);
+});
+
 for (const layout of ["desktop", "mobile"] as const) {
   test(`${layout} collection highlights only the last opened stable record ID`, () => {
     const descriptor = Object.getOwnPropertyDescriptor(globalThis, "window");

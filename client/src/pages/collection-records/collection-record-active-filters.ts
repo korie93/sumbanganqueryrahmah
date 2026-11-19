@@ -1,5 +1,6 @@
 import type { ActiveFilterChip } from "@/components/data/ActiveFilterChips";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
+import { translate } from "@/lib/i18n";
 import type { CollectionRecordsFiltersProps } from "./CollectionRecordsFilters";
 import { buildCollectionRecordFilterSnapshot } from "./collection-record-filters";
 
@@ -14,7 +15,7 @@ const sortLabels: Record<string, string> = {
 
 // Use the same normalization/permission gates as the existing query. These chips
 // describe selected controls, not a claim that a pending request has completed.
-export function buildCollectionRecordsActiveFilters(controls: CollectionRecordsFiltersProps) {
+export function buildCollectionRecordsActiveFilters(controls: CollectionRecordsFiltersProps, t = translate) {
   const filters = buildCollectionRecordFilterSnapshot(controls);
   const items: ActiveFilterChip[] = [];
   if (filters.from) items.push({
@@ -52,6 +53,10 @@ export function buildCollectionRecordsActiveFilters(controls: CollectionRecordsF
     onRemove: () => controls.onClassificationFilterChange("all"),
   });
   const sortKey = `${filters.sortBy}_${filters.sortDirection}`;
+  if (filters.duplicateOnly) items.push({
+    id: "collection-duplicate-receipts", label: t("common.collection.records.duplicateOnly"),
+    onRemove: () => controls.onDuplicateOnlyChange(false),
+  });
   if (sortKey !== "paymentDate_desc") items.push({
     id: "collection-sort", label: `Sort: ${sortLabels[sortKey] || "Custom order"}`,
     onRemove: () => controls.onSortValueChange("paymentDate_desc"),

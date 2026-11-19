@@ -55,6 +55,8 @@ async function syntheticPng(page: Page, width: number, height: number) {
 
 async function installFixture(page: Page, baseURL: string | undefined, options: {
   locale?: "ms" | "en"; verifyMissingAmounts?: boolean;
+  breakdownRole?: "user" | "admin" | "manager" | "superuser";
+  comparison?: "available" | "retry" | "removed";
   theme?: "light" | "dark"; firstFailure?: "http" | "decode"; holdFirst?: boolean;
 } = {}) {
   expect(baseURL, "Use npm run test:visual:built").toBeTruthy();
@@ -66,7 +68,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   const record = {
     id: recordId, customerName: "Synthetic Viewer Customer", icNumber: "SYNTHETIC-ID", customerPhone: "SYNTHETIC-PHONE",
     accountNumber: "SYNTHETIC-ACCOUNT", cardNumber: "00009007199254740993", cardNumberLast4: "0993", batch: "P10",
-    paymentDate: "2026-10-14", amount: "125.00", receiptFile: null,
+    paymentDate: "2026-10-14", amount: options.breakdownRole ? "3250.00" : "125.00", receiptFile: null,
     receipts: media.map((entry, index) => ({
       id: entry.id, collectionRecordId: recordId, storagePath: `/synthetic/${entry.id}`,
       originalFileName: entry.fileName, originalMimeType: entry.mimeType, originalExtension: entry.id === "pdf" ? ".pdf" : ".png",
@@ -74,12 +76,16 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
       extractionConfidence: null, receiptDate: "2026-10-14", receiptReference: `SYNTHETIC-${entry.id}`, fileHash: null, createdAt: now,
     })),
     archivedReceipts: [], receiptTotalAmount: "80.00", receiptValidationStatus: "unverified", receiptValidationMessage: null,
-    receiptCount: media.length, duplicateReceiptFlag: false, createdByLogin: "synthetic.viewer", collectionStaffNickname: nickname,
+    receiptCount: media.length, duplicateReceiptFlag: options.breakdownRole === "superuser", createdByLogin: "synthetic.viewer", collectionStaffNickname: nickname,
     createdAt: now, updatedAt: now, sourceImportId: "synthetic-source", sourceFilename: "Synthetic source.xlsx",
-    totalDue: options.verifyMissingAmounts ? null : "150.00", billingPrincipalOsp: options.verifyMissingAmounts ? "0.00" : "125.00",
+    totalDue: options.verifyMissingAmounts ? null : options.breakdownRole ? "250.00" : "150.00", billingPrincipalOsp: options.verifyMissingAmounts ? "0.00" : "125.00",
     sourceMatchAccuracy: options.locale === "en" ? 0 : null, cpStatus: "cp", agingBucket: "D3",
   };
-  const fixture = { errors: [] as string[], unexpected: [] as string[], views: [] as string[], downloads: [] as string[], release: () => {} };
+  const records = options.comparison ? [
+    ...Array.from({ length: 14 }, (_, index) => ({ ...record, id: `synthetic-row-${index}`, customerName: `Synthetic example ${index + 1}`, receipts: [], receiptCount: 0, duplicateReceiptFlag: false })),
+    record,
+  ] : [record];
+  const fixture = { errors: [] as string[], unexpected: [] as string[], views: [] as string[], downloads: [] as string[], breakdownRequests: 0, comparisonRequests: 0, release: () => {} };
   const gate = new Promise<void>((resolve) => { fixture.release = resolve; });
   const respond = (route: Route, json: unknown, status = 200) => route.fulfill({ status, json, headers: { "Cache-Control": "no-store" } });
   await page.clock.setFixedTime(new Date(now));
@@ -116,17 +122,49 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (endpoint === "GET /api/maintenance-status") return respond(route, { maintenance: false, message: "Synthetic fixture", type: "soft", startTime: null, endTime: null });
     if (endpoint === "GET /api/me") return respond(route, { ok: true, sessionExpiresAt: "2036-01-01T00:00:00.000Z", user: {
       id: "synthetic-viewer-admin", username: "synthetic.viewer", fullName: "Synthetic Viewer Operator", email: "viewer@example.test",
-      role: "admin", status: "active", mustChangePassword: false, passwordResetBySuperuser: false, isBanned: false,
+      role: options.breakdownRole ?? "admin", status: "active", mustChangePassword: false, passwordResetBySuperuser: false, isBanned: false,
       twoFactorEnabled: false, twoFactorPendingSetup: false, twoFactorConfiguredAt: null, activatedAt: now, passwordChangedAt: now, lastLoginAt: now,
     } });
     if (endpoint === "GET /api/app-config") return respond(route, { systemName: "SQR", aiEnabled: false, aiTimeoutMs: 30000, heartbeatIntervalMinutes: 60, importUploadLimitBytes: 10485760, searchResultLimit: 250, semanticSearchEnabled: false, sessionTimeoutMinutes: 30, viewerRowsPerPage: 100, wsIdleMinutes: 10 });
-    if (endpoint === "GET /api/settings/tab-visibility") return respond(route, { role: "admin", tabs: { home: true, "collection-report": true } });
+    if (endpoint === "GET /api/settings/tab-visibility") return respond(route, { role: options.breakdownRole ?? "admin", tabs: { home: true, "collection-report": true } });
     if (endpoint === "GET /api/imports") return respond(route, { imports: [], pagination: { page: 1, pageSize: 20, limit: 20, mode: "offset", offset: 0, total: 0, totalPages: 1, hasNextPage: false, hasPreviousPage: false } });
     if (endpoint === "POST /api/activity/heartbeat") return respond(route, { ok: true, status: "ONLINE", lastActivityTime: now });
     if (endpoint === "GET /api/collection/nickname-auth/session") return respond(route, { ok: true, nickname: { id: "synthetic-viewer-nickname", nickname } });
     if (endpoint === "GET /api/collection/nicknames") return respond(route, { ok: true, nicknames: [{ id: "synthetic-viewer-nickname", nickname, isActive: true, roleScope: "both", createdBy: "synthetic-viewer-admin", createdAt: now }] });
-    if (endpoint === "GET /api/collection/list") return respond(route, { ok: true, records: [record], total: 1, totalAmount: 125, page: 1, pageSize: 50, limit: 50, offset: 0, nextCursor: null, pagination: { mode: "hybrid", page: 1, pageSize: 50, limit: 50, offset: 0, total: 1, totalPages: 1, nextCursor: null, hasNextPage: false, hasPreviousPage: false } });
+    if (endpoint === "GET /api/collection/list") {
+      const duplicateOnly = url.searchParams.get("duplicateOnly") === "1";
+      const search = (url.searchParams.get("search") ?? "").toLowerCase();
+      const aging = url.searchParams.get("agingBuckets");
+      const selected = records.filter(row => (!duplicateOnly || row.duplicateReceiptFlag)
+        && row.customerName.toLowerCase().includes(search) && (!aging || aging === row.agingBucket));
+      const total = selected.length;
+      const pageSize = Number(url.searchParams.get("pageSize") ?? url.searchParams.get("limit") ?? 50);
+      const pageNumber = Number(url.searchParams.get("page") ?? 1);
+      const offset = (pageNumber - 1) * pageSize;
+      const pagination = { mode: "hybrid", page: pageNumber, pageSize, limit: pageSize, offset, total, totalPages: Math.max(1, Math.ceil(total / pageSize)), nextCursor: null, hasNextPage: offset + pageSize < total, hasPreviousPage: pageNumber > 1 };
+      return respond(route, { ...pagination, ok: true, records: selected.slice(offset, offset + pageSize), totalAmount: selected.reduce((sum, row) => sum + Number(row.amount), 0), pagination });
+    }
     if (endpoint === "GET /api/collection/source-configs") return respond(route, { ok: true, sourceConfigs: [] });
+    if (options.breakdownRole && endpoint === `GET /api/collection/${recordId}/receipt-breakdown`) {
+      fixture.breakdownRequests++;
+      if (options.breakdownRole === "user" && fixture.breakdownRequests === 1) return respond(route, { ok: false }, 500);
+      return respond(route, {
+        ok: true, recordedAmount: "3250.00", totalDue: "250.00", uniqueAmount: "250.00", sharedAmount: "3000.00",
+        receiptCount: 3, unclassifiedCount: 1, sharedReceipts: [{ id: media[1]!.id, fileName: media[1]!.fileName, amount: "3000.00",
+          ...(options.breakdownRole === "superuser" ? { related: { count: 1, records: [
+            { recordId: "synthetic-peer-id", batch: "P25", paymentDate: "2026-10-12", accountLast4: "0010", cardLast4: "0007" },
+          ] } } : {}) }],
+      });
+    }
+    if (options.breakdownRole === "superuser" && endpoint === `GET /api/collection/${recordId}/receipts/landscape/compare/synthetic-peer-id`) {
+      fixture.comparisonRequests++;
+      if (options.comparison === "removed") return respond(route, { ok: false }, 404);
+      if (options.comparison === "retry" && fixture.comparisonRequests === 1) return respond(route, { ok: false }, 500);
+      return respond(route, {
+        original: { batch: "P10", paymentDate: "2026-10-14", recordedAmount: "3250.00", receiptAmount: "3000.00", fileName: media[1]!.fileName },
+        related: { batch: "P25", paymentDate: "2026-10-12", recordedAmount: "3100.25", receiptAmount: "2950.50", fileName: "Renamed receipt.png" },
+      });
+    }
     if (endpoint === "GET /api/collection/teams") return respond(route, { ok: true, teams: [] });
     if (endpoint === "GET /api/collection/purge-summary") return respond(route, { ok: true, retentionMonths: 6, cutoffDate: "2026-04-15", eligibleRecords: 0, totalAmount: 0 });
     for (const [index, entry] of media.entries()) for (const action of ["view", "download"] as const) {
@@ -245,6 +283,206 @@ for (const [width, theme] of [[320, "dark"], [390, "light"], [1024, "dark"], [13
     expect(fixture.errors).toEqual([]);
   });
 }
+
+for (const [width, role] of [[320, "user"], [1366, "superuser"]] as const) {
+  test(`Receipt breakdown for ${role} at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    const staff = role === "user";
+    await page.setViewportSize({ width, height: staff ? 740 : 900 });
+    const fixture = await installFixture(page, baseURL, { locale: "ms", theme: staff ? "dark" : "light", breakdownRole: role });
+    await page.goto("/collection/records");
+    const trigger = page.getByRole("button", { name: "Synthetic Viewer Customer", exact: true });
+    await trigger.click();
+    const dialog = page.getByRole("dialog", { name: "Synthetic Viewer Customer", exact: true });
+    const toggle = dialog.getByRole("button", { name: "Pecahan amaun resit" });
+    if (staff) {
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(fixture.breakdownRequests).toBe(0);
+      await toggle.press("Enter");
+      await dialog.getByRole("button", { name: "Cuba semula" }).click();
+    }
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    for (const [term, amount] of [
+      ["Bayaran direkodkan", /RM\s*3,250\.00/], ["Jumlah perlu dibayar", /RM\s*250\.00/],
+      ["Resit unik bagi rekod ini", /RM\s*250\.00/], ["Resit dikongsi dengan rekod lain", /RM\s*3,000\.00/],
+    ] as const) await expect(dialog.getByText(term, { exact: true }).locator("+ dd")).toHaveText(amount);
+    await expect(dialog.getByText(/Resit yang belum dapat dibandingkan: 1/)).toBeAttached();
+    const link = dialog.getByText(/ID synthetic-peer-id/);
+    if (staff) {
+      await expect(link).toHaveCount(0);
+      await expect(dialog.getByRole("button", { name: /^Bandingkan/ })).toHaveCount(0);
+      expect(fixture.comparisonRequests).toBe(0);
+    }
+    else {
+      await expect(link).toContainText("P25 · 12/10/2026");
+      await expect(dialog.getByText(/Nombor akaun •••• 0010 · Nombor kad •••• 0007/)).toBeVisible();
+    }
+    await (staff ? dialog.getByText(media[1]!.fileName, { exact: true }) : link).scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`receipt-breakdown-${width}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(trigger).toBeFocused();
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const width of [320, 1366]) {
+  test(`Receipt comparison preserves the filtered list at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    const phone = width === 320;
+    await page.setViewportSize({ width, height: phone ? 740 : 900 });
+    const fixture = await installFixture(page, baseURL, { locale: "ms", theme: phone ? "dark" : "light", breakdownRole: "superuser", comparison: phone ? "available" : "retry" });
+    await page.goto("/collection/records");
+    const search = page.getByRole("searchbox", { name: "Search" });
+    await search.fill("Synthetic");
+    await page.getByTestId("collection-records-filter-toggle").click();
+    await page.getByRole("combobox", { name: "Aging", exact: true }).click();
+    await page.getByRole("option", { name: "D3", exact: true }).click();
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    const chip = page.getByText("Aging: D3", { exact: true });
+    await expect(chip).toBeVisible();
+    const name = "Synthetic Viewer Customer";
+    const row = page.getByRole("button", { name, exact: true });
+    await row.scrollIntoViewIfNeeded();
+    const listScroll = () => row.evaluate(element => {
+      const offsets: number[] = [];
+      for (let ancestor = element.parentElement; ancestor; ancestor = ancestor.parentElement) {
+        if (ancestor.scrollHeight > ancestor.clientHeight) offsets.push(ancestor.scrollTop);
+      }
+      return offsets;
+    });
+    const offsets = await listScroll();
+    expect(offsets.some(offset => offset > 0)).toBe(true);
+    await row.press("Enter");
+    const details = page.getByRole("dialog", { name, exact: true });
+    const link = details.getByRole("button", { name: /^Bandingkan Nombor akaun/ });
+    await expect(link).toBeVisible();
+    expect(fixture.comparisonRequests).toBe(0);
+    await link.press("Enter");
+    const pair = page.getByRole("dialog", { name: "Bandingkan rekod resit" });
+    await expect(pair.getByRole("heading", { name: "Bandingkan rekod resit" })).toBeFocused();
+    if (!phone) await pair.getByRole("button", { name: "Cuba semula" }).click();
+    const original = pair.getByRole("region", { name: "Rekod asal" });
+    const related = pair.getByRole("region", { name: "Rekod berkaitan" });
+    await expect(original.locator("dd")).toHaveText([/RM\s*3,250\.00/, "14/10/2026", "P10", /RM\s*3,000\.00/, media[1]!.fileName]);
+    await expect(related.locator("dd")).toHaveText([/RM\s*3,100\.25/, "12/10/2026", "P25", /RM\s*2,950\.50/, "Renamed receipt.png"]);
+    const left = (await original.boundingBox())!;
+    const right = (await related.boundingBox())!;
+    if (phone) {
+      expect(right.y).toBeGreaterThanOrEqual(left.y + left.height);
+      expect(right.x).toBe(left.x);
+      await expect(pair.getByRole("button", { name: "Close", exact: true })).toHaveCSS("width", "44px");
+    } else {
+      expect(right.x).toBeGreaterThan(left.x + left.width);
+      expect(right.y).toBe(left.y);
+      const fieldPositions = (section: Locator) => section.locator("dt").evaluateAll(labels => labels.map(label => label.getBoundingClientRect().top));
+      expect(await fieldPositions(related)).toEqual(await fieldPositions(original));
+    }
+    expect(await pair.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`receipt-comparison-${width}.png`) });
+    expect(fixture.views).toEqual([]);
+    const previewButton = pair.getByRole("button", { name: "Lihat resit yang dikongsi" });
+    await previewButton.click();
+    await expectImage(page.getByRole("dialog", { name: "Receipt Preview" }), media[1]!.fileName);
+    expect(fixture.views).toEqual(["landscape"]);
+    await page.keyboard.press("Escape");
+    await expect(previewButton).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(link).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(row).toBeFocused();
+    expect(await listScroll()).toEqual(offsets);
+    await expect(search).toHaveValue("Synthetic");
+    await expect(chip).toBeAttached();
+    expect(fixture.errors).toEqual([]);
+    expect(fixture.unexpected).toEqual([]);
+  });
+}
+
+for (const width of [320, 1366]) {
+  test(`Duplicate receipt filter opens a comparison and preserves selection at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 320 ? 740 : 900 });
+    const fixture = await installFixture(page, baseURL, { locale: "ms", theme: width === 320 ? "dark" : "light", breakdownRole: "superuser", comparison: "available" });
+    await page.goto("/collection/records");
+    const search = page.getByRole("searchbox", { name: "Search" });
+    const toggle = page.getByTestId("collection-records-filter-toggle");
+    const checkbox = page.getByRole("checkbox", { name: "Resit pendua" });
+    const ordinary = page.getByRole("button", { name: "Synthetic example 1", exact: true });
+    const duplicate = page.getByRole("button", { name: "Synthetic Viewer Customer", exact: true });
+    await expect(ordinary).toBeVisible();
+    await search.fill("Synthetic");
+    await toggle.click();
+    await page.getByRole("combobox", { name: "Aging", exact: true }).click();
+    await page.getByRole("option", { name: "D3", exact: true }).click();
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.focus();
+    await checkbox.press("Space");
+    await expect(checkbox).toBeChecked();
+    await checkbox.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`duplicate-filter-${width}.png`) });
+    await page.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect(toggle).toBeFocused();
+    await expect(ordinary).toHaveCount(0);
+    await expect(duplicate).toBeVisible();
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveText("2");
+    await page.getByRole("button", { name: "View All", exact: true }).click();
+    const fullList = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection" });
+    await expect(fullList.getByRole("button", { name: "Synthetic Viewer Customer" })).toBeVisible();
+    await expect(fullList.getByRole("button", { name: /^Synthetic example / })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+    await duplicate.click();
+    const peer = page.getByRole("button", { name: /^Bandingkan Nombor akaun/ });
+    await peer.click();
+    await expect(page.getByRole("region", { name: "Rekod berkaitan" })).toContainText("Renamed receipt.png");
+    await page.keyboard.press("Escape");
+    await expect(peer).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(duplicate).toBeFocused();
+    await expect(search).toHaveValue("Synthetic");
+    await search.fill("Synthetic example");
+    await expect(page.getByRole("heading", { name: "Tiada rekod sepadan" })).toBeVisible();
+    await page.getByRole("button", { name: "Remove filter Resit pendua" }).click();
+    await expect(ordinary).toBeVisible();
+    await expect(duplicate).toHaveCount(0);
+    await expect(search).toHaveValue("Synthetic example");
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveText("1");
+    await toggle.click();
+    await expect(checkbox).not.toBeChecked();
+    await checkbox.check();
+    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await expect(ordinary).toBeVisible();
+    await expect(duplicate).toBeVisible();
+    await expect(search).toHaveValue("");
+    await expect(page.getByTestId("collection-records-filter-count")).toHaveCount(0);
+    expect(fixture.unexpected).toEqual([]);
+    expect(fixture.errors).toEqual([]);
+  });
+}
+
+for (const role of ["user", "admin", "manager"] as const) {
+  test(`Duplicate receipt filter stays hidden for ${role}`, async ({ page, baseURL }) => {
+    await installFixture(page, baseURL, { breakdownRole: role });
+    await page.goto("/collection/records");
+    await page.getByTestId("collection-records-filter-toggle").click();
+    await expect(page.getByRole("combobox", { name: "Aging" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: "Resit pendua" })).toHaveCount(0);
+  });
+}
+
+test("Receipt comparison handles a removed match", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { breakdownRole: "superuser", comparison: "removed" });
+  await page.goto("/collection/records");
+  await page.getByRole("button", { name: "Synthetic Viewer Customer", exact: true }).click();
+  const link = page.getByRole("button", { name: /^Bandingkan Nombor akaun/ });
+  await link.click();
+  const pair = page.getByRole("dialog", { name: "Bandingkan rekod resit" });
+  await expect(pair.getByRole("status")).toHaveText("Padanan ini sudah tiada atau akses anda telah berubah.");
+  await expect(pair.locator("dd")).toHaveCount(0);
+  await expect(pair.getByRole("button", { name: "Lihat resit yang dikongsi" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(link).toBeFocused();
+  expect(fixture.views).toEqual([]);
+  expect(fixture.unexpected).toEqual([]);
+});
 
 async function openPreview(page: Page) {
   await page.goto("/collection/records");

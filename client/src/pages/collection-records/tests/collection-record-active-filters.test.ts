@@ -5,6 +5,7 @@ import type { CollectionRecordsFiltersProps } from "../CollectionRecordsFilters"
 
 function controls(overrides: Partial<CollectionRecordsFiltersProps> = {}): CollectionRecordsFiltersProps {
   return {
+    canUseDuplicateFilter: false, duplicateOnly: false, onDuplicateOnlyChange: () => undefined,
     canUseNicknameFilter: true, canUseTeamLeaderFilter: true,
     fromDate: "", toDate: "", searchInput: "", nicknameFilter: "all", leaderFilter: "all",
     sourceImportFilter: "all", agingFilter: "all", classificationFilter: "all", sortValue: "paymentDate_desc",
@@ -24,6 +25,19 @@ const selected = {
   nicknameFilter: "Collector A", leaderFilter: "leader-1", sourceImportFilter: "source-1",
   agingFilter: "D4", classificationFilter: "abort_cp", sortValue: "amount_desc",
 };
+
+test("the duplicate chip requires the superuser control and removes only that filter", () => {
+  const calls: boolean[] = [];
+  const options = { duplicateOnly: true, searchInput: "Test", onDuplicateOnlyChange: (value: boolean) => calls.push(value) };
+  const hidden = buildCollectionRecordsActiveFilters(controls(options));
+  assert.equal(hidden.filterCount, 0);
+  const shown = buildCollectionRecordsActiveFilters(controls({ ...options, canUseDuplicateFilter: true }));
+  assert.equal(shown.filterCount, 1);
+  const chip = shown.items.find(item => item.id === "collection-duplicate-receipts");
+  assert.ok(chip?.onRemove);
+  chip.onRemove();
+  assert.deepEqual(calls, [false]);
+});
 
 test("active filter count excludes visible Search but includes every other selected control", () => {
   assert.deepEqual(buildCollectionRecordsActiveFilters(controls()), { items: [], filterCount: 0 });

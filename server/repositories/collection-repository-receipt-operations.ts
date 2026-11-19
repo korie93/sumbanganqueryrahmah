@@ -1,4 +1,5 @@
 import { db } from "../db-postgres";
+import { findSharedReceiptPair } from "./collection-receipt-lookup-utils";
 import type {
   CollectionReceiptDuplicateSummary,
   CollectionRecord,
@@ -30,6 +31,10 @@ export async function listCollectionRecordReceiptsRepository(
   return listCollectionRecordReceiptsByRecordId(db, recordId);
 }
 
+export function getCollectionReceiptComparisonRepository(recordId: string, receiptId: string, relatedRecordId: string) {
+  return findSharedReceiptPair(db, recordId, receiptId, relatedRecordId);
+}
+
 export async function getCollectionRecordReceiptByIdRepository(
   recordId: string,
   receiptId: string,
@@ -39,7 +44,7 @@ export async function getCollectionRecordReceiptByIdRepository(
 
 export async function findCollectionReceiptDuplicateSummariesRepository(
   fileHashes: string[],
-  options?: { excludeRecordId?: string },
+  options?: { excludeRecordId?: string; includeRecordDetails?: boolean },
 ): Promise<CollectionReceiptDuplicateSummary[]> {
   return findCollectionReceiptDuplicateSummariesByHash(db, fileHashes, options);
 }

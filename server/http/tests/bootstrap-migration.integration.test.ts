@@ -15,8 +15,9 @@ import {
 } from "../../internal/core-schema-bootstrap-imports";
 import { ensureSettingsSchema } from "../../internal/settings-bootstrap-schema";
 import { ensureUsersBootstrapSchema } from "../../internal/users-bootstrap/schema";
-import { decryptCollectionPiiValue } from "../../lib/collection-pii-encryption";
-import { acquireCollectionReceiptHashLocks } from "../../repositories/collection-receipt-utils";
+import { decryptCollectionPiiValue, encryptCollectionPiiFieldValue } from "../../lib/collection-pii-encryption";
+import { findCollectionReceiptDuplicateSummariesByHash, findSharedReceiptPair } from "../../repositories/collection-receipt-lookup-utils";
+import { acquireCollectionReceiptHashLocks, createCollectionRecordReceiptRows } from "../../repositories/collection-receipt-utils";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const aiMessagesIndexMigrationSql = readFileSync(
@@ -462,6 +463,111 @@ test(
         releaseFirstLock();
         await concurrencyPool.end().catch(() => undefined);
       }
+    });
+  },
+);
+
+test(
+  "concurrent receipt uploads to different records allow one owner and roll back the other batch",
+  { skip: skipReason || false },
+  async () => {
+    await withTempDatabase(async ({ pool, databaseName }) => {
+      await applySql(pool, collectionRecordMigrationSql);
+      for (const filename of migrationSqlFileNames.filter(name => /^(0018|0019|0020)_/.test(name))) {
+        await applySql(pool, readFileSync(path.join(repoRoot, "drizzle", filename), "utf8"));
+      }
+      const writers = new pg.Pool({ ...pgBaseConfig, database: databaseName, max: 2 });
+      const db = drizzle(writers);
+      const sharedHash = "f".repeat(64);
+      const ids = [randomUUID(), randomUUID()] as const;
+      const receipt = (fileHash: string, name: string) => ({
+        storagePath: `uploads/${name}`, originalFileName: name, originalMimeType: "application/pdf",
+        originalExtension: ".pdf", fileSize: 100, fileHash,
+      });
+      try {
+        for (const id of ids) {
+          await pool.query(`INSERT INTO public.collection_records (
+            id, customer_name, ic_number, customer_phone, account_number, batch, payment_date,
+            amount, created_by_login, collection_staff_nickname, staff_username
+          ) VALUES ($1::uuid, 'Test', '-', '-', $1::text, 'P10', CURRENT_DATE, 100, 'qa', 'qa', 'qa')`,
+          [id]);
+        }
+        const results = await Promise.allSettled(ids.map((id, index) =>
+          db.transaction(tx => createCollectionRecordReceiptRows(tx, id, [
+            receipt(String(index).repeat(64), `unique-${index}.pdf`),
+            receipt(sharedHash, `different-name-${index}.pdf`),
+          ])),
+        ));
+        assert.equal(results.filter(result => result.status === "fulfilled").length, 1);
+        const rejected = results.find(result => result.status === "rejected");
+        assert.equal(rejected?.reason.code, "COLLECTION_RECEIPT_DUPLICATE_DETECTED");
+        assert.equal(rejected?.reason.statusCode, 409);
+        const rows = await pool.query("SELECT collection_record_id, file_hash FROM public.collection_record_receipts");
+        assert.equal(rows.rowCount, 2);
+        assert.equal(new Set(rows.rows.map(row => row.collection_record_id)).size, 1);
+        const winner = rows.rows[0].collection_record_id;
+        const other = ids.find(id => id !== winner)!;
+        await pool.query("UPDATE public.collection_record_receipts SET deleted_at = now() WHERE file_hash = $1", [sharedHash]);
+        const reused = await db.transaction(tx => createCollectionRecordReceiptRows(tx, other, [
+          receipt(sharedHash, "corrected-allocation.pdf"),
+        ]));
+        assert.equal(reused.length, 1);
+      } finally {
+        await writers.end();
+      }
+    });
+  },
+);
+
+test(
+  "historical shared receipts disclose masked identifiers only when requested and ignore archived attachments",
+  { skip: skipReason || false },
+  async t => {
+    const priorKey = process.env.COLLECTION_PII_ENCRYPTION_KEY;
+    process.env.COLLECTION_PII_ENCRYPTION_KEY = randomUUID();
+    t.after(() => {
+      if (priorKey === undefined) delete process.env.COLLECTION_PII_ENCRYPTION_KEY;
+      else process.env.COLLECTION_PII_ENCRYPTION_KEY = priorKey;
+    });
+    await withTempDatabase(async ({ pool }) => {
+      const db = drizzle(pool);
+      await ensureCollectionRecordsTables(db);
+      const hash = "a".repeat(64);
+      const ids = Array.from({ length: 8 }, () => randomUUID());
+      const receiptIds = ids.map(() => randomUUID());
+      for (const [index, id] of ids.entries()) {
+        await pool.query(`INSERT INTO public.collection_records (
+          id, account_number_encrypted, card_number_last4, batch, payment_date,
+          amount, created_by_login, collection_staff_nickname, staff_username
+        ) VALUES ($1, $2, '0007', 'P25', '2026-03-02', 100, 'qa', 'qa', 'qa')`,
+        [id, encryptCollectionPiiFieldValue("991122000010")]);
+        await pool.query(`INSERT INTO public.collection_record_receipts (
+          id, collection_record_id, storage_path, original_file_name, original_mime_type, file_hash, created_at, deleted_at
+        ) VALUES ($1, $2, 'fixture/a.pdf', 'a.pdf', 'application/pdf', $3, $4, $5)`,
+        [receiptIds[index], id, hash, new Date(Date.UTC(2026, 2, index + 1)), index === 7 ? new Date() : null]);
+      }
+      const [summary] = await findCollectionReceiptDuplicateSummariesByHash(db, [hash], { excludeRecordId: ids[0]!, includeRecordDetails: true });
+      assert.equal(summary?.matchCount, 6);
+      assert.deepEqual(summary.matches.map(match => match.record), ids.slice(2, 7).reverse().map(id => ({
+        recordId: id, batch: "P25", paymentDate: "2026-03-02", accountLast4: "0010", cardLast4: "0007",
+      })));
+      const [ordinary] = await findCollectionReceiptDuplicateSummariesByHash(db, [hash], { excludeRecordId: ids[0]! });
+      assert.ok(ordinary?.matches.every(match => !("record" in match)));
+      const [original, related] = ids as [string, string, ...string[]];
+      const receipt = receiptIds[0]!;
+      await pool.query("UPDATE public.collection_record_receipts SET receipt_amount = 300025, original_file_name = 'renamed.pdf' WHERE id = $1", [receiptIds[1]]);
+      await pool.query("UPDATE public.collection_records SET amount = 3250 WHERE id = $1", [original]);
+      assert.deepEqual(await findSharedReceiptPair(db, original, receipt, related), {
+        original: { batch: "P25", paymentDate: "2026-03-02", recordedAmount: "3250.00", receiptAmount: null, fileName: "a.pdf" },
+        related: { batch: "P25", paymentDate: "2026-03-02", recordedAmount: "100.00", receiptAmount: "3000.25", fileName: "renamed.pdf" },
+      });
+      assert.equal(await findSharedReceiptPair(db, original, receipt, original), null);
+      assert.equal(await findSharedReceiptPair(db, original, receiptIds[1]!, related), null);
+      assert.equal(await findSharedReceiptPair(db, original, receipt, ids[7]!), null);
+      await pool.query("UPDATE public.collection_record_receipts SET file_hash = $1 WHERE id = $2", ["b".repeat(64), receiptIds[1]]);
+      assert.equal(await findSharedReceiptPair(db, original, receipt, related), null);
+      await pool.query("UPDATE public.collection_record_receipts SET deleted_at = now() WHERE id = $1", [receipt]);
+      assert.equal(await findSharedReceiptPair(db, original, receipt, ids[2]!), null);
     });
   },
 );

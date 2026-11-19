@@ -7,6 +7,9 @@ import { CollectionRecordsFilters, type CollectionRecordsFiltersProps } from "@/
 function renderFilters(overrides: Partial<CollectionRecordsFiltersProps> = {}) {
   return renderToStaticMarkup(
     createElement(CollectionRecordsFilters, {
+      canUseDuplicateFilter: false,
+      duplicateOnly: false,
+      onDuplicateOnlyChange: () => undefined,
       canUseNicknameFilter: true,
       canUseTeamLeaderFilter: true,
       fromDate: "2026-05-01",

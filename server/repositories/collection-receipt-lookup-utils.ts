@@ -1,4 +1,9 @@
 import { sql } from "drizzle-orm";
+import { formatCollectionAmountFromCents } from "../../shared/collection-amount-types";
+import type { CollectionReceiptComparison } from "../../shared/collection-receipt-breakdown";
+import { resolveCollectionPiiFieldValueFailClosed } from "../lib/collection-pii-encryption";
+import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
+import { hydrateCollectionRecordSourceAccounts } from "./collection-record-source-account-utils";
 import type {
   CollectionRecordReceipt,
   CollectionReceiptDuplicateSummary,
@@ -12,6 +17,40 @@ import {
   type CollectionRecordReceiptDbRow,
 } from "./collection-receipt-read-shared";
 import type { CollectionReceiptExecutor } from "./collection-receipt-attachment-utils";
+
+export async function findSharedReceiptPair(
+  executor: CollectionReceiptExecutor, recordId: string, receiptId: string, relatedRecordId: string,
+): Promise<CollectionReceiptComparison | null> {
+  // Both attachments must still be active in the same database snapshot.
+  const result = await executor.execute(sql`
+    WITH pair AS (
+      SELECT a.id AS original_id, b.id AS related_id
+      FROM public.collection_record_receipts a
+      JOIN public.collection_record_receipts b ON b.file_hash = a.file_hash
+      WHERE a.collection_record_id = ${recordId}::uuid AND a.id = ${receiptId}::uuid
+        AND b.collection_record_id = ${relatedRecordId}::uuid AND b.collection_record_id <> a.collection_record_id
+        AND a.file_hash <> '' AND a.deleted_at IS NULL AND b.deleted_at IS NULL
+    )
+    SELECT file.id = pair.original_id AS original, record.batch, record.payment_date::text,
+           record.amount::text, file.receipt_amount, file.original_file_name
+    FROM pair
+    JOIN public.collection_record_receipts file ON file.id IN (pair.original_id, pair.related_id)
+    JOIN public.collection_records record ON record.id = file.collection_record_id
+  `);
+  const rows = readRows<{
+    original: boolean; batch: string; payment_date: string; amount: string;
+    receipt_amount: string | null; original_file_name: string;
+  }>(result);
+  const original = rows.find(row => row.original);
+  const related = rows.find(row => !row.original);
+  if (rows.length !== 2 || !original || !related) return null;
+  const entry = (row: (typeof rows)[number]) => ({
+    batch: row.batch, paymentDate: row.payment_date, recordedAmount: row.amount,
+    receiptAmount: row.receipt_amount == null ? null : formatCollectionAmountFromCents(row.receipt_amount),
+    fileName: row.original_file_name,
+  });
+  return { original: entry(original), related: entry(related) };
+}
 
 export async function listCollectionRecordReceiptsByRecordId(
   executor: CollectionReceiptExecutor,
@@ -120,7 +159,7 @@ export async function listCollectionRecordReceiptsByIds(
 export async function findCollectionReceiptDuplicateSummariesByHash(
   executor: CollectionReceiptExecutor,
   fileHashes: string[],
-  options?: { excludeRecordId?: string },
+  options?: { excludeRecordId?: string; includeRecordDetails?: boolean },
 ): Promise<CollectionReceiptDuplicateSummary[]> {
   const normalizedHashes = normalizeUniqueValues(fileHashes.map((value) => String(value || "").trim().toLowerCase()));
   if (!normalizedHashes.length) {
@@ -168,10 +207,44 @@ export async function findCollectionReceiptDuplicateSummariesByHash(
     grouped.set(fileHash, current);
   }
 
-  return Array.from(grouped.values())
+  const summaries = Array.from(grouped.values())
     .filter((summary) => summary.matchCount > 0)
     .map((summary) => ({
       ...summary,
       matches: summary.matches.slice(0, 5),
     }));
+  if (!options?.includeRecordDetails || !summaries.length) return summaries;
+
+  const ids = [...new Set(summaries.flatMap(summary => summary.matches.map(match => match.collectionRecordId)))];
+  const details = await executor.execute(sql`
+    SELECT id, batch, payment_date::text, card_number_last4, source_import_id,
+      source_data_row_id, source_obligation_key, account_number_encrypted,
+      ${buildProtectedCollectionPiiSelect("account_number", "account_number_encrypted", "account_number", "accountNumber")}
+    FROM public.collection_records
+    WHERE id IN (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)})
+  `);
+  const records = await hydrateCollectionRecordSourceAccounts(executor, readRows<{
+    id: string; batch: string; payment_date: string; card_number_last4: string | null;
+    source_import_id: string | null; source_data_row_id: string | null; source_obligation_key: string | null;
+    account_number: string | null; account_number_encrypted: string | null;
+  }>(details).map(row => ({
+    id: row.id, batch: row.batch, paymentDate: row.payment_date,
+    cardNumberLast4: row.card_number_last4, sourceImportId: row.source_import_id,
+    sourceDataRowId: row.source_data_row_id, sourceObligationKey: row.source_obligation_key,
+    accountNumber: resolveCollectionPiiFieldValueFailClosed({
+      field: "accountNumber", plaintext: row.account_number, encrypted: row.account_number_encrypted,
+    }),
+  })));
+  const links = new Map(records.map(record => [record.id, {
+    recordId: record.id, batch: record.batch, paymentDate: record.paymentDate,
+    accountLast4: record.accountNumber.trim().match(/\d{4}$/)?.[0] ?? null,
+    cardLast4: /^\d{4}$/.test(record.cardNumberLast4 ?? "") ? record.cardNumberLast4 : null,
+  }]));
+  for (const summary of summaries) {
+    for (const match of summary.matches) {
+      const link = links.get(match.collectionRecordId);
+      if (link) match.record = link;
+    }
+  }
+  return summaries;
 }

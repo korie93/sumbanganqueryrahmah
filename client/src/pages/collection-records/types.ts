@@ -1,3 +1,7 @@
+import type { CollectionRecord } from "@/lib/api";
+
+export type ViewCollectionReceipt = (record: CollectionRecord, launcher?: HTMLElement, receiptId?: string) => void;
+
 export type ReceiptPreviewKind = "pdf" | "image" | "unsupported";
 
 export type CollectionRecordFilters = {
@@ -6,6 +10,7 @@ export type CollectionRecordFilters = {
   search?: string | undefined;
   nickname?: string | undefined;
   leaderId?: string | undefined;
+  duplicateOnly?: boolean | undefined;
   sourceImportIds?: string[] | undefined;
   agingBuckets?: Array<"D3" | "D4" | "D5" | "D6"> | undefined;
   classifications?: Array<"cp" | "abort_cp"> | undefined;

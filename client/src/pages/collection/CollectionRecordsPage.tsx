@@ -143,7 +143,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
     viewModel.filters.fromDate, viewModel.filters.toDate, viewModel.filters.searchInput,
     viewModel.filters.nicknameFilter, viewModel.filters.leaderFilter,
     viewModel.filters.sourceImportFilter, viewModel.filters.agingFilter,
-    viewModel.filters.classificationFilter, viewModel.filters.sortValue,
+    viewModel.filters.classificationFilter, viewModel.filters.duplicateOnly, viewModel.filters.sortValue,
   ]);
   const { lastViewedRecordId, markViewed } = useCollectionRecordReturnHighlight(
     returnContextKey, viewModel.table.paginatedRecords,
@@ -155,7 +155,7 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
     ));
   };
   const { items: activeFilterChips, filterCount } = useMemo(
-    () => buildCollectionRecordsActiveFilters(viewModel.filters), [viewModel.filters],
+    () => buildCollectionRecordsActiveFilters(viewModel.filters, t), [viewModel.filters, t],
   );
   const focusSearch = () => {
     const searchField = document.getElementById(isMobile ? "collection-records-search-mobile" : "collection-records-search");
@@ -253,10 +253,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           }}
           lastViewedRecordId={lastViewedRecordId}
           onOpenRecord={(record) => markViewed(record.id)}
-          onViewReceipt={(record, launcher) => {
+          onViewReceipt={(record, launcher, receiptId) => {
             rememberReceiptLauncher(launcher);
             markViewed(record.id);
-            viewModel.table.onViewReceipt(record);
+            viewModel.table.onViewReceipt(record, launcher, receiptId);
           }}
           onEdit={(record, launcher) => {
             const activeElement = document.activeElement;
@@ -356,10 +356,10 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <ViewAllRecordsDialog
             {...viewModel.viewAll}
             onOpenRecord={(record) => markViewed(record.id)}
-            onViewReceipt={(record) => {
-              rememberReceiptLauncher();
+            onViewReceipt={(record, launcher, receiptId) => {
+              rememberReceiptLauncher(launcher);
               markViewed(record.id);
-              viewModel.viewAll.onViewReceipt(record);
+              viewModel.viewAll.onViewReceipt(record, launcher, receiptId);
             }}
           />
         </Suspense>

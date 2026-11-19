@@ -118,7 +118,7 @@ export function ViewAllRecordsDesktopTable({
               <TableCell className="py-2">{record.batch}</TableCell>
               <TableCell className="py-2">{formatCollectionOptionalAmount(record.totalDue, missing)}</TableCell>
               <TableCell className="py-2">{formatCollectionOptionalAmount(record.billingPrincipalOsp, missing)}</TableCell>
-              <TableCell className="py-2 font-medium">{getCollectionCpStatusLabel(record)}</TableCell>
+              <TableCell className="py-2 font-medium">{getCollectionCpStatusLabel(record, t)}</TableCell>
               <TableCell className="py-2">{record.agingBucket || "-"}</TableCell>
               <TableCell className="py-2">{getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy, missing)}</TableCell>
               <TableCell className="py-2">{record.collectionStaffNickname}</TableCell>

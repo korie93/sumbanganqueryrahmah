@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
+import { CollectionRecordsTranslation } from "./collection-records-translation";
 import { Button } from "@/components/ui/button";
 import { DatePickerField } from "@/components/ui/date-picker-field";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,9 @@ import {
 } from "@/components/ui/select";
 
 export interface CollectionRecordsFiltersProps {
+  canUseDuplicateFilter: boolean;
+  duplicateOnly: boolean;
+  onDuplicateOnlyChange: (checked: boolean) => void;
   canUseNicknameFilter: boolean;
   canUseTeamLeaderFilter: boolean;
   fromDate: string;
@@ -186,6 +190,9 @@ function CollectionRecordsAdvancedFilters({
 }
 
 export function CollectionRecordsFilters({
+  canUseDuplicateFilter,
+  duplicateOnly,
+  onDuplicateOnlyChange,
   canUseNicknameFilter,
   canUseTeamLeaderFilter,
   fromDate,
@@ -215,6 +222,15 @@ export function CollectionRecordsFilters({
   onReset,
 }: CollectionRecordsFiltersProps) {
   const isMobile = useIsMobile();
+  const t = useContext(CollectionRecordsTranslation);
+  const duplicateFilter = canUseDuplicateFilter && (
+    <label className="flex min-h-11 cursor-pointer items-center gap-2 self-end text-sm font-medium md:min-h-9">
+      <input type="checkbox" name="duplicateOnly" checked={duplicateOnly}
+        onChange={event => onDuplicateOnlyChange(event.currentTarget.checked)}
+        className="size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
+      {t("common.collection.records.duplicateOnly")}
+    </label>
+  );
   const [desktopNicknamePickerOpen, setDesktopNicknamePickerOpen] = useState(false);
   const [mobileNicknamePickerOpen, setMobileNicknamePickerOpen] = useState(false);
   const mobileFromDateButtonId = "collection-records-from-date-mobile-button";
@@ -313,6 +329,7 @@ export function CollectionRecordsFilters({
           onSortValueChange={onSortValueChange}
         />
 
+        {duplicateFilter}
         <div className="grid grid-cols-2 gap-2 pt-1" data-floating-ai-avoid="true">
           <Button type="button" className="h-11 w-full rounded-md" onClick={onFilter} disabled={loadingRecords}>
             Filter
@@ -384,6 +401,7 @@ export function CollectionRecordsFilters({
             />
           </div>
         ) : null}
+        {duplicateFilter}
         <div
           className="flex shrink-0 flex-wrap items-center gap-2"
           data-floating-ai-avoid="true"

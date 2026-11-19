@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
+import { conflict } from "../http/errors";
 import { normalizeCollectionReceiptExtractionStatus } from "../services/collection/collection-receipt-validation";
 import { normalizeCollectionReceiptExtractionState } from "../lib/collection-receipt-extraction-state";
 import {
@@ -29,7 +30,7 @@ function normalizeUniqueValues(values: string[]): string[] {
 export async function acquireCollectionReceiptHashLocks(
   executor: CollectionReceiptExecutor,
   receipts: Array<Pick<CreateCollectionRecordReceiptInput, "fileHash">>,
-): Promise<void> {
+): Promise<string[]> {
   const fileHashes = Array.from(
     new Set(
       receipts
@@ -45,6 +46,7 @@ export async function acquireCollectionReceiptHashLocks(
       )
     `);
   }
+  return fileHashes;
 }
 
 export async function createCollectionRecordReceiptRows(
@@ -57,7 +59,22 @@ export async function createCollectionRecordReceiptRows(
     return [];
   }
 
-  await acquireCollectionReceiptHashLocks(executor, receipts);
+  const fileHashes = await acquireCollectionReceiptHashLocks(executor, receipts);
+  if (fileHashes.length) {
+    // A separate statement after acquiring the locks sees any upload that committed while we waited.
+    const existing = await executor.execute(sql`
+      SELECT 1 FROM public.collection_record_receipts
+      WHERE file_hash IN (${sql.join(fileHashes.map(hash => sql`${hash}`), sql`, `)})
+        AND deleted_at IS NULL
+      LIMIT 1
+    `);
+    if (existing.rows?.length) {
+      throw conflict(
+        "Fail resit ini sudah digunakan dalam rekod Collection. Sila semak dan pilih resit yang betul.",
+        "COLLECTION_RECEIPT_DUPLICATE_DETECTED",
+      );
+    }
+  }
 
   const insertedIds: string[] = [];
   for (const receipt of receipts) {
@@ -100,7 +117,7 @@ export async function createCollectionRecordReceiptRows(
         ${receipt.extractionConfidence ?? null},
         ${receipt.receiptDate ?? null},
         ${receipt.receiptReference ?? null},
-        ${receipt.fileHash ?? null},
+        ${receipt.fileHash?.trim().toLowerCase() || null},
         now()
       )
     `);

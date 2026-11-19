@@ -11,6 +11,7 @@ import {
   createCollectionRecordsCache,
 } from "@/pages/collection-records/records-query-cache";
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
+import { getCollectionRecordCriteria } from "./collection-record-filters";
 import {
   buildCollectionRecordsPaginationState,
   clampCollectionRecordsPageSize,
@@ -138,17 +139,9 @@ export function useCollectionRecordsQueryState() {
     }: FetchCollectionRecordsPageParams) => {
       const requestId = ++recordsRequestIdRef.current;
       const safePageSize = clampCollectionRecordsPageSize(pageSize);
+      const criteria = getCollectionRecordCriteria(filters);
       const requestFilters: CollectionRecordFilters = {
-        from: filters.from,
-        to: filters.to,
-        search: filters.search,
-        nickname: filters.nickname,
-        leaderId: filters.leaderId,
-        sourceImportIds: filters.sourceImportIds,
-        agingBuckets: filters.agingBuckets,
-        classifications: filters.classifications,
-        sortBy: filters.sortBy,
-        sortDirection: filters.sortDirection,
+        ...criteria,
         limit: safePageSize,
         cursor,
       };
@@ -160,18 +153,7 @@ export function useCollectionRecordsQueryState() {
         if (!isMountedRef.current || requestId !== recordsRequestIdRef.current) {
           return;
         }
-        appliedFiltersRef.current = {
-          from: requestFilters.from,
-          to: requestFilters.to,
-          search: requestFilters.search,
-          nickname: requestFilters.nickname,
-          leaderId: requestFilters.leaderId,
-          sourceImportIds: requestFilters.sourceImportIds,
-          agingBuckets: requestFilters.agingBuckets,
-          classifications: requestFilters.classifications,
-          sortBy: requestFilters.sortBy,
-          sortDirection: requestFilters.sortDirection,
-        };
+        appliedFiltersRef.current = criteria;
         cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
         cursorHistoryRef.current[page - 1] = cursor;
         if (resetHistory) {
@@ -229,18 +211,7 @@ export function useCollectionRecordsQueryState() {
           totalAmount: nextTotalAmount,
           nextCursor: nextCursorValue,
         });
-        appliedFiltersRef.current = {
-          from: requestFilters.from,
-          to: requestFilters.to,
-          search: requestFilters.search,
-          nickname: requestFilters.nickname,
-          leaderId: requestFilters.leaderId,
-          sourceImportIds: requestFilters.sourceImportIds,
-          agingBuckets: requestFilters.agingBuckets,
-          classifications: requestFilters.classifications,
-          sortBy: requestFilters.sortBy,
-          sortDirection: requestFilters.sortDirection,
-        };
+        appliedFiltersRef.current = criteria;
         cursorHistoryRef.current = cursorHistoryRef.current.slice(0, Math.max(0, page - 1));
         cursorHistoryRef.current[page - 1] = cursor;
         if (resetHistory) {
@@ -278,21 +249,9 @@ export function useCollectionRecordsQueryState() {
   const loadFirstPage = useCallback(
     async (filters?: CollectionRecordFilters, nextPageSize?: number) => {
       const resolvedPageSize = clampCollectionRecordsPageSize(nextPageSize ?? pageSize);
-      const requestFilters: CollectionRecordFilters = {
-        from: filters?.from,
-        to: filters?.to,
-        search: filters?.search,
-        nickname: filters?.nickname,
-        leaderId: filters?.leaderId,
-        sourceImportIds: filters?.sourceImportIds,
-        agingBuckets: filters?.agingBuckets,
-        classifications: filters?.classifications,
-        sortBy: filters?.sortBy,
-        sortDirection: filters?.sortDirection,
-      };
       await fetchRecordsPage({
         cursor: null,
-        filters: requestFilters,
+        filters: filters ?? {},
         page: 1,
         pageSize: resolvedPageSize,
         resetHistory: true,

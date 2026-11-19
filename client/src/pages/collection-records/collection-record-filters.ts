@@ -6,7 +6,7 @@ export function getCollectionRecordsRecoveryState(filters: CollectionRecordFilte
     hasSearch: Boolean(filters.search?.trim()),
     hasFilters: Boolean(
       filters.from || filters.to || filters.nickname || filters.leaderId
-      || filters.sourceImportIds?.length || filters.agingBuckets?.length || filters.classifications?.length,
+      || filters.sourceImportIds?.length || filters.agingBuckets?.length || filters.classifications?.length || filters.duplicateOnly,
     ),
   };
 }
@@ -16,6 +16,8 @@ type BuildCollectionRecordFilterSnapshotArgs = {
   toDate?: string;
   searchInput?: string;
   canUseNicknameFilter: boolean;
+  canUseDuplicateFilter?: boolean;
+  duplicateOnly?: boolean;
   nicknameFilter?: string;
   canUseTeamLeaderFilter?: boolean;
   leaderFilter?: string;
@@ -37,6 +39,8 @@ export function buildCollectionRecordFilterSnapshot({
   toDate,
   searchInput,
   canUseNicknameFilter,
+  canUseDuplicateFilter,
+  duplicateOnly,
   nicknameFilter,
   canUseTeamLeaderFilter = false,
   leaderFilter,
@@ -70,6 +74,7 @@ export function buildCollectionRecordFilterSnapshot({
     from: normalizeCollectionFilterText(fromDate),
     to: normalizeCollectionFilterText(toDate),
     search: normalizeCollectionFilterText(searchInput),
+    ...(canUseDuplicateFilter && duplicateOnly ? { duplicateOnly: true } : {}),
     nickname:
       canUseNicknameFilter
       && normalizedNickname
@@ -95,5 +100,22 @@ export function buildCollectionRecordFilterSnapshot({
     sortDirection,
     limit,
     offset,
+  };
+}
+
+// List pages, View All and exports use the same selection with different pagination.
+export function getCollectionRecordCriteria(filters: CollectionRecordFilters) {
+  return {
+    from: filters.from,
+    to: filters.to,
+    search: filters.search,
+    nickname: filters.nickname,
+    leaderId: filters.leaderId,
+    sourceImportIds: filters.sourceImportIds,
+    agingBuckets: filters.agingBuckets,
+    classifications: filters.classifications,
+    ...(filters.duplicateOnly ? { duplicateOnly: true } : {}),
+    sortBy: filters.sortBy,
+    sortDirection: filters.sortDirection,
   };
 }

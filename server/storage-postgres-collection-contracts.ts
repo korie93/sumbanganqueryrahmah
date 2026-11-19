@@ -1,3 +1,4 @@
+import type { CollectionReceiptComparison } from "../shared/collection-receipt-breakdown";
 import type {
   CollectionAdminGroup,
   CollectionAdminUser,
@@ -341,8 +342,9 @@ export interface CollectionStorageContract {
   getCollectionRecordReceiptById(recordId: string, receiptId: string): Promise<CollectionRecordReceipt | undefined>;
   findCollectionReceiptDuplicateSummaries(
     fileHashes: string[],
-    options?: { excludeRecordId?: string },
+    options?: { excludeRecordId?: string; includeRecordDetails?: boolean },
   ): Promise<CollectionReceiptDuplicateSummary[]>;
+  getCollectionReceiptComparison(recordId: string, receiptId: string, relatedRecordId: string): Promise<CollectionReceiptComparison | null>;
   createCollectionRecordReceipts(
     recordId: string,
     receipts: CreateCollectionRecordReceiptInput[],

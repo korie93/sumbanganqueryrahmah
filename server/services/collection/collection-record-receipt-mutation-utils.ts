@@ -205,6 +205,8 @@ export function buildCreateReceiptInput(
   uploadedReceipt: CreateCollectionRecordReceiptInput,
   metadata: NormalizedCollectionReceiptMetadata,
 ): CreateCollectionRecordReceiptInput {
+  const fileHash = normalizeCollectionText(uploadedReceipt.fileHash).toLowerCase();
+  if (!fileHash) throw new Error("Uploaded receipt is missing its server-computed hash.");
   const normalizedReceiptState = normalizeCollectionReceiptExtractionState({
     receiptAmountCents: metadata.receiptAmountCents,
     extractedAmountCents: metadata.extractedAmountCents,
@@ -220,8 +222,7 @@ export function buildCreateReceiptInput(
     extractionConfidence: metadata.extractionConfidence,
     receiptDate: metadata.receiptDate,
     receiptReference: metadata.receiptReference,
-    fileHash:
-      metadata.fileHash || normalizeCollectionText(uploadedReceipt.fileHash).toLowerCase() || null,
+    fileHash,
   };
 }
 

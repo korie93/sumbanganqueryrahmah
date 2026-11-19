@@ -74,6 +74,13 @@ test("createCollectionRecordsCache evicts least-recently-used entries", () => {
   assert.equal(cache.get("page-3")?.records[0]?.id, "3");
 });
 
+test("duplicate searches are cached separately and an unchecked filter reuses the unfiltered entry", () => {
+  const filters = { search: "example", page: 1, pageSize: 10 };
+  const all = buildCollectionRecordsCacheKey(filters);
+  assert.equal(buildCollectionRecordsCacheKey({ ...filters, duplicateOnly: false }), all);
+  assert.notEqual(buildCollectionRecordsCacheKey({ ...filters, duplicateOnly: true }), all);
+});
+
 test("createCollectionRecordsCache clear removes cached record pages", () => {
   const cache = createCollectionRecordsCache(3);
 

@@ -56,6 +56,7 @@ import {
   deleteAllCollectionRecordReceiptsRepository,
   deleteCollectionRecordReceiptsRepository,
   findCollectionReceiptDuplicateSummariesRepository,
+  getCollectionReceiptComparisonRepository,
   getCollectionRecordReceiptByIdRepository,
   listCollectionRecordReceiptsRepository,
   syncCollectionRecordReceiptValidationRepository,
@@ -112,6 +113,7 @@ export class CollectionRepository {
   readonly deleteCollectionDailyCalendarDay = deleteCollectionDailyCalendarDayRepository;
   readonly deleteCollectionSource = deleteCollectionSource;
   readonly findCollectionReceiptDuplicateSummaries = findCollectionReceiptDuplicateSummariesRepository;
+  readonly getCollectionReceiptComparison = getCollectionReceiptComparisonRepository;
   readonly findEligibleCollectionSourceMatches = findEligibleCollectionSourceMatches;
   readonly getCollectionAdminAssignedNicknameIds = getCollectionAdminAssignedNicknameIdsRepository;
   readonly getCollectionAdminGroupById = getCollectionAdminGroupByIdRepository;

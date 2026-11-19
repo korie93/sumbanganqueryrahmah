@@ -313,7 +313,7 @@ test("collection receipt helpers keep suggested extraction state compatible with
       extractionConfidence: null,
       receiptDate: null,
       receiptReference: null,
-      fileHash: null,
+      fileHash: "a".repeat(64),
     },
     {
       receiptId: null,
@@ -336,4 +336,15 @@ test("collection receipt helpers keep suggested extraction state compatible with
   });
   assert.equal(updated.extractionStatus, "unprocessed");
   assert.equal(updated.extractedAmountCents, null);
+});
+
+test("new receipt identity comes from the inspected upload", () => {
+  const uploaded = {
+    storagePath: "receipts/test.pdf", originalFileName: "test.pdf",
+    originalMimeType: "application/pdf", originalExtension: ".pdf", fileSize: 100,
+    fileHash: "a".repeat(64),
+  };
+  const metadata = normalizeCollectionReceiptMetadata({ fileHash: "b".repeat(64) });
+  assert.equal(buildCreateReceiptInput(uploaded, metadata).fileHash, uploaded.fileHash);
+  assert.throws(() => buildCreateReceiptInput({ ...uploaded, fileHash: null }, metadata), /server-computed hash/);
 });

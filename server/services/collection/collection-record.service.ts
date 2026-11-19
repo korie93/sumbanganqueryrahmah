@@ -10,6 +10,7 @@ import { CollectionSourceMatchOperations } from "./collection-source-match-opera
 import { CollectionSourceGovernanceOperations } from "./collection-source-governance-operations";
 import { CollectionOspV7Operations } from "./collection-osp-v7-operations";
 import { CollectionManualSettlementOperations } from "./collection-manual-settlement-operations";
+import { compareSharedReceipt, readCollectionReceiptBreakdown } from "./collection-receipt-breakdown";
 
 export class CollectionRecordService extends CollectionServiceSupport {
   private readonly readOperations: CollectionRecordReadOperations;
@@ -170,6 +171,14 @@ export class CollectionRecordService extends CollectionServiceSupport {
 
   async listRecords(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0], query: ListQuery) {
     return this.readOperations.listRecords(userInput, query);
+  }
+
+  getReceiptBreakdown(user: Parameters<CollectionServiceSupport["requireUser"]>[0], recordId: string) {
+    return readCollectionReceiptBreakdown(this.storage, this.requireUser(user), recordId);
+  }
+
+  getReceiptComparison(user: Parameters<CollectionServiceSupport["requireUser"]>[0], recordId: string, receiptId: string, relatedRecordId: string) {
+    return compareSharedReceipt(this.storage, this.requireUser(user), recordId, receiptId, relatedRecordId);
   }
 
   async getPurgeSummary(userInput: Parameters<CollectionServiceSupport["requireUser"]>[0]) {

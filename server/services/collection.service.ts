@@ -208,6 +208,14 @@ export class CollectionService {
     return this.recordService.listRecords(user, query);
   }
 
+  getReceiptBreakdown(user: AuthenticatedUser | undefined, recordId: string) {
+    return this.recordService.getReceiptBreakdown(user, recordId);
+  }
+
+  getReceiptComparison(user: AuthenticatedUser | undefined, recordId: string, receiptId: string, relatedRecordId: string) {
+    return this.recordService.getReceiptComparison(user, recordId, receiptId, relatedRecordId);
+  }
+
   getPurgeSummary(user: AuthenticatedUser | undefined) {
     return this.recordService.getPurgeSummary(user);
   }
