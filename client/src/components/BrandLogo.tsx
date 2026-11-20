@@ -21,7 +21,8 @@ export function BrandLogo({
   theme = "auto",
 }: BrandLogoProps) {
   const resolvedAlt = decorative ? "" : alt.trim() || "Sumbangan Query Rahmah (SQR)";
-  const themes = theme === "auto" ? ["light", "dark"] as const : [theme];
+  const surfaceTheme = variant === "icon" ? "light" : theme;
+  const themes = surfaceTheme === "auto" ? ["light", "dark"] as const : [surfaceTheme];
   const dimensions = SQR_BRAND_DIMENSIONS[variant];
   const decorativeProps = decorative ? { "aria-hidden": "true" as const } : {};
 
@@ -29,7 +30,7 @@ export function BrandLogo({
     <span
       className={["sqr-brand-logo", className].filter(Boolean).join(" ")}
       data-brand-variant={variant}
-      data-brand-theme={theme}
+      data-brand-theme={surfaceTheme}
       {...decorativeProps}
     >
       {themes.map((assetTheme) => (

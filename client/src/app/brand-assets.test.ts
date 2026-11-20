@@ -20,7 +20,9 @@ test("tab favicon, touch and PWA declarations stay aligned with their central br
     assert.ok(html.includes(`href="${url}"`));
     assert.ok(existsSync(asset(url)));
   }
-  assert.match(html, /<link rel="icon" type="image\/png" sizes="32x32"/);
+  assert.match(html, /<link rel="icon" type="image\/png" sizes="128x128" href="\/brand\/sidebar-q-static\.png"/);
+  assert.equal(SQR_BRAND_ASSETS.tabFavicon.onlinePng, SQR_BRAND_ASSETS.transparentIcon);
+  assert.deepEqual(readFileSync(asset("/favicon.ico")), readFileSync(asset(SQR_BRAND_ASSETS.tabFavicon.onlineIco)));
   assert.match(html, /<link rel="shortcut icon" type="image\/x-icon"/);
   assert.ok(existsSync(asset(SQR_BRAND_ASSETS.tabFavicon.offlinePng)));
   // Installed app icons keep the supplied Q artwork independent of tab status.
@@ -49,6 +51,7 @@ test("supplied full SVG bytes have not been redrawn or recolored", () => {
 test("new Q exports retain approved source provenance and bounded same-origin payloads", () => {
   const root = new URL("../../../", import.meta.url);
   const manifest = JSON.parse(readFileSync(new URL("assets/brand/q-mark-exports.json", root), "utf8"));
+  assert.deepEqual(manifest.sources.map((source: { file: string }) => source.file), ["assets/brand/q-mark-light-source.png"]);
   for (const entry of [...manifest.sources, ...manifest.files]) {
     const bytes = readFileSync(new URL(entry.file, root));
     assert.equal(createHash("sha256").update(bytes).digest("hex"), entry.sha256, entry.file);

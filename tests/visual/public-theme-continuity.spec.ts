@@ -251,8 +251,12 @@ for (const width of [320, 722, 1440]) {
           : /^\/assets\/sqr-illustration-(?!dark-)[A-Za-z0-9_-]+\.webp$/);
         expect(otherPath).not.toBe(imagePath);
         const preload = page.locator(`link[rel="preload"][as="image"][href="${imagePath}"]`);
-        await expect(preload).toHaveCount(1);
+        await expect(preload).toHaveAttribute("media", "(min-width: 768px)");
         await expect(preload).not.toHaveAttribute("crossorigin");
+        const logoPath = await shell.locator(".auth-v17-brand img").getAttribute("src");
+        expect(logoPath).toBe(`/brand/sqr-full-logo-${theme}.svg`);
+        await expect(page.locator(`link[rel="preload"][as="image"][href="${logoPath}"]`)).toHaveAttribute("fetchpriority", "high");
+        await expect(page.locator(`link[rel="preload"][href="/brand/sqr-full-logo-${opposite(theme)}.svg"]`)).toHaveCount(0);
         await page.evaluate(async () => {
           await document.fonts.ready;
           await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));

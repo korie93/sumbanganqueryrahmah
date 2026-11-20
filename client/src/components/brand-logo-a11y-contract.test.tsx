@@ -41,12 +41,10 @@ test("automatic branding contains both themes without mounting a theme controlle
   assert.match(markup, /loading="lazy"/);
 });
 
-test("the default compact Q includes the supplied light and dark images for surface-aware selection", () => {
+test("the default compact Q uses the same single transparent landing mark across themes", () => {
   const markup = renderToStaticMarkup(createElement(BrandLogo));
-  assert.match(markup, /data-brand-theme="auto"/);
-  assert.ok(markup.includes(`src="${SQR_BRAND_ASSETS.icon.dark}"`));
-  assert.ok(markup.includes(`src="${SQR_BRAND_ASSETS.icon.light}"`));
-  assert.equal((markup.match(/<img\b/g) ?? []).length, 2);
+  assert.ok(markup.includes(`src="${SQR_BRAND_ASSETS.transparentIcon}"`));
+  assert.equal((markup.match(/<img\b/g) ?? []).length, 1);
 });
 
 test("BrandLogo keeps a semantic accessible name when not decorative", () => {

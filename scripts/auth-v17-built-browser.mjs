@@ -110,6 +110,8 @@ async function verifyAsyncBootScheduling() {
   });
   await context.routeWebSocket("**/*", (socket) => socket.close());
   const page = await context.newPage();
+  const requested = new Set();
+  page.on("request", (request) => requested.add(new URL(request.url()).pathname));
   page.on("requestfinished", (request) => finished.add(new URL(request.url()).pathname));
   try {
     await page.goto(`${server.origin}/login`, { waitUntil: "commit" });
@@ -118,10 +120,11 @@ async function verifyAsyncBootScheduling() {
     const hint = page.locator('meta[name="sqr-login-image"][data-theme="light"]');
     await expect(hint).toHaveCount(1);
     const artwork = await hint.getAttribute("content");
-    await expect(page.locator(`link[rel="preload"][as="image"][href="${artwork}"]`)).toHaveCount(1);
+    await expect(page.locator(`link[rel="preload"][as="image"][href="${artwork}"]`)).toHaveAttribute("media", "(min-width: 768px)");
     const darkArtwork = await page.locator('meta[name="sqr-login-image"][data-theme="dark"]').getAttribute("content");
     await expect(page.locator(`link[rel="preload"][as="image"][href="${darkArtwork}"]`)).toHaveCount(0);
-    await expect.poll(() => finished.has(artwork)).toBe(true);
+    await expect.poll(() => finished.has("/brand/sqr-full-logo-light.svg")).toBe(true);
+    assert.equal(requested.has(artwork), false, "Hidden mobile artwork must not take bandwidth before the app mounts.");
     await expect(page.getByTestId("input-username")).toHaveCount(0);
     assert.equal(await page.locator('script[src="/boot-shell.js"]').evaluate((element) => element.async), true);
     assert.equal(await page.locator('script[src="/boot-shell.js"]').evaluate((element) => {
@@ -132,7 +135,7 @@ async function verifyAsyncBootScheduling() {
     releaseCss();
     await expect(page.getByTestId("input-username")).toBeVisible();
     assert.deepEqual(fixture.state.unexpected, []);
-    pass("async boot discovers and fetches login artwork while the initial stylesheet is still blocked");
+    pass("async boot fetches the visible mobile login logo while the initial stylesheet is still blocked");
   } finally {
     releaseCss();
     await Promise.allSettled(held);
@@ -179,7 +182,7 @@ async function verifyAsyncBootScheduling() {
 async function verifyLoginResourceHints() {
   // A cold, isolated context proves the artwork is discovered from the built
   // resource hints, not from a cached stylesheet or an already-mounted login.
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "light", reducedMotion: "reduce", serviceWorkers: "block" });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: "light", reducedMotion: "reduce", serviceWorkers: "block" });
   const requests = [];
   const finished = new Set();
   const errors = [];

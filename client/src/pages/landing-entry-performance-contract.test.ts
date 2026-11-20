@@ -74,11 +74,8 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
     ["boot-shell-copy", { textContent: options.initialAuthCopy ? "Platform operasi dalaman Sumbangan Query Rahmah sedang disediakan." : "" }],
   ]);
   const attributes = new Map<string, string>();
-  const brandAttributes = new Map<string, string>([["src", "/brand/sqr-q-mark-dark.png"]]);
-  const brand = { setAttribute(name: string, value: string) {
-    assert.equal(name, "src");
-    brandAttributes.set(name, value);
-  } };
+  const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+  const brandSrc = /class="public-auth-boot-shell__brand" src="([^"]+)"/.exec(html)?.[1];
   const documentElement = {
     lang: "en",
     setAttribute(name: string, value: string) { attributes.set(name, value); },
@@ -134,7 +131,6 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
       },
       set cookie(_value: string) { assert.fail("Resource hints must never mutate session cookies"); },
       querySelector(selector: string) {
-        if (selector === "#boot-shell .public-auth-boot-shell__brand") return shellCopyAvailable ? brand : null;
         assert.equal(selector, 'meta[name="sqr-maintenance"][content="active"]');
         return options.maintenance ? {} : null;
       },
@@ -160,7 +156,7 @@ function runBootShell(pathname: string, options: BootOptions = {}) {
     },
   });
   return {
-    documentElement, attributes, elements, links, readyCallbacks, brandAttributes,
+    documentElement, attributes, elements, links, readyCallbacks, brandSrc,
     finishParsing() {
       shellCopyAvailable = true;
       for (const callback of readyCallbacks.splice(0)) callback();
@@ -177,7 +173,7 @@ test("async boot discovers assets before DOM ready and safely waits for shell co
   assert.equal(result.readyCallbacks.length, 1);
   result.finishParsing();
   assert.equal(result.elements.get("boot-shell-title")?.textContent, "Loading SQR…");
-  assert.equal(result.brandAttributes.get("src"), SQR_BRAND_ASSETS.transparentIcon);
+  assert.equal(result.brandSrc, SQR_BRAND_ASSETS.transparentIcon);
   assert.equal(result.attributes.get("data-landing-boot-ready"), "true");
   assert.equal(result.links.length, 2, "DOM readiness must not duplicate resource hints");
 });
@@ -195,7 +191,7 @@ test("landing replaces the shared auth copy before DOMContentLoaded when its nod
   assert.equal(result.elements.get("boot-shell-title")?.textContent, "Loading SQR…");
   assert.equal(result.elements.get("boot-shell-eyebrow")?.textContent, "");
   assert.equal(result.elements.get("boot-shell-copy")?.textContent, "");
-  assert.equal(result.brandAttributes.get("src"), SQR_BRAND_ASSETS.transparentIcon);
+  assert.equal(result.brandSrc, SQR_BRAND_ASSETS.transparentIcon);
   assert.equal(result.attributes.get("data-landing-boot-ready"), "true");
   assert.equal(result.readyCallbacks.length, 1, "The parsing fallback remains available for shared HTML");
   result.finishParsing();
@@ -206,10 +202,10 @@ test("unparsed root content stays hidden until its loading copy and real Q are r
   const result = runBootShell("/", { readyState: "loading", shellCopyAvailable: false, initialAuthCopy: true });
   assert.equal(result.attributes.has("data-landing-boot-ready"), false);
   assert.equal(result.elements.get("boot-shell-title")?.textContent, "Log In SQR System");
-  assert.equal(result.brandAttributes.get("src"), "/brand/sqr-q-mark-dark.png");
+  assert.equal(result.brandSrc, SQR_BRAND_ASSETS.transparentIcon);
   result.finishParsing();
   assert.equal(result.attributes.get("data-landing-boot-ready"), "true");
-  assert.equal(result.brandAttributes.get("src"), SQR_BRAND_ASSETS.transparentIcon);
+  assert.equal(result.brandSrc, SQR_BRAND_ASSETS.transparentIcon);
 });
 
 test("all auth boot routes preserve their copy, brand and DOMContentLoaded timing", () => {
@@ -224,7 +220,7 @@ test("all auth boot routes preserve their copy, brand and DOMContentLoaded timin
     assert.equal(result.attributes.has("data-landing-boot-ready"), false, pathname);
     result.finishParsing();
     assert.equal(result.elements.get("boot-shell-title")?.textContent, title, pathname);
-    assert.equal(result.brandAttributes.get("src"), "/brand/sqr-q-mark-dark.png", pathname);
+    assert.equal(result.brandSrc, SQR_BRAND_ASSETS.transparentIcon, pathname);
     assert.equal(result.attributes.has("data-landing-boot-ready"), false, pathname);
   }
 });
@@ -247,7 +243,7 @@ test("landing boot uses English while direct login retains its original Malay co
   assert.equal(landing.elements.get("boot-shell-eyebrow")?.textContent, "");
   assert.equal(landing.elements.get("boot-shell-title")?.textContent, "Loading SQR…");
   assert.equal(landing.elements.get("boot-shell-copy")?.textContent, "");
-  assert.equal(landing.brandAttributes.get("src"), SQR_BRAND_ASSETS.transparentIcon);
+  assert.equal(landing.brandSrc, SQR_BRAND_ASSETS.transparentIcon);
 
   const login = runBootShell("/login");
   assert.equal(login.documentElement.lang, "ms");
@@ -356,14 +352,17 @@ const validLoginHints = [
 
 test("anonymous exact login preloads its scripts, styles and LCP image without applying CSS", () => {
   const result = runBootShell("/login", { hints: [...validHints, ...radarHints, ...validLoginHints] });
-  assert.equal(result.links.length, 4);
+  assert.equal(result.links.length, 5);
   assert.deepEqual({ ...result.links[0] }, {
-    href: validLoginHints[0].content, rel: "preload", as: "image", fetchPriority: "high",
-  }, "CSS background-image reuse requires no crossorigin attribute on the image preload");
+    href: SQR_BRAND_ASSETS.full.light, rel: "preload", as: "image", fetchPriority: "high",
+  });
   assert.deepEqual({ ...result.links[1] }, {
+    href: validLoginHints[0].content, media: "(min-width: 768px)", rel: "preload", as: "image", fetchPriority: "high",
+  }, "CSS background-image reuse requires no crossorigin attribute on the image preload");
+  assert.deepEqual({ ...result.links[2] }, {
     href: validLoginHints[1].content, rel: "modulepreload", crossOrigin: "anonymous", fetchPriority: "high",
   });
-  assert.deepEqual({ ...result.links[3] }, {
+  assert.deepEqual({ ...result.links[4] }, {
     href: validLoginHints[3].content, rel: "preload", as: "style", crossOrigin: "anonymous", fetchPriority: "high",
   });
   assert.equal(result.links.some(link => link.rel === "stylesheet"), false);
@@ -385,13 +384,15 @@ test("login preloads one exact illustration for canonical preference, legacy fal
   for (const { options, expected } of cases) {
     const result = runBootShell("/login", { ...options, hints: validLoginHints });
     const images = result.links.filter(link => link.as === "image");
-    assert.equal(images.length, 1);
-    assert.equal(images[0]!.href, expected === "dark"
+    assert.equal(images.length, 2);
+    assert.equal(images[0]!.href, SQR_BRAND_ASSETS.full[expected]);
+    assert.equal(images[1]!.href, expected === "dark"
       ? "/assets/sqr-illustration-dark-fixture.webp" : "/assets/sqr-illustration-fixture.webp");
     assert.equal(result.links.filter(link => link.as !== "image").length, 3,
       "Theme reads never block script/style preloading");
     assert.equal(images[0]!.crossOrigin, undefined, "CSS image and preload must retain matching no-CORS mode");
-    assert.equal(images[0]!.media, undefined, "A saved choice must override the OS media preference");
+    assert.equal(images[0]!.media, undefined);
+    assert.equal(images[1]!.media, "(min-width: 768px)");
   }
 });
 
@@ -416,7 +417,7 @@ test("login preloading cannot bypass session, maintenance or storage-denied guar
   }
   assert.equal(runBootShell("/login", {
     cookie: "other_sqr_auth_hint=1", banned: "0", hints: validLoginHints,
-  }).links.length, 4);
+  }).links.length, 5);
 });
 
 test("login preload rejects external, traversal, mismatched and nonillustration asset URLs", () => {

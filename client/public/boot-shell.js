@@ -97,8 +97,16 @@
           if (imageTheme !== loginTheme || (imageTheme !== "light" && imageTheme !== "dark")) return;
           const darkImage = /^\/assets\/sqr-illustration-dark-[A-Za-z0-9_-]+\.webp$/.test(href);
           if ((imageTheme === "dark") !== darkImage) return;
+          // The wordmark is the mobile LCP image. Prioritize it before the
+          // matching desktop scene once this build's login hints are present.
+          const logo = document.createElement("link");
+          logo.rel = "preload";
+          logo.as = "image";
+          logo.href = "/brand/sqr-full-logo-" + loginTheme + ".svg";
+          logo.fetchPriority = "high";
+          document.head.appendChild(logo);
         }
-        const media = isImage && resource === "landing" ? meta.getAttribute("media") : null;
+        const media = !isImage ? null : resource === "login" ? "(min-width: 768px)" : meta.getAttribute("media");
         if (isImage && resource === "landing") {
           const expectedMedia = href === "/landing-next/radar-static.svg"
             ? "(prefers-reduced-motion: reduce)" : "(prefers-reduced-motion: no-preference)";
@@ -140,13 +148,7 @@
     if (copy && typeof shell.copy === "string") {
       copy.textContent = shell.copy;
     }
-    if (shell.mode === "landing" && title) {
-      const brand = document.querySelector("#boot-shell .public-auth-boot-shell__brand");
-      if (brand) {
-        brand.setAttribute("src", "/brand/sidebar-q-static.png");
-        document.documentElement.setAttribute("data-landing-boot-ready", "true");
-      }
-    }
+    if (shell.mode === "landing" && title) document.documentElement.setAttribute("data-landing-boot-ready", "true");
   };
 
   // The shared HTML contains auth copy. Replace it before the first root-route

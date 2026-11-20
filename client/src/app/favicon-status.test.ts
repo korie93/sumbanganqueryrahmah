@@ -10,7 +10,7 @@ import {
 } from "./favicon-status";
 
 const offlinePng = "data:image/png;base64,c3ludGhldGljLW9mZmxpbmU=";
-const onlinePng = "/brand/favicon-online-v2-32.png";
+const onlinePng = "/brand/sidebar-q-static.png";
 const onlineIco = "/brand/favicon-online-v2.ico";
 
 class ListenerTarget extends EventTarget {
@@ -61,7 +61,7 @@ async function flush() {
 }
 
 function fixture(initiallyOnline = true, initiallyHidden = false) {
-  const icon = new Link({ rel: "icon", href: onlinePng, type: "image/png", sizes: "32x32" });
+  const icon = new Link({ rel: "icon", href: onlinePng, type: "image/png", sizes: "128x128" });
   const shortcut = new Link({ rel: "shortcut icon", href: onlineIco, type: "image/x-icon" });
   const apple = new Link({ rel: "apple-touch-icon", href: "/brand/apple-touch-icon-180x180.png", sizes: "180x180" });
   const originals = [icon.snapshot(), shortcut.snapshot(), apple.snapshot()];
@@ -310,7 +310,7 @@ test("offline invalidates a pending success and an online event immediately rest
   assert.deepEqual(f.state(), ["online", "online"]);
   assert.equal(f.icon.getAttribute("href"), onlinePng);
   assert.equal(f.icon.getAttribute("type"), "image/png");
-  assert.equal(f.icon.getAttribute("sizes"), "32x32");
+  assert.equal(f.icon.getAttribute("sizes"), "128x128");
   assert.equal(f.shortcut.getAttribute("href"), onlineIco);
   assert.equal(f.shortcut.getAttribute("type"), "image/x-icon");
   assert.equal(f.shortcut.getAttribute("sizes"), null, "An originally absent sizes attribute stays absent.");

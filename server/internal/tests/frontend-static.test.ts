@@ -148,6 +148,7 @@ const minimalRobotsPolicy = [
   "Allow: /$",
   "Allow: /assets/",
   "Allow: /brand/",
+  "Allow: /favicon.ico$",
   "Allow: /boot-shell.js$",
   "Allow: /boot-shell.css$",
   "Allow: /site.webmanifest$",
@@ -190,6 +191,7 @@ test("robots permits the exact landing and rendering resources while blocking de
   const robots = buildRobotsTxt("https://sqr-system.com");
   for (const requestPath of [
     "/", "/assets/app-ABC12345.js", "/assets/fonts/interface.woff2?v=1",
+    "/brand/sidebar-q-static.png", "/brand/apple-touch-icon-180x180.png", "/favicon.ico",
     "/brand/sqr-full-logo-light.svg", "/boot-shell.js", "/boot-shell.css",
     "/site.webmanifest", "/sitemap.xml",
   ]) {

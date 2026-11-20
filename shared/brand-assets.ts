@@ -1,21 +1,22 @@
 /** Approved SQR brand assets. Paths are public, same-origin, and build-independent. */
+const transparentQ = "/brand/sidebar-q-static.png";
 export const SQR_BRAND_ASSETS = {
   full: {
     light: "/brand/sqr-full-logo-light.svg",
     dark: "/brand/sqr-full-logo-dark.svg",
   },
   icon: {
-    light: "/brand/sqr-q-mark-light.png",
-    dark: "/brand/sqr-q-mark-dark.png",
+    light: transparentQ,
+    dark: transparentQ,
   },
   /** Original transparent Q + dots, without the older boxed icon treatment. */
-  transparentIcon: "/brand/sidebar-q-static.png",
+  transparentIcon: transparentQ,
   favicon: {
     svg: "/brand/favicon.svg",
     ico: "/brand/favicon.ico",
   },
   tabFavicon: {
-    onlinePng: "/brand/favicon-online-v2-32.png",
+    onlinePng: transparentQ,
     onlineIco: "/brand/favicon-online-v2.ico",
     offlinePng: "/brand/favicon-offline-v2-32.png",
   },

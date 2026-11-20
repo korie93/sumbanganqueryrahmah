@@ -8,8 +8,9 @@ icons are proportional exports of the approved original transparent Q PNG
 The offline variant removes the disconnected decorative dots and converts the
 remaining Q to grey mechanically; no AI redrawing is used.
 `assets/brand/favicon-status-provenance.json` records the source and export
-hashes and method. Existing workspace, login, status-page, touch and PWA artwork
-remains independent of the tab icon.
+hashes and method. The homepage declares the landing page’s 128px transparent
+PNG in its initial HTML for browsers and search crawlers. Touch and PWA icons
+use the same artwork at their native sizes.
 
 ## Runtime and endpoint
 
@@ -48,7 +49,8 @@ changes; metadata updates no longer write tab icons. HMR disposes the controller
   no cache-busting URL on every poll. Requests use same-origin relative URLs,
   `cache: no-store`, `redirect: error` and `credentials: omit`.
   The earlier `v1` files remain available for tabs running a cached older client;
-  the current HTML and controller paths use `v2`.
+  those paths serve copies of the matching transparent exports. The current
+  HTML pairs the landing PNG with the multi-resolution online v2 ICO.
 - The existing API proxy forwards this endpoint; API responses already have
   no-store headers. No service worker is registered in this repository. If one is
   introduced later, this endpoint must remain network-only.

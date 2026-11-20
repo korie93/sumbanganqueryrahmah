@@ -23,11 +23,10 @@ Full-logo SVGs and the 4096×1909 social PNG remain byte-for-byte copies. On 12 
 
 ### Rendering behavior
 
-The default is `variant="icon"`, `theme="auto"`. The latest PNG reference takes precedence over the earlier dark-Q-only choice: light surfaces use the transparent Q; dark surfaces use the supplied navy-backed Q. Full logos reserve 665×310 geometry; 128×128 compact exports preserve a 1:1 ratio and support existing 32–60px slots at 2× density. Auto follows the root theme with CSS, without changing saved preferences or mounting another theme controller. Fixed pale landing/auth surfaces use light full logos; landing preview uses transparent Q. No extra CSS frame/background/inset is added. Decorative marks are hidden from assistive technology; semantic logos retain an accessible name.
+Compact Q marks use the transparent landing artwork in both themes. The theme selects the full wordmark SVG when requested. The compact icon reserves a square slot and exposes a single accessible image.
 
 The main desktop sidebar toggle (1024px and above) uses the original transparent
-blue Q with dots, displayed at 24px inside a 36px button. It explicitly selects
-the light icon asset in both surface themes to avoid a navy tile. This is static
+blue Q with dots, displayed at 24px inside a 36px button. It uses the landing artwork in both surface themes. This is static
 brand artwork, independent of the connection-aware tab favicon. The existing
 Expand/Collapse labels, keyboard behavior, focus and sidebar state remain intact.
 The mobile/tablet hamburger and drawer, other sidebar action glyphs and ordinary
@@ -37,16 +36,18 @@ workspace logos are unchanged. Built-browser coverage is selected with
 | Purpose | Public path |
 | --- | --- |
 | Full logo, pale/dark surface | `/brand/sqr-full-logo-light.svg`, `/brand/sqr-full-logo-dark.svg` |
-| Compact icon, light/dark | `/brand/sqr-q-mark-light.png`, `/brand/sqr-q-mark-dark.png` |
+| Compact icon in both themes | `/brand/sidebar-q-static.png` |
 | Static fallback favicon | `/brand/favicon.svg`, `/brand/favicon.ico` |
-| Browser tab, connected/disconnected | `/brand/favicon-online-v2-32.png`, `/brand/favicon-online-v2.ico`, `/brand/favicon-offline-v2-32.png` |
+| Browser tab and search, connected/disconnected | `/brand/sidebar-q-static.png`, `/brand/favicon-online-v2.ico`, `/brand/favicon-offline-v2-32.png` |
 | Apple touch icon | `/brand/apple-touch-icon-180x180.png` |
 | App icons | `/brand/icon-192x192.png`, `/brand/icon-512x512.png` |
 | Logo-based social metadata | `/brand/sqr-social-logo-light.png` |
 
-PNG app icons are declared `purpose: "any"`, not `maskable`: no maskable-safe-area artwork was supplied. Boot/status/static fallback icons use the new dark-backed Q, whose own background keeps it readable on either page theme. The browser tab uses the separate transparent pair described below. `scripts/export-brand-icons.mjs` performs offline canvas downsampling only (no crop, recoloring, background removal or generative redraw). `assets/brand/q-mark-exports.json` records approved source hashes and every generated asset hash. Run `node scripts/export-brand-icons.mjs` manually to regenerate, then `npm run build:status`; normal builds verify checked-in exports, not generate them with a browser.
+App icons use the manifest purpose `any`. The homepage advertises the transparent 128×128 landing Q in its initial HTML. Google can also select the shortcut ICO or Apple touch icon. All three URLs serve the same blue artwork. After deployment, Search picks up the change when it recrawls the homepage and icon. [Google Search favicon guidance](https://developers.google.com/search/docs/appearance/favicon-in-search)
 
-The favicon SVG embeds its 64px PNG export; the independent status SVG embeds a 96px WEBP export at quality 1. These are honest raster-backed SVG containers, not traced vectors. The existing `/_sqr/errors/assets/sqr-logo.svg` URL/MIME/Nginx allowlist stay unchanged, and the independent 32KiB asset budget remains enforced. Full logos continue to use true SVGs. Small Q images are about 12/25KB instead of loading the 0.55/1.43MB originals at runtime.
+The status and installed-app exports use the original transparent PNG and the landing crop. Run `node scripts/export-brand-icons.mjs` to regenerate the compatible public URLs and provenance, then `npm run build:status` for the Nginx copy.
+
+The favicon SVG embeds its 64px PNG export; the independent status SVG embeds a 96px WEBP export at quality 1. These are honest raster-backed SVG containers, not traced vectors. The existing `/_sqr/errors/assets/sqr-logo.svg` URL/MIME/Nginx allowlist stay unchanged, and the independent 32KiB asset budget remains enforced. Full logos continue to use true SVGs.
 
 The old minimal SVG/WebP, old maskable SVG, and separate auth/root touch icons were removed after all application references were migrated. Original prototype fixture assets in browser comparison scripts are historical test inputs, not deployed branding.
 
@@ -78,12 +79,7 @@ independently hosted Nginx artwork above. See
 [favicon connectivity](FAVICON_CONNECTIVITY.md) for status semantics, exact asset
 provenance, verification and rollout.
 
-The desktop workspace sidebar is an explicit transparent-icon exception to
-generic `theme="auto"` rendering: its expanded brand header selects the light
-transparent blue Q for both themes, avoiding the navy-backed dark icon. Its
-collapsed Q uses mechanically exported original layers for lightweight motion;
-see [desktop sidebar Q](sidebar-animated-q.md). Other logo consumers and favicon
-connectivity assets remain unchanged.
+The collapsed sidebar animates layers from the same original artwork. See [desktop sidebar Q](sidebar-animated-q.md).
 
 ## Landing footer lazy-image sizing
 

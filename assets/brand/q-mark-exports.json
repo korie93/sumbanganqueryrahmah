@@ -1,57 +1,91 @@
 {
   "sources": [
     {
-      "theme": "light",
       "file": "assets/brand/q-mark-light-source.png",
       "sha256": "07e5e47d3a1851200301dc22b49764b6bb174b48843bc2462700ba3c0dc5ea5e"
-    },
-    {
-      "theme": "dark",
-      "file": "assets/brand/q-mark-dark-source.png",
-      "sha256": "ba84d8b9b9142727fdb2e88538ed1685a51ca1ccddef872bdc719aab3c111994"
     }
   ],
-  "method": "Proportional canvas downsampling only; no crop or recoloring. Status WEBP quality 1 in passive SVG, all other raster exports PNG.",
+  "method": "Transparent landing Q framing at every size. Legacy URLs reuse the landing mark or current connectivity favicon bytes.",
   "files": [
     {
-      "file": "client/public/brand/sqr-q-mark-light.png",
-      "bytes": 11750,
-      "sha256": "affaad5a2ae2fcef544447671382239fb9267aec5d904dc75c68df7db1a69c3c"
-    },
-    {
-      "file": "client/public/brand/sqr-q-mark-dark.png",
-      "bytes": 25438,
-      "sha256": "108bbeb250eef15ac57d7bc5cf119b8a53664f0c3e7d95540a8751269ff5d776"
-    },
-    {
       "file": "client/public/brand/apple-touch-icon-180x180.png",
-      "bytes": 48209,
-      "sha256": "6a62fcf7d2ec89056a2b9a120c13056e892baffff5ae082e018fd80ef795563e"
+      "bytes": 25378,
+      "sha256": "98b66ff4cb1f31d6932afaa73010c7b0fd07c7a14a092ed2bb317316f735f4bd"
     },
     {
       "file": "client/public/brand/icon-192x192.png",
-      "bytes": 53981,
-      "sha256": "a40dfefbc2516f441b87e1caf4c0610dede5ea12dd81f16d6d582ea4eb550620"
+      "bytes": 28322,
+      "sha256": "ac4fdd81ac1a49aaa40b6121b31bdd210df2a9cc02247ebefea05c22bdbb36da"
     },
     {
       "file": "client/public/brand/icon-512x512.png",
-      "bytes": 299371,
-      "sha256": "8aabc9d64ed8c1fb515c0e2472740e4be61d39ad66bf4b44732f421f2fe7563a"
+      "bytes": 153797,
+      "sha256": "dbb1430ce5f2481cdc66bbbfa7928072228af412d5dd7293b3e1f5a48be60df2"
     },
     {
       "file": "client/public/brand/favicon.svg",
-      "bytes": 10968,
-      "sha256": "1702d1e81cb1e881d8ac96d79f0d9c0c8332f6b48987c1f3f153f351cbc144bf"
+      "bytes": 7340,
+      "sha256": "2a23395e74548075d9bdb5b9a632597f78fe21e6cb45f80898393efff14499d8"
     },
     {
       "file": "client/public/brand/sqr-q-status.svg",
-      "bytes": 15917,
-      "sha256": "668bfbb2492519b49cf7bda26028b820d8985ee4556dd40929ce3558283ce696"
+      "bytes": 13989,
+      "sha256": "13ad5ebe631075a9684e9540e4c6fc1b1adbb5e23f70996fdec44b2e88a7d690"
+    },
+    {
+      "file": "client/public/brand/sqr-q-mark-light.png",
+      "bytes": 11556,
+      "sha256": "3a4c192638e5e797a23a2227707761f7808a64db2357d25c9e709c822c078314"
+    },
+    {
+      "file": "client/public/brand/sqr-q-mark-dark.png",
+      "bytes": 11556,
+      "sha256": "3a4c192638e5e797a23a2227707761f7808a64db2357d25c9e709c822c078314"
     },
     {
       "file": "client/public/brand/favicon.ico",
-      "bytes": 16539,
-      "sha256": "ddd493b56c31ddc5d000240f642e0932f1f6fa9be017735785947c9f6e659c96"
+      "bytes": 12313,
+      "sha256": "58116b9e7888e3b689d99986a2062334f0512fea54641db6cc31aa6abc40bd37"
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1.ico",
+      "bytes": 12313,
+      "sha256": "58116b9e7888e3b689d99986a2062334f0512fea54641db6cc31aa6abc40bd37"
+    },
+    {
+      "file": "client/public/favicon.ico",
+      "bytes": 12313,
+      "sha256": "58116b9e7888e3b689d99986a2062334f0512fea54641db6cc31aa6abc40bd37"
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-16.png",
+      "bytes": 786,
+      "sha256": "c16746535e0087f0b5aa6a703ec256188e3e31c36d39c7ac7ab563ec01f49e86"
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-32.png",
+      "bytes": 2065,
+      "sha256": "b1a08845650e341fc54bbf3797bf5a273b0e3a98c4caf279d65bf2bb8443c217"
+    },
+    {
+      "file": "client/public/brand/favicon-online-v1-48.png",
+      "bytes": 3639,
+      "sha256": "f9b5be743458cafa562b41edaff4496dc10bdce309285cc14d39d2a273bf6751"
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-16.png",
+      "bytes": 673,
+      "sha256": "b0d5764654153837e04ffc2bdc6a6dbc09ddc70ec5be4ca5cb2cb2eee43f33eb"
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-32.png",
+      "bytes": 1625,
+      "sha256": "f04583a92c268602f6971ad654bda6d188c09af2ea6cebc03cc39bb494eff1a4"
+    },
+    {
+      "file": "client/public/brand/favicon-offline-v1-48.png",
+      "bytes": 2670,
+      "sha256": "78ea39c221eb5dc24ffff7aa57d19fe4fbbade2d47109755c54ff357986e1d48"
     }
   ]
 }

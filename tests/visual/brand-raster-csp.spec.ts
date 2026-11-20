@@ -38,9 +38,12 @@ test("brand migration raster-backed icons paint real pixels under unchanged stri
           return ctx.getImageData(0, 0, canvas.width, canvas.height).data;
         }
         const svg = await pixels(`/${name}.svg`), raster = await pixels(`/${name}.raster`);
-        return { painted: svg.some((v, i) => i % 4 === 3 && v > 0), identical: svg.length === raster.length && svg.every((v, i) => v === raster[i]) };
+        const width = Math.sqrt(svg.length / 4);
+        const hole = (Math.floor(width * .50) * width + Math.floor(width * .42)) * 4 + 3;
+        return { painted: svg.some((v, i) => i % 4 === 3 && v > 0), clearCorner: svg[3], clearCenter: svg[hole],
+          identical: svg.length === raster.length && svg.every((v, i) => v === raster[i]) };
       }, name);
-      expect(result, name).toEqual({ painted: true, identical: true });
+      expect(result, name).toEqual({ painted: true, clearCorner: 0, clearCenter: 0, identical: true });
     }
     expect(errors).toEqual([]);
   } finally {

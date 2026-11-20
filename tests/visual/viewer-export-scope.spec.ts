@@ -99,7 +99,10 @@ async function openExport(page: Page, keyboard = false) {
 async function closeDesktopExport(page: Page) {
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
-  await expect(page.getByTestId("button-viewer-more-actions")).toHaveAttribute("aria-expanded", "false");
+  const trigger = page.getByTestId("button-viewer-more-actions");
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+  // The menu restores focus after it closes. Wait before editing another field.
+  await expect(trigger).toBeFocused();
 }
 
 async function expectCsv(download: Download, expected: typeof rows) {
@@ -206,15 +209,18 @@ test("Viewer export scope: mobile320 scope labels fit and selected CSV keeps foc
 test("Viewer export scope: unfiltered labels and hidden scope choices remain accurate after clearing search", async ({ page, baseURL }) => {
   const fixture = await installFixture(page, baseURL, "dark");
   await openViewer(page);
-  await page.getByTestId("input-search-viewer").fill("Synthetic Export");
-  await expect.poll(() => fixture.reads[fixture.reads.length - 1].search).toBe("Synthetic Export");
+  const search = page.getByTestId("input-search-viewer");
+  const pagination = page.getByRole("navigation", { name: "Dataset pagination", exact: true });
+  await search.fill("Customer 01");
+  await expect(pagination).toContainText("Showing 1-25 of 100 rows");
   await openExport(page, true);
-  await expect(page.getByTestId("button-export-csv-all")).toHaveText("Semua keputusan carian — 1,200 rekod");
+  await expect(page.getByTestId("button-export-csv-all")).toHaveText("Semua keputusan carian — 100 rekod");
   await expect(page.getByTestId("button-export-csv-filtered")).toHaveText("Paparan halaman ini — 25 rekod");
   await expect(page.getByTestId("button-export-csv-selected")).toHaveCount(0);
   await closeDesktopExport(page);
-  await page.getByTestId("input-search-viewer").fill("");
-  await expect.poll(() => fixture.reads[fixture.reads.length - 1].search).toBe("");
+  await search.fill("");
+  await expect(search).toHaveValue("");
+  await expect(pagination).toContainText("Showing 1-25 of 1200 rows");
   await expect(page.getByTestId("select-viewer-page-size")).toBeEnabled();
   await openExport(page, true);
   for (const kind of ["csv", "pdf", "excel"]) {
@@ -224,6 +230,5 @@ test("Viewer export scope: unfiltered labels and hidden scope choices remain acc
   }
   await expect(page.getByText(scopeHint, { exact: true })).toHaveCount(0);
   await closeDesktopExport(page);
-  await expect(page.getByTestId("button-viewer-more-actions")).toBeFocused();
   await checkFixture(page, fixture.session);
 });

@@ -16,9 +16,9 @@ async function loadedLogo(image: Locator, source: string, ratio: number) {
 }
 
 async function metadata(page: Page) {
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/favicon-online-v2-32.png");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("href", "/brand/sidebar-q-static.png");
   await expect(page.locator('link[rel="icon"]')).toHaveAttribute("type", "image/png");
-  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("sizes", "32x32");
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute("sizes", "128x128");
   await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("href", "/brand/favicon-online-v2.ico");
   await expect(page.locator('link[rel="shortcut icon"]')).toHaveAttribute("type", "image/x-icon");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/apple-touch-icon-180x180.png");
@@ -30,20 +30,33 @@ test("brand migration supplied favicon and device icons decode without request i
   // Use a static image document with no route handlers, app scripts or backend calls.
   await page.goto("/brand/favicon.svg");
   for (const [source, size] of [
+    ["/brand/sidebar-q-static.png", 128],
+    ["/brand/sqr-q-mark-light.png", 128], ["/brand/sqr-q-mark-dark.png", 128],
     ["/brand/favicon.svg", 64],
+    ["/favicon.ico", 64],
     ["/brand/favicon.ico", 64],
     ["/brand/favicon-online-v2.ico", 64],
     ["/brand/apple-touch-icon-180x180.png", 180],
     ["/brand/icon-192x192.png", 192],
     ["/brand/icon-512x512.png", 512],
   ] as const) {
-    const dimensions = await page.evaluate(async (src) => {
+    const pixels = await page.evaluate(async (src) => {
       const img = new Image();
       img.src = src;
       await img.decode();
-      return { width: img.naturalWidth, height: img.naturalHeight };
+      const w = img.naturalWidth, h = img.naturalHeight;
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext("2d")!;
+      ctx.drawImage(img, 0, 0);
+      const data = ctx.getImageData(0, 0, w, h).data;
+      const alpha = (x: number, y: number) => data[(Math.floor(y * h) * w + Math.floor(x * w)) * 4 + 3];
+      return { width: w, height: h, background: [alpha(0, 0), alpha(.99, 0), alpha(0, .99), alpha(.99, .99), alpha(.42, .50)],
+        ring: alpha(.15, .50), dots: alpha(.91, .15) };
     }, source);
-    expect(dimensions, source).toEqual({ width: size, height: size });
+    expect([pixels.width, pixels.height], source).toEqual([size, size]);
+    expect(pixels.background, source).toEqual([0, 0, 0, 0, 0]);
+    expect(pixels.ring, source).toBeGreaterThan(220);
+    expect(pixels.dots, source).toBeGreaterThan(220);
   }
 });
 
@@ -65,7 +78,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(toggle.locator("svg.lucide-panel-left-close")).toBeVisible();
     const expandedBrand = page.locator(".workspace-brand-mark .sqr-brand-logo");
     await expect(expandedBrand.locator("img")).toHaveCount(1);
-    await loadedLogo(expandedBrand.locator("img"), "/brand/sqr-q-mark-light.png", 1);
+    await loadedLogo(expandedBrand.locator("img"), "/brand/sidebar-q-static.png", 1);
     await expect(expandedBrand.locator('[src="/brand/sqr-q-mark-dark.png"]')).toHaveCount(0);
     await expect(logo).toHaveCount(0);
     await page.locator("aside.workspace-sidebar").screenshot({ path: testInfo.outputPath(`desktop-q-expanded-${theme}.png`), animations: "disabled" });
@@ -201,8 +214,8 @@ for (const theme of ["light", "dark"] as const) {
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       const img = frame.locator("img:visible");
-      await loadedLogo(img, `/brand/sqr-q-mark-${theme}.png`, 1);
-      await expect(frame.locator("img")).toHaveCount(2);
+      await loadedLogo(img, "/brand/sidebar-q-static.png", 1);
+      await expect(frame.locator("img")).toHaveCount(1);
       await expect(img).toHaveCount(1);
       await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
       await expect(frame).toHaveCSS("border-width", "0px");
@@ -287,7 +300,7 @@ for (const theme of ["light", "dark"] as const) {
     const notFoundResponse = await page.goto(notFoundUrl);
     expect(notFoundResponse?.status()).toBe(404);
     expect(notFoundResponse?.headers()["content-type"]).toContain("text/html");
-    await loadedLogo(page.locator(".sqr-status__brand img"), "/brand/sqr-q-mark-dark.png", 1);
+    await loadedLogo(page.locator(".sqr-status__brand img"), "/brand/sidebar-q-static.png", 1);
     await metadata(page);
     expect(errors).toEqual([]);
   });
@@ -299,7 +312,7 @@ for (const theme of ["light", "dark"] as const) {
     const brand = page.locator(".workspace-brand-mark .sqr-brand-logo");
     await expect(brand).toHaveAttribute("data-brand-variant", "icon");
     await expect(brand.locator("img:visible")).toHaveCount(1);
-    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await loadedLogo(brand.locator("img:visible"), "/brand/sidebar-q-static.png", 1);
     await expect(brand.locator("img")).toHaveCount(1);
     await expect(brand).toHaveAttribute("data-brand-theme", "light");
     const frame = page.locator(".workspace-brand-mark");
@@ -312,7 +325,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.screenshot({ path: testInfo.outputPath(`workspace-${theme}.png`), fullPage: true });
     await page.getByTestId("button-toggle-theme").click();
     await expect.poll(() => page.locator("html").evaluate((element) => element.classList.contains("dark"))).toBe(theme === "light");
-    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await loadedLogo(brand.locator("img:visible"), "/brand/sidebar-q-static.png", 1);
     await expect(brand.locator("img")).toHaveCount(1);
     await expect(brand).toHaveAttribute("data-brand-theme", "light");
     await expect(frame).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
@@ -322,7 +335,7 @@ for (const theme of ["light", "dark"] as const) {
     // Do not alter navigation layout solely to introduce a second compact logo.
     await expect(brand).toBeHidden();
     await page.getByTestId("button-toggle-sidebar").click();
-    await loadedLogo(brand.locator("img:visible"), "/brand/sqr-q-mark-light.png", 1);
+    await loadedLogo(brand.locator("img:visible"), "/brand/sidebar-q-static.png", 1);
     await expect(brand.locator("img")).toHaveCount(1);
     await expect(brand).toHaveAttribute("data-brand-theme", "light");
     await page.setViewportSize({ width: 390, height: 844 });

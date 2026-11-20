@@ -26,6 +26,7 @@ const ROBOTS_ALLOWED_PUBLIC_PATHS = [
   "/$",
   "/assets/",
   "/brand/",
+  "/favicon.ico$",
   "/boot-shell.js$",
   "/boot-shell.css$",
   "/site.webmanifest$",

@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 
 test.use({ serviceWorkers: "block" });
-const onlinePng = "/brand/favicon-online-v2-32.png";
+const onlinePng = "/brand/sidebar-q-static.png";
 const onlineIco = "/brand/favicon-online-v2.ico";
 const offlinePng = "data:image/png;base64," + readFileSync("client/src/assets/favicon-status/offline-32.png").toString("base64");
 type ResponseMode = "ok" | "503" | "html" | "marker" | "cache" | "redirect" | "network";
@@ -76,7 +76,7 @@ async function checkLinks(page: Page, state: "online" | "offline") {
   await expect(icon).toHaveAttribute("href", state === "offline" ? offlinePng : onlinePng);
   await expect(shortcut).toHaveAttribute("href", state === "offline" ? offlinePng : onlineIco);
   await expect(icon).toHaveAttribute("type", "image/png");
-  await expect(icon).toHaveAttribute("sizes", "32x32");
+  await expect(icon).toHaveAttribute("sizes", state === "offline" ? "32x32" : "128x128");
   await expect(shortcut).toHaveAttribute("type", state === "offline" ? "image/png" : "image/x-icon");
   await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveAttribute("href", "/brand/apple-touch-icon-180x180.png");
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute("href", "/site.webmanifest");

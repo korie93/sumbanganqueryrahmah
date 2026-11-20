@@ -3,6 +3,7 @@ Disallow: /
 Allow: /$
 Allow: /assets/
 Allow: /brand/
+Allow: /favicon.ico$
 Allow: /boot-shell.js$
 Allow: /boot-shell.css$
 Allow: /site.webmanifest$

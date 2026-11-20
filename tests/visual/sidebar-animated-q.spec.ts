@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-const onlineFavicon = "/brand/favicon-online-v2-32.png";
+const onlineFavicon = "/brand/sidebar-q-static.png";
 const originalQ = "/brand/sidebar-q-static.png";
 
 function toggle(page: Page) { return page.getByTestId("button-toggle-sidebar"); }
