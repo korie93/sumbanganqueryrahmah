@@ -26,6 +26,7 @@ const COMMON_SHARED_MODULES = new Set([
   "brand-assets",
   "collection-amount-types",
   "collection-daily-status",
+  "collection-receipt-breakdown",
   "client-error-telemetry",
   "error-codes",
   "json-schema",
