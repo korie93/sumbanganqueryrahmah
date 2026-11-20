@@ -11,6 +11,7 @@ import {
   type CollectionRecord,
 } from "@/lib/api";
 import type { CollectionRecordFilters } from "@/pages/collection-records/types";
+import { getCollectionRecordCriteria } from "./collection-record-filters";
 import {
   COLLECTION_DATA_CHANGED_EVENT,
   parseApiError,
@@ -48,16 +49,7 @@ export function buildCollectionViewAllRequestFilters(
   pageSize: number,
 ): CollectionRecordFilters {
   return {
-    from: snapshot.from,
-    to: snapshot.to,
-    search: snapshot.search,
-    nickname: snapshot.nickname,
-    leaderId: snapshot.leaderId,
-    sourceImportIds: snapshot.sourceImportIds,
-    agingBuckets: snapshot.agingBuckets,
-    classifications: snapshot.classifications,
-    sortBy: snapshot.sortBy,
-    sortDirection: snapshot.sortDirection,
+    ...getCollectionRecordCriteria(snapshot),
     page,
     pageSize,
   };

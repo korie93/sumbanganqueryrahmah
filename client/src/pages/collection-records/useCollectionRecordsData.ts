@@ -18,11 +18,13 @@ const COLLECTION_RECORDS_AUTO_FETCH_DEBOUNCE_MS = 300;
 type UseCollectionRecordsDataArgs = {
   canUseNicknameFilter: boolean;
   canUseTeamLeaderFilter: boolean;
+  canUseDuplicateFilter: boolean;
 };
 
 export function useCollectionRecordsData({
   canUseNicknameFilter,
   canUseTeamLeaderFilter,
+  canUseDuplicateFilter,
 }: UseCollectionRecordsDataArgs) {
   const { toast } = useToast();
   const [sourceOptions, setSourceOptions] = useState<CollectionSourceConfig[]>([]);
@@ -58,6 +60,7 @@ export function useCollectionRecordsData({
     sourceImportFilter,
     agingFilter,
     classificationFilter,
+    duplicateOnly,
     sortValue,
     deferredSearchInput,
     fromDateRef,
@@ -71,6 +74,7 @@ export function useCollectionRecordsData({
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,
+    handleDuplicateOnlyChange,
     handleSortValueChange,
     buildCurrentFilters,
     markSkipNextAutoFetch,
@@ -79,6 +83,7 @@ export function useCollectionRecordsData({
   } = useCollectionRecordsFilterState({
     canUseNicknameFilter,
     canUseTeamLeaderFilter,
+    canUseDuplicateFilter,
     pageSize,
   });
 
@@ -231,6 +236,7 @@ export function useCollectionRecordsData({
     sourceImportFilter,
     agingFilter,
     classificationFilter,
+    duplicateOnly,
     sortValue,
     pageSize,
     toDate,
@@ -288,6 +294,7 @@ export function useCollectionRecordsData({
     handleSourceImportFilterChange("all");
     handleAgingFilterChange("all");
     handleClassificationFilterChange("all");
+    handleDuplicateOnlyChange(false);
     handleSortValueChange("paymentDate_desc");
     markSkipNextAutoFetch(buildCurrentFilters("", pageSize, 0));
     void loadFirstPage({});
@@ -299,6 +306,7 @@ export function useCollectionRecordsData({
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,
+    handleDuplicateOnlyChange,
     handleSortValueChange,
     handleSearchInputChange,
     handleToDateChange,
@@ -319,6 +327,7 @@ export function useCollectionRecordsData({
     sourceImportFilter,
     agingFilter,
     classificationFilter,
+    duplicateOnly,
     sortValue,
     nicknameOptions,
     loadingNicknames,
@@ -344,6 +353,7 @@ export function useCollectionRecordsData({
     setSourceImportFilter: handleSourceImportFilterChange,
     setAgingFilter: handleAgingFilterChange,
     setClassificationFilter: handleClassificationFilterChange,
+    setDuplicateOnly: handleDuplicateOnlyChange,
     setSortValue: handleSortValueChange,
     buildCurrentFilters,
     loadRecords: loadFirstPage,

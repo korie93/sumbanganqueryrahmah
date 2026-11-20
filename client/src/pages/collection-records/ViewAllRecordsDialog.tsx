@@ -12,6 +12,7 @@ import {
 import { STANDARD_PAGE_SIZE_OPTIONS } from "@/components/data/AppPaginationBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { CollectionRecord } from "@/lib/api";
+import type { ViewCollectionReceipt } from "./types";
 import { CollectionPaginationBar } from "@/pages/collection-report/CollectionPaginationBar";
 import { formatAmountRM } from "@/pages/collection/utils";
 import type { CollectionAmountMyrNumber } from "@shared/collection-amount-types";
@@ -37,7 +38,7 @@ export interface ViewAllRecordsDialogProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
-  onViewReceipt: (record: CollectionRecord) => void;
+  onViewReceipt: ViewCollectionReceipt;
   toDisplayDate: (value: string) => string;
 }
 

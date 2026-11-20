@@ -35,6 +35,7 @@ export function buildCollectionRecordsCacheKey(filters?: CollectionRecordFilters
     sourceImportIds: [...(filters?.sourceImportIds || [])].sort(),
     agingBuckets: [...(filters?.agingBuckets || [])].sort(),
     classifications: [...(filters?.classifications || [])].sort(),
+    duplicateOnly: filters?.duplicateOnly === true,
     sortBy: normalizeCollectionRecordFilterValue(filters?.sortBy),
     sortDirection: normalizeCollectionRecordFilterValue(filters?.sortDirection),
     page,

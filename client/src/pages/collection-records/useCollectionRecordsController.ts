@@ -32,6 +32,7 @@ export function useCollectionRecordsController({
   const canUseNicknameFilter =
     role === "admin" || role === "manager" || role === "superuser";
   const canUseTeamLeaderFilter = role === "manager" || role === "superuser";
+  const canUseDuplicateFilter = role === "superuser";
   const canPurgeOldRecords = role === "superuser";
 
   const {
@@ -46,6 +47,7 @@ export function useCollectionRecordsController({
     sourceImportFilter,
     agingFilter,
     classificationFilter,
+    duplicateOnly,
     sortValue,
     nicknameOptions,
     loadingNicknames,
@@ -71,6 +73,7 @@ export function useCollectionRecordsController({
     setSourceImportFilter,
     setAgingFilter,
     setClassificationFilter,
+    setDuplicateOnly,
     setSortValue,
     buildCurrentFilters,
     loadRecords,
@@ -80,7 +83,7 @@ export function useCollectionRecordsController({
     handleNextPage,
     handlePageSizeChange,
     getAppliedFilters,
-  } = useCollectionRecordsData({ canUseNicknameFilter, canUseTeamLeaderFilter });
+  } = useCollectionRecordsData({ canUseNicknameFilter, canUseTeamLeaderFilter, canUseDuplicateFilter });
   const [receiptPreviewRequest, setReceiptPreviewRequest] = useState<ReceiptPreviewRequest | null>(null);
   const handleViewReceipt = useCallback((record: CollectionRecord, receiptId?: string) => {
     setReceiptPreviewRequest(receiptId ? { record, receiptId } : { record });
@@ -174,7 +177,7 @@ export function useCollectionRecordsController({
         canDeleteGlobal,
         onEdit: openEditDialog,
         onDelete: actions.requestDelete,
-        onViewReceipt: (record: CollectionRecord) => void handleViewReceipt(record),
+        onViewReceipt: (record, _launcher, receiptId) => handleViewReceipt(record, receiptId),
       }),
     [
       actions.requestDelete,
@@ -243,6 +246,9 @@ export function useCollectionRecordsController({
     canUseTeamLeaderFilter,
     canPurgeOldRecords,
     filters: {
+      canUseDuplicateFilter,
+      duplicateOnly,
+      onDuplicateOnlyChange: setDuplicateOnly,
       fromDate,
       toDate,
       searchInput,
@@ -281,7 +287,7 @@ export function useCollectionRecordsController({
     purgeDialog: actions.purgeDialog,
     viewAll: {
       ...viewAll,
-      onViewReceipt: (record: CollectionRecord) => void handleViewReceipt(record),
+      onViewReceipt: (record: CollectionRecord, _launcher?: HTMLElement, receiptId?: string) => handleViewReceipt(record, receiptId),
     },
   };
 }

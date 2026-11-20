@@ -1,4 +1,5 @@
 import type { CollectionRecord } from "@/lib/api";
+import type { ViewCollectionReceipt } from "./types";
 import type { CollectionRecordsTableProps } from "@/pages/collection-records/CollectionRecordsTable";
 import type { CollectionRecordsToolbarProps } from "@/pages/collection-records/CollectionRecordsToolbar";
 
@@ -11,7 +12,7 @@ type BuildCollectionRecordsTableViewModelArgs = {
   canDeleteGlobal: boolean;
   onEdit: (record: CollectionRecord) => void;
   onDelete: (record: CollectionRecord) => void;
-  onViewReceipt: (record: CollectionRecord) => void;
+  onViewReceipt: ViewCollectionReceipt;
 };
 
 export type CollectionRecordsTableViewModel = CollectionRecordsTableProps;

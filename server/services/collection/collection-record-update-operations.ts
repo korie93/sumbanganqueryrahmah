@@ -243,7 +243,6 @@ export class CollectionRecordUpdateOperations {
         targetDraft.extractionConfidence = metadata.extractionConfidence;
         targetDraft.receiptDate = metadata.receiptDate;
         targetDraft.receiptReference = metadata.receiptReference;
-        targetDraft.fileHash = metadata.fileHash || targetDraft.fileHash || null;
       }
       const newReceiptInputs = buildCollectionNewReceiptInputs(uploadedReceipts, newReceiptMetadata);
       const validationReceipts = [

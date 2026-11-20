@@ -10,6 +10,7 @@ import {
   collectionTeamOptionsResponseSchema,
 } from "@shared/api-contracts";
 import { parseApiJson } from "./contract";
+import { collectionReceiptBreakdownSchema, collectionReceiptComparisonSchema } from "@shared/collection-receipt-breakdown";
 import type {
   CollectionPurgeResponse,
   CollectionPurgeSummaryResponse,
@@ -511,4 +512,16 @@ export async function getCollectionManualSettlementHistory(
   const endpoint = `/api/collection/${encodeURIComponent(recordId)}/manual-settlement/history${suffix ? `?${suffix}` : ""}`;
   const response = await apiRequest("GET", endpoint, undefined, { signal: options?.signal });
   return parseApiJson(response, collectionManualSettlementHistoryResponseSchema, "/api/collection/:id/manual-settlement/history");
+}
+
+export async function getCollectionReceiptBreakdown(recordId: string, signal: AbortSignal) {
+  const path = `/api/collection/${encodeURIComponent(recordId)}/receipt-breakdown`;
+  const response = await apiRequest("GET", path, undefined, { signal });
+  return parseApiJson(response, collectionReceiptBreakdownSchema, "/api/collection/:id/receipt-breakdown");
+}
+
+export async function getCollectionReceiptComparison(recordId: string, receiptId: string, relatedId: string, signal: AbortSignal) {
+  const path = `/api/collection/${encodeURIComponent(recordId)}/receipts/${encodeURIComponent(receiptId)}/compare/${encodeURIComponent(relatedId)}`;
+  const response = await apiRequest("GET", path, undefined, { signal });
+  return parseApiJson(response, collectionReceiptComparisonSchema, "/api/collection/:id/receipts/:receiptId/compare/:relatedId");
 }

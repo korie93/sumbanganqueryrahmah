@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { translate } from "@/lib/i18n";
 import {
   formatCollectionOptionalAmount,
   getCollectionCpStatusLabel,
@@ -25,6 +26,14 @@ test("collection coverage labels distinguish CP, Abort CP, and unverified states
     ["Abort CP", "Manual Verified", `POOL ${formatCollectionOptionalAmount("350.00")}`]
       .join(` ${String.fromCodePoint(0xb7)} `),
   );
+});
+
+test("the CP display identifies flagged receipts without changing the exported status", () => {
+  const record = { cpStatus: "unverified" as const, duplicateReceiptFlag: true };
+  assert.equal(getCollectionCpStatusLabel(record, translate), "Unverified · Semak resit pendua");
+  assert.equal(getCollectionCpStatusLabel(record, key => translate(key, undefined, "en")), "Unverified · Review duplicate receipt");
+  assert.equal(getCollectionCpStatusLabel({ ...record, duplicateReceiptFlag: false }, translate), "Unverified");
+  assert.equal(getCollectionCpStatusLabel(record), "Unverified");
 });
 
 test("collection coverage formatting keeps missing source values explicit", () => {

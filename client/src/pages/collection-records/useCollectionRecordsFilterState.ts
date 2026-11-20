@@ -6,12 +6,14 @@ import { buildCollectionRecordsCacheKey } from "@/pages/collection-records/recor
 type UseCollectionRecordsFilterStateOptions = {
   canUseNicknameFilter: boolean;
   canUseTeamLeaderFilter: boolean;
+  canUseDuplicateFilter: boolean;
   pageSize: number;
 };
 
 export function useCollectionRecordsFilterState({
   canUseNicknameFilter,
   canUseTeamLeaderFilter,
+  canUseDuplicateFilter,
   pageSize,
 }: UseCollectionRecordsFilterStateOptions) {
   const skipInitialAutoFetchRef = useRef(true);
@@ -24,6 +26,7 @@ export function useCollectionRecordsFilterState({
   const sourceImportFilterRef = useRef("all");
   const agingFilterRef = useRef("all");
   const classificationFilterRef = useRef("all");
+  const duplicateOnlyRef = useRef(false);
   const sortValueRef = useRef("paymentDate_desc");
 
   const [fromDate, setFromDate] = useState("");
@@ -34,6 +37,7 @@ export function useCollectionRecordsFilterState({
   const [sourceImportFilter, setSourceImportFilter] = useState("all");
   const [agingFilter, setAgingFilter] = useState("all");
   const [classificationFilter, setClassificationFilter] = useState("all");
+  const [duplicateOnly, setDuplicateOnly] = useState(false);
   const [sortValue, setSortValue] = useState("paymentDate_desc");
 
   const deferredSearchInput = useDeferredValue(searchInput);
@@ -83,6 +87,11 @@ export function useCollectionRecordsFilterState({
     setSortValue(value);
   }, []);
 
+  const handleDuplicateOnlyChange = useCallback((value: boolean) => {
+    duplicateOnlyRef.current = value;
+    setDuplicateOnly(value);
+  }, []);
+
   const buildCurrentFilters = useCallback(
     (
       searchValue = searchInputRef.current,
@@ -96,6 +105,8 @@ export function useCollectionRecordsFilterState({
         canUseNicknameFilter,
         nicknameFilter: nicknameFilterRef.current,
         canUseTeamLeaderFilter,
+        canUseDuplicateFilter,
+        duplicateOnly: duplicateOnlyRef.current,
         leaderFilter: leaderFilterRef.current,
         sourceImportFilter: sourceImportFilterRef.current,
         agingFilter: agingFilterRef.current,
@@ -104,7 +115,7 @@ export function useCollectionRecordsFilterState({
         limit,
         offset,
       }),
-    [canUseNicknameFilter, canUseTeamLeaderFilter, pageSize],
+    [canUseNicknameFilter, canUseTeamLeaderFilter, canUseDuplicateFilter, pageSize],
   );
 
   const markSkipNextAutoFetch = useCallback((filters: CollectionRecordFilters) => {
@@ -134,6 +145,7 @@ export function useCollectionRecordsFilterState({
     sourceImportFilter,
     agingFilter,
     classificationFilter,
+    duplicateOnly: canUseDuplicateFilter && duplicateOnly,
     sortValue,
     deferredSearchInput,
     fromDateRef,
@@ -147,6 +159,7 @@ export function useCollectionRecordsFilterState({
     handleSourceImportFilterChange,
     handleAgingFilterChange,
     handleClassificationFilterChange,
+    handleDuplicateOnlyChange,
     handleSortValueChange,
     buildCurrentFilters,
     markSkipNextAutoFetch,

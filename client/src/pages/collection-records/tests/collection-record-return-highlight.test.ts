@@ -22,7 +22,7 @@ test("return marker clears on a different result context or a removed record", (
 test("return marker context includes every table filter, role and pagination without persistent storage", () => {
   const page = readFileSync("client/src/pages/collection/CollectionRecordsPage.tsx", "utf8");
   const context = page.slice(page.indexOf("const returnContextKey"), page.indexOf("const { lastViewedRecordId"));
-  for (const key of ["role", "tablePage", "tablePageSize", "fromDate", "toDate", "searchInput", "nicknameFilter", "leaderFilter", "sourceImportFilter", "agingFilter", "classificationFilter", "sortValue"]) {
+  for (const key of ["role", "tablePage", "tablePageSize", "fromDate", "toDate", "searchInput", "nicknameFilter", "leaderFilter", "sourceImportFilter", "agingFilter", "classificationFilter", "duplicateOnly", "sortValue"]) {
     assert.ok(context.includes(key), key);
   }
   const hook = readFileSync("client/src/pages/collection-records/useCollectionRecordReturnHighlight.ts", "utf8");

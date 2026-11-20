@@ -4,10 +4,12 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CollectionRecord } from "@/lib/api";
+import type { ViewCollectionReceipt } from "./types";
 import { formatIsoDateToDDMMYYYY } from "@/lib/date-format";
 import { formatCollectionOptionalAmount, getCollectionCpStatusLabel, getCollectionMatchAccuracyLabel } from "./collection-coverage";
 import { getCollectionRecordSourceLabel } from "./collection-source-label";
 import { getCollectionCardNumberLabel } from "./utils";
+import { CollectionReceiptBreakdownPanel } from "./CollectionReceiptBreakdownPanel";
 
 function DetailGroup({ title, fields, children }: {
   title: string;
@@ -33,7 +35,7 @@ function DetailGroup({ title, fields, children }: {
 export function CollectionRecordName({ record, number, onOpenRecord, onViewReceipt }: {
   record: CollectionRecord;
   number: number;
-  onViewReceipt: (record: CollectionRecord, launcher: HTMLElement) => void;
+  onViewReceipt: ViewCollectionReceipt;
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
 }) {
   const t = useContext(CollectionRecordsTranslation);
@@ -52,7 +54,7 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
         </button>
       </DialogTrigger>
       {open && (
-        <DialogContent className="flex max-w-xl flex-col gap-0 overflow-hidden p-0 text-left sm:p-0 motion-reduce:animate-none [&>button]:grid [&>button]:place-items-center [&>button]:size-8 max-md:[&>button]:size-[44px] max-md:[&>button]:top-1.5 max-md:[&>button]:right-2">
+        <DialogContent className="flex max-w-xl flex-col gap-0 overflow-hidden p-0 text-left aria-hidden:opacity-25 sm:p-0 motion-reduce:animate-none [&>button]:grid [&>button]:place-items-center [&>button]:size-8 max-md:[&>button]:size-[44px] max-md:[&>button]:top-1.5 max-md:[&>button]:right-2">
           <div className="min-w-0 shrink-0 px-4 pt-4 pr-16 sm:px-6 sm:pt-5 sm:pr-16">
             <DialogTitle className="max-h-20 overflow-y-auto wrap-anywhere text-lg leading-6">{name}</DialogTitle>
             <DialogDescription className="sr-only">Butiran rekod #{number}</DialogDescription>
@@ -72,6 +74,7 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
                 <p className="mt-2.5 text-sm text-muted-foreground">Tiada resit</p>
               )}
             </DetailGroup>
+            {receiptCount > 0 && <CollectionReceiptBreakdownPanel key={record.id} record={record} onViewReceipt={onViewReceipt} />}
             <DetailGroup title="Butiran lain" fields={[
               ["No.", String(number)], ["Batch", record.batch],
               ["IC Number", record.icNumber], ["Telefon", record.customerPhone],
@@ -79,7 +82,7 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
               ["Billing Principal (OSP)", formatCollectionOptionalAmount(record.billingPrincipalOsp, missing)],
             ]} />
             <DetailGroup title="Padanan dan sumber" fields={[
-              ["CP Status", getCollectionCpStatusLabel(record)], ["Aging", record.agingBucket || "-"],
+              ["CP Status", getCollectionCpStatusLabel(record, t)], ["Aging", record.agingBucket || "-"],
               ["Match", getCollectionMatchAccuracyLabel(record.sourceMatchAccuracy, missing)],
               ["Staff Nickname", record.collectionStaffNickname], [t("common.collection.records.sourceFile"), getCollectionRecordSourceLabel(record), "wide"],
             ]} />

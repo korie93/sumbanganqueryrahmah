@@ -25,7 +25,7 @@ export type ExistingCollectionAccessRecord = NonNullable<
   Awaited<ReturnType<CollectionStoragePort["getCollectionRecordById"]>>
 >;
 
-function isCollectionAccessUserSnapshotUsable(user: CollectionAccessUser): boolean {
+export function isCollectionAccessUserSnapshotUsable(user: CollectionAccessUser): boolean {
   const status = normalizeCollectionText("status" in user ? user.status : undefined).toLowerCase();
   if (status && status !== "active") {
     return false;
