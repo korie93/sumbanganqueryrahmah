@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectPaddedActions } from "./helpers/collection-action-layout";
 import {
   addReceipt, checkFixture, confirmation, draft, fillIdentity, installFixture,
   nickname, openSave, readDraft, reset,
@@ -158,6 +159,30 @@ test("Save guidance stays compact and preserves private draft reload behavior", 
   await expect(confirmation(page)).toBeVisible();
   await checkFixture(page, fixture);
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Post-save actions fit their labels ${theme}`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+    const fixture = await installFixture(page, baseURL, { restore: draft, theme });
+    await openSave(page);
+    await fillIdentity(page);
+    await page.keyboard.press("Control+s");
+    const banner = page.getByRole("status", { name: "Tindakan selepas simpan collection berjaya" });
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole("link", { name: "View rekod" })).toHaveAttribute("href", "/collection/records");
+    await expect(banner.getByRole("link", { name: "Collection Daily" })).toHaveAttribute("href", "/collection/daily");
+    await page.evaluate(() => document.fonts.ready);
+    for (const width of [1280, 1024, 768, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await banner.screenshot({ path: testInfo.outputPath(`success-${width}.png`) });
+      await expectPaddedActions(banner);
+    }
+    await banner.getByRole("button", { name: "Tambah rekod baru" }).click();
+    await expect(banner).toHaveCount(0);
+    expect(fixture.saves).toHaveLength(1);
+    await checkFixture(page, fixture);
+  });
+}
 
 for (const shortcut of ["Control+s", "Meta+s"]) {
   test(`Save guidance ${shortcut} retains explicit save payload after compact navigation`, async ({ page, baseURL }) => {

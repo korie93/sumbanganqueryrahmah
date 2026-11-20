@@ -21,6 +21,7 @@ import {
   getCollectionMatchAccuracyLabel,
 } from "@/pages/collection-records/collection-coverage";
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
+import "./CollectionRecordsDesktopTable.css";
 
 type ViewAllRecordsDesktopTableProps = Pick<
   ViewAllRecordsDialogProps,
@@ -43,16 +44,19 @@ export function ViewAllRecordsDesktopTable({
   const t = useContext(CollectionRecordsTranslation);
   const missing = t("common.collection.records.missing");
   return (
-    <Table className="min-w-[1960px] text-sm">
+    <Table
+      className="min-w-[1960px] text-sm"
+      containerProps={{ className: "collection-records-table-scroll collection-records-table-scroll--all" }}
+    >
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Name</TableHead>
+          <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-background">No.</TableHead>
+          <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-background">Customer Name</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.cardNumber")}</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.accountNumber")}</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Amount</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Payment Date</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Receipt</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">No.</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">IC Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Phone Number</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Batch</TableHead>
@@ -89,7 +93,8 @@ export function ViewAllRecordsDesktopTable({
                 recordNumber: (page - 1) * pageSize + index + 1,
               })}
             >
-              <TableCell className="py-2 font-medium"><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={(page - 1) * pageSize + index + 1} /></TableCell>
+              <TableCell className="collection-records-table-number py-2 text-muted-foreground">{(page - 1) * pageSize + index + 1}</TableCell>
+              <TableCell className="collection-records-table-identity py-2 font-medium"><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={(page - 1) * pageSize + index + 1} /></TableCell>
               <TableCell className="py-2">{getCollectionCardNumberLabel(record.cardNumber)}</TableCell>
               <TableCell className="py-2">{record.accountNumber || "-"}</TableCell>
               <TableCell className="py-2 font-semibold text-emerald-700 dark:text-emerald-300">{formatCollectionOptionalAmount(record.amount, missing)}</TableCell>
@@ -109,9 +114,6 @@ export function ViewAllRecordsDesktopTable({
                 ) : (
                   <span className="text-muted-foreground">-</span>
                 )}
-              </TableCell>
-              <TableCell className="py-2 text-muted-foreground">
-                {(page - 1) * pageSize + index + 1}
               </TableCell>
               <TableCell className="py-2">{record.icNumber}</TableCell>
               <TableCell className="py-2">{record.customerPhone}</TableCell>

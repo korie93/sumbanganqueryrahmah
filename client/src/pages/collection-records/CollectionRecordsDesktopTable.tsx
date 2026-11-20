@@ -62,6 +62,7 @@ export function CollectionRecordsDesktopTable({
       >
         <TableHeader>
           <TableRow>
+            <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-muted">No.</TableHead>
             <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">Customer Name</TableHead>
             {isCompact ? (
               <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-36 border-b border-border/70 bg-muted">{t("common.collection.records.cardAccount")}</TableHead>
@@ -74,7 +75,6 @@ export function CollectionRecordsDesktopTable({
             <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", isCompact && "w-28")}>Amount</TableHead>
             <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Payment Date</TableHead>
             <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Receipt</TableHead>
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact ? "w-16" : "w-[72px]")}>No.</TableHead>
             {!isCompact && (
               <>
                 <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">IC Number</TableHead>
@@ -87,7 +87,7 @@ export function CollectionRecordsDesktopTable({
                 <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Match</TableHead>
               </>
             )}
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Staff Nickname</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Staff Nickname</TableHead>
             {!isCompact && <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.sourceFile")}</TableHead>}
             {showActionsColumn && <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", hasRowActions && "collection-records-table-actions")}>Actions</TableHead>}
           </TableRow>
@@ -104,8 +104,11 @@ export function CollectionRecordsDesktopTable({
                   recordNumber: pageOffset + index + 1,
                 })}
               >
+                <TableCell className="collection-records-table-number py-2 text-muted-foreground">
+                  {pageOffset + index + 1}
+                </TableCell>
                 <TableCell className="collection-records-table-identity py-2 font-medium">
-                  <span className={cn("block whitespace-normal wrap-anywhere", isCompact ? "w-full" : "w-56")}><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={pageOffset + index + 1} /></span>
+                  <span className="block whitespace-normal wrap-anywhere"><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={pageOffset + index + 1} /></span>
                   {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
                 </TableCell>
                 {isCompact ? (
@@ -146,9 +149,6 @@ export function CollectionRecordsDesktopTable({
                   ) : (
                     <span className="text-muted-foreground">-</span>
                   )}
-                </TableCell>
-                <TableCell className="py-2 text-muted-foreground">
-                  {pageOffset + index + 1}
                 </TableCell>
                 {!isCompact && (
                   <>

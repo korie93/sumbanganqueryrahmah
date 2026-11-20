@@ -142,7 +142,7 @@ export function ViewAllRecordsDialog({
               className={
                 isMobile
                   ? "min-h-0 flex-1 overflow-hidden pt-3"
-                  : "min-h-0 flex-1 overflow-auto rounded-[1.5rem] border border-border/60 bg-background shadow-sm"
+                  : "min-h-0 flex-1 overflow-hidden rounded-[1.5rem] border border-border/60 bg-background shadow-sm"
               }
             >
               {isMobile ? (

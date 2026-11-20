@@ -762,9 +762,12 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
   await expect(scroll.locator("tbody tr")).toHaveCount(20);
   await scroll.scrollIntoViewIfNeeded();
   const customer = scroll.locator("tbody .collection-records-table-identity").first();
+  const number = scroll.locator("tbody .collection-records-table-number").first();
   const actions = scroll.locator("tbody .collection-records-table-actions").first();
   await scroll.evaluate((element) => { element.scrollLeft = 500; });
-  await expect.poll(async () => (await bounds(customer)).x).toBeLessThan((await bounds(scroll)).x + 3);
+  const numberBounds = await bounds(number);
+  expect(Math.abs(numberBounds.x - (await bounds(scroll)).x)).toBeLessThan(3);
+  expect(Math.abs((await bounds(customer)).x - numberBounds.x - numberBounds.width)).toBeLessThan(2);
   const actionBounds = await bounds(actions);
   const scrollBounds = await bounds(scroll);
   expect(Math.abs(actionBounds.x + actionBounds.width - scrollBounds.x - scrollBounds.width)).toBeLessThan(3);
@@ -772,13 +775,17 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
   const headerTop = (await bounds(header)).y;
   await scroll.evaluate((element) => { element.scrollTop = 220; });
   await expect.poll(async () => Math.abs((await bounds(header)).y - headerTop)).toBeLessThan(2);
+  const numberHeader = await bounds(scroll.getByRole("columnheader", { name: "No.", exact: true }));
+  expect(Math.abs(numberHeader.y - headerTop)).toBeLessThan(2);
+  expect(Math.abs(numberHeader.x - numberBounds.x)).toBeLessThan(2);
+  expect(Math.abs((await bounds(header)).x - numberHeader.x - numberHeader.width)).toBeLessThan(2);
   expect(await scroll.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
   expect(await scroll.evaluate((element) => [...element.querySelectorAll("div")].filter((child) => {
     const style = getComputedStyle(child);
     return /auto|scroll/.test(style.overflowY) && child.scrollHeight > child.clientHeight;
   }).length)).toBe(0);
   await assertPageFits(page);
-  await testInfo.attach(`records-${theme}-${viewport.width}x${viewport.height}-scrolled`, { body: await page.screenshot(), contentType: "image/png" });
+  await testInfo.attach(`records-${theme}-${viewport.width}x${viewport.height}-scrolled`, { body: await page.screenshot({ path: testInfo.outputPath("scrolled.png") }), contentType: "image/png" });
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 });

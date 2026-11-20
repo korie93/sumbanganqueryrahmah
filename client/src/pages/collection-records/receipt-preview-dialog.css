@@ -1,3 +1,24 @@
+.receipt-preview-desktop-frame {
+  /* Leave room for the preview and its actions when record details need to scroll. */
+  flex: 1 0 min(14rem, 55%);
+}
+
+.receipt-preview-footer-mobile > :is(a, button) {
+  flex: 1 0 auto;
+  min-height: 2.75rem;
+}
+
+@media (max-width: 28rem) {
+  .receipt-preview-footer-mobile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .receipt-preview-footer-mobile > a {
+    grid-column: 1 / -1;
+  }
+}
+
 .receipt-preview-image-scroller {
   overscroll-behavior: contain;
   padding: 0.75rem;

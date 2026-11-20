@@ -56,6 +56,9 @@ test("pinned identity and actions preserve full identifiers, pagination and perm
   assert.match(markup.rows, /<th[^>]*collection-records-table-actions/);
   assert.match(markup.rows, /<td[^>]*collection-records-table-actions/);
   assert.match(markup.rows, /aria-label="Actions for record 51"/);
+  for (const html of [markup.rows, markup.readonly, markup.compact, markup.compactReadonly]) {
+    assert.match(html, /<tbody[^>]*><tr[^>]*><td[^>]*collection-records-table-number[^>]*>51<\/td><td[^>]*collection-records-table-identity/);
+  }
   assert.doesNotMatch(markup.readonly, /aria-label="Actions for record/);
   for (const html of [markup.readonly, markup.compactReadonly]) {
     assert.match(html, /<button[^>]*aria-haspopup="dialog"[^>]*>Synthetic Customer<\/button>/);

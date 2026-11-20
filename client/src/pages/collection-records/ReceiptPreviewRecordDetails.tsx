@@ -42,7 +42,7 @@ export function ReceiptPreviewRecordDetails({
       aria-label={t("common.collection.receipts.details")}
       hidden={!showDetails}
       tabIndex={0}
-      className={cn("max-h-[30vh] shrink-0 overflow-y-auto rounded-md border border-border/60 bg-background/40 px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", isMobile ? "mx-3 mt-2" : "mt-2")}
+      className={cn("mt-2 shrink-0 rounded-md border border-border/60 bg-background/40 px-3 py-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", isMobile ? "mx-3 max-h-[30vh] overflow-y-auto" : "focus-visible:ring-inset")}
     >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
         <ReceiptDetail label={t("common.collection.receipts.recordedPayment")} value={formatCollectionOptionalAmount(record.amount, missing)} amount />
