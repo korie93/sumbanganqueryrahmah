@@ -87,7 +87,7 @@ function ReceiptPdfPreviewFrame({ source, iframePreviewProps, onRetry }: Receipt
         ref={frameRef}
         src={source}
         title="Receipt PDF Preview"
-        className="h-full w-full rounded-sm border-0 bg-white"
+        className="block h-full w-full border-0 bg-white"
         loading="lazy"
         onError={() => setFailed(true)}
         {...iframePreviewProps}
@@ -226,7 +226,7 @@ export function ReceiptPreviewContent({
 
   return (
     <div
-      className={cn("min-h-0 flex-1 overflow-hidden rounded-md border border-border/60 bg-background/40", isMobile ? "mx-3 my-2" : "mt-2")}
+      className={cn("min-h-0 flex-1 overflow-hidden bg-background/40", isMobile && "mx-3 my-2 rounded-md border border-border/60")}
       aria-busy={loading}
     >
       {loading ? <ReceiptPreviewLoading /> : error ? (

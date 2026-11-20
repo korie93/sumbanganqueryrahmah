@@ -239,7 +239,7 @@ function getDesktopHeaders(markup: string) {
 test("desktop defaults to eight compact columns with complete authorized Account and Card strings", () => {
   const markup = renderDesktopRecords();
   assert.deepEqual(getDesktopHeaders(markup), [
-    "Customer Name", "Kad / Akaun", "Amount", "Payment Date", "Receipt", "No.", "Staff Nickname", "Actions",
+    "No.", "Customer Name", "Kad / Akaun", "Amount", "Payment Date", "Receipt", "Staff Nickname", "Actions",
   ]);
   assert.match(markup, /collection-records-table--compact min-w-\[64rem\] table-fixed/);
   assert.match(markup, /<dt[^>]*>Nombor akaun<\/dt><dd>0000007788<\/dd>/);
@@ -255,7 +255,7 @@ test("desktop defaults to eight compact columns with complete authorized Account
 test("full desktop view retains all eighteen columns and full supplied record values", () => {
   const markup = renderDesktopRecords({ viewMode: "full" });
   assert.deepEqual(getDesktopHeaders(markup), [
-    "Customer Name", "Nombor kad", "Nombor akaun", "Amount", "Payment Date", "Receipt", "No.", "IC Number", "Customer Phone Number", "Batch",
+    "No.", "Customer Name", "Nombor kad", "Nombor akaun", "Amount", "Payment Date", "Receipt", "IC Number", "Customer Phone Number", "Batch",
     "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Staff Nickname", "Fail sumber", "Actions",
   ]);
   assert.equal((markup.match(/<td\b/g) ?? []).length, 18);

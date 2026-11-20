@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { isChromiumPdfViewerResource } from "./helpers/chromium-pdf-resources";
+import { expectPaddedActions } from "./helpers/collection-action-layout";
 
 // Production assets, synthetic records and generated in-memory media only.
 // The static runner has no backend; unexpected network requests fail closed.
@@ -188,7 +189,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
   return fixture;
 }
 
-for (const [width, theme] of [[320, "dark"], [390, "light"], [1024, "dark"], [1366, "light"]] as const) {
+for (const [width, theme] of [[320, "dark"], [390, "light"], [800, "light"], [1024, "dark"], [1366, "light"]] as const) {
   test(`Customer name opens collection details at ${width}px`, async ({ page, baseURL }, testInfo) => {
     await page.setViewportSize({ width, height: width < 768 ? 568 : 900 });
     const en = width === 390 || width === 1366;
@@ -223,8 +224,25 @@ for (const [width, theme] of [[320, "dark"], [390, "light"], [1024, "dark"], [13
       else {
         const headers = await parent.getByRole("columnheader").allTextContents();
         const identifiers = mode === "list" ? [en ? "Card / Account" : "Kad / Akaun"] : [cardLabel, accountLabel];
-        const expected = ["Customer Name", ...identifiers, "Amount", "Payment Date", "Receipt"];
+        const expected = ["No.", "Customer Name", ...identifiers, "Amount", "Payment Date", "Receipt"];
         expect(headers.slice(0, expected.length)).toEqual(expected);
+        const table = parent.getByRole("table");
+        const cells = table.locator("tbody tr").first().getByRole("cell");
+        await expect(cells.nth(0)).toHaveText("1");
+        await expect(cells.nth(1).getByRole("button", { name, exact: true })).toBeVisible();
+        const scroller = table.locator("..");
+        const distance = await scroller.evaluate(element => {
+          element.scrollLeft = element.scrollWidth;
+          return element.scrollLeft;
+        });
+        if (mode !== "list" || width <= 1024) expect(distance).toBeGreaterThan(0);
+        const edge = await scroller.evaluate(element => element.getBoundingClientRect().left + element.clientLeft);
+        for (const columns of [table.getByRole("columnheader"), cells]) {
+          const numberBox = (await columns.nth(0).boundingBox())!;
+          const nameBox = (await columns.nth(1).boundingBox())!;
+          expect(Math.abs(numberBox.x - edge)).toBeLessThan(2);
+          expect(Math.abs(nameBox.x - numberBox.x - numberBox.width)).toBeLessThan(2);
+        }
         await trigger.press("Enter");
       }
       const dialog = page.getByRole("dialog", { name, exact: true });
@@ -632,9 +650,9 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [
   expect(fixture.unexpected).toEqual([]);
 });
 
-for (const width of [320, 393, 1366]) test(`Receipt viewer PDF ${width}px has one open action and downloads original authenticated bytes`, async ({ page, baseURL }) => {
+for (const width of [320, 393, 720, 1366]) test(`Receipt viewer PDF ${width}px has one open action and downloads original authenticated bytes`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize({ width, height: 740 });
-  const fixture = await installFixture(page, baseURL);
+  const fixture = await installFixture(page, baseURL, { theme: width === 393 || width === 720 ? "dark" : "light" });
   const { launcher, dialog } = await openPreview(page);
   await expectImage(dialog);
   await dialog.getByRole("button", { name: `3 · ${media[2]!.fileName}`, exact: true }).click();
@@ -646,6 +664,18 @@ for (const width of [320, 393, 1366]) test(`Receipt viewer PDF ${width}px has on
   await expect(download).toHaveCount(1);
   await expect(download).toBeInViewport();
   await expect(openPdf).toBeInViewport();
+  const footer = dialog.locator('[data-floating-ai-avoid="true"]').filter({ has: page.getByRole("link", { name: "Open PDF", exact: true }) });
+  await footer.screenshot({ path: testInfo.outputPath("receipt-footer.png") });
+  await expectPaddedActions(footer);
+  const close = footer.getByRole("button", { name: "Close", exact: true });
+  if (width <= 393) {
+    const openBounds = (await openPdf.boundingBox())!;
+    const downloadBounds = (await download.boundingBox())!;
+    const closeBounds = (await close.boundingBox())!;
+    expect(openBounds.y + openBounds.height).toBeLessThan(downloadBounds.y);
+    expect(downloadBounds.y).toBeCloseTo(closeBounds.y, 0);
+    expect(closeBounds.height).toBeGreaterThanOrEqual(44);
+  }
   await expect(dialog.getByRole("group", { name: "Image controls", exact: true })).toHaveCount(0);
   if (width < 768) {
     await expect(dialog.getByText("PDF ready to open", { exact: true })).toBeVisible();
@@ -659,12 +689,73 @@ for (const width of [320, 393, 1366]) test(`Receipt viewer PDF ${width}px has on
   expect(downloaded.suggestedFilename()).toBe("Synthetic_original_receipt.pdf");
   expect(await readFile((await downloaded.path())!)).toEqual(syntheticPdf());
   await expect.poll(() => fixture.downloads).toEqual(["pdf"]);
-  await page.keyboard.press("Escape");
+  await close.click();
   await expect(dialog).toHaveCount(0);
   await expect(launcher).toBeFocused();
   expect(fixture.errors).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
 });
+
+for (const theme of ["light", "dark"] as const) {
+  test(`Desktop PDF actions stay inside the receipt frame in ${theme} mode`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await installFixture(page, baseURL, { theme });
+    const { dialog } = await openPreview(page);
+    await expectImage(dialog);
+    await dialog.getByRole("button", { name: `3 · ${media[2]!.fileName}`, exact: true }).click();
+    const pdf = dialog.getByTitle("Receipt PDF Preview");
+    const open = dialog.getByRole("link", { name: "Open PDF", exact: true });
+    const download = dialog.getByRole("button", { name: "Download Original", exact: true });
+    const footer = dialog.locator('[data-floating-ai-avoid="true"]').filter({ has: page.getByRole("link", { name: "Open PDF" }) });
+    const close = footer.getByRole("button", { name: "Close", exact: true });
+    const frame = dialog.locator(".receipt-preview-desktop-frame");
+    await expect(pdf).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    for (const [width, height] of [[1280, 720], [768, 320], [768, 480], [1024, 370], [1366, 768], [1920, 1080]] as const) {
+      await page.setViewportSize({ width, height });
+      for (const expanded of [false, true]) {
+        const toggle = dialog.getByRole("button", { name: /^(?:Hide details|Details)$/ });
+        if (await toggle.getAttribute("aria-expanded") !== String(expanded)) await toggle.click();
+        await expect(toggle).toHaveAttribute("aria-expanded", String(expanded));
+        if (expanded) {
+          const lastDetail = dialog.getByRole("region").getByText("SYNTHETIC-pdf", { exact: true });
+          await lastDetail.scrollIntoViewIfNeeded();
+          await expect(lastDetail).toBeInViewport({ ratio: 1 });
+        }
+        const box = (await dialog.boundingBox())!;
+        const bounds = (await frame.boundingBox())!;
+        const foot = (await footer.boundingBox())!;
+        const paper = (await pdf.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(10);
+        expect(box.x + box.width).toBeLessThanOrEqual(width - 10);
+        expect(bounds.y).toBeGreaterThanOrEqual(box.y);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(Math.min(height, box.y + box.height));
+        expect(paper.height).toBeGreaterThanOrEqual(55);
+        expect(paper.y + paper.height).toBeCloseTo(foot.y, 0);
+        let previousRight = bounds.x;
+        for (const action of [open, download, close]) {
+          const button = (await action.boundingBox())!;
+          expect(button.x - previousRight).toBeGreaterThanOrEqual(7);
+          expect(bounds.x + bounds.width - button.x - button.width).toBeGreaterThanOrEqual(12);
+          expect(button.y - foot.y).toBeGreaterThanOrEqual(10);
+          expect(bounds.y + bounds.height - button.y - button.height).toBeGreaterThanOrEqual(10);
+          await action.click({ trial: true });
+          previousRight = button.x + button.width;
+        }
+        if ((width === 1280 && !expanded) || (width === 1024 && expanded)) {
+          await page.screenshot({ path: testInfo.outputPath(`desktop-${width}x${height}.png`) });
+        }
+      }
+    }
+    await open.focus();
+    await page.keyboard.press("Tab");
+    await expect(download).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(close).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+  });
+}
 
 for (const failure of ["http", "decode"] as const) test(`Receipt viewer retries ${failure} failure with accessible status and clears stale preview`, async ({ page, baseURL }) => {
   await page.setViewportSize({ width: 393, height: 600 });

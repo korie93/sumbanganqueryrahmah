@@ -116,7 +116,7 @@ export function ReceiptPreviewDialog({
         className={
           isMobile
             ? `${mobileFullscreenDialogViewportClassName} flex w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0`
-            : "flex h-[90vh] w-[96vw] max-w-6xl flex-col gap-0 overflow-hidden"
+            : "flex h-[90vh] max-w-6xl flex-col gap-0 overflow-hidden sm:w-[96vw]"
         }
       >
         <DialogHeader className={isMobile ? "shrink-0 border-b border-border/60 px-4 py-3 pr-12 text-left" : "shrink-0 pr-8"}>
@@ -126,90 +126,93 @@ export function ReceiptPreviewDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <ReceiptPreviewSelector
-          receipts={receipts}
-          selectedReceipt={selectedReceipt}
-          loading={loading}
-          isMobile={isMobile}
-          onSelectReceipt={onSelectReceipt}
-        />
+        <div className={isMobile ? "contents" : "min-h-0 overflow-y-auto overscroll-contain"}>
+          <ReceiptPreviewSelector
+            receipts={receipts}
+            selectedReceipt={selectedReceipt}
+            loading={loading}
+            isMobile={isMobile}
+            onSelectReceipt={onSelectReceipt}
+          />
 
-        <ReceiptPreviewToolbar
-          detailsId={detailsId}
-          showDetails={showDetails}
-          setShowDetails={setShowDetails}
-          canShowDetails={Boolean(record)}
-          canZoom={canZoom}
-          zoom={zoom}
-          setZoom={changeZoom}
-          setRotationDegrees={setRotationDegrees}
-          isMobile={isMobile}
-        />
+          <ReceiptPreviewToolbar
+            detailsId={detailsId}
+            showDetails={showDetails}
+            setShowDetails={setShowDetails}
+            canShowDetails={Boolean(record)}
+            canZoom={canZoom}
+            zoom={zoom}
+            setZoom={changeZoom}
+            setRotationDegrees={setRotationDegrees}
+            isMobile={isMobile}
+          />
 
-        {refining ? <p role="status" className={cn("text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
-          Preparing a clearer preview…
-        </p> : refinementError ? <div className={cn("flex flex-wrap items-center gap-2 text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
-          <p role="status">{refinementError}</p>
-          {onRetryRefinement ? <Button type="button" size="sm" variant="ghost" onClick={onRetryRefinement}>Retry clearer preview</Button> : null}
-        </div> : null}
+          {refining ? <p role="status" className={cn("text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
+            Preparing a clearer preview…
+          </p> : refinementError ? <div className={cn("flex flex-wrap items-center gap-2 text-xs text-muted-foreground", isMobile ? "mx-3 mt-2" : "mt-2")}>
+            <p role="status">{refinementError}</p>
+            {onRetryRefinement ? <Button type="button" size="sm" variant="ghost" onClick={onRetryRefinement}>Retry clearer preview</Button> : null}
+          </div> : null}
 
-        <ReceiptPreviewRecordDetails
-          id={detailsId}
-          record={record}
-          selectedReceipt={selectedReceipt}
-          showDetails={showDetails}
-          isMobile={isMobile}
-        />
+          <ReceiptPreviewRecordDetails
+            id={detailsId}
+            record={record}
+            selectedReceipt={selectedReceipt}
+            showDetails={showDetails}
+            isMobile={isMobile}
+          />
+        </div>
 
-        <ReceiptPreviewContent
-          loading={loading}
-          error={error}
-          safeSource={safeSource}
-          hasUnsafeSource={hasUnsafeSource}
-          showPdfFallback={showPdfFallback}
-          kind={kind}
-          isMobile={isMobile}
-          zoomValue={zoomValue}
-          rotationDegrees={normalizeReceiptPreviewRotation(rotationDegrees)}
-          fileName={fileName}
-          imageIdentity={JSON.stringify([record?.id || "", selectedReceiptId || ""])}
-          selectedReceipt={selectedReceipt}
-          onRetry={onRetry}
-        />
+        <div className={isMobile ? "contents" : "receipt-preview-desktop-frame mt-2 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-border"}>
+          <ReceiptPreviewContent
+            loading={loading}
+            error={error}
+            safeSource={safeSource}
+            hasUnsafeSource={hasUnsafeSource}
+            showPdfFallback={showPdfFallback}
+            kind={kind}
+            isMobile={isMobile}
+            zoomValue={zoomValue}
+            rotationDegrees={normalizeReceiptPreviewRotation(rotationDegrees)}
+            fileName={fileName}
+            imageIdentity={JSON.stringify([record?.id || "", selectedReceiptId || ""])}
+            selectedReceipt={selectedReceipt}
+            onRetry={onRetry}
+          />
 
-        <DialogFooter
-          className={cn(
-            "shrink-0 gap-2 border-t border-border/60 bg-background/95 sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85",
-            isMobile
-              ? "flex-row flex-wrap items-center justify-end px-3 py-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)]"
-              : "mt-3 flex-row items-center justify-end pt-3",
-          )}
-          data-floating-ai-avoid="true"
-        >
-          {kind === "pdf" && safeSource && !loading && !error ? (
-            <Button type="button" variant="default" asChild className={isMobile ? "flex-1" : ""}>
-              <a href={safeSource} target="_blank" rel="noreferrer noopener">
-                <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
-                Open PDF
-              </a>
-            </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={onDownload}
-            disabled={!record || downloading}
-            aria-busy={downloading}
-            className={isMobile ? "flex-1" : ""}
+          <DialogFooter
+            className={cn(
+              "shrink-0 flex-row flex-wrap items-center justify-end gap-2 border-t border-border/60 sm:gap-2 sm:space-x-0",
+              isMobile
+                ? "receipt-preview-footer-mobile bg-background/95 px-3 py-3 pb-[calc(var(--safe-area-inset-bottom)+0.75rem)] sqr-backdrop-blur supports-[backdrop-filter]:bg-background/85"
+                : "bg-background px-4 py-3",
+            )}
+            data-floating-ai-avoid="true"
           >
-            {downloading ? <Loader2 className="mr-2 h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="mr-2 h-4 w-4" aria-hidden="true" />}
-            {downloading ? "Downloading..." : "Download Original"}
-          </Button>
-          <Button type="button" variant="secondary" onClick={onClose} className={isMobile && kind === "pdf" && safeSource ? "w-full" : ""}>
-            Close
-          </Button>
-          <span role="status" className="sr-only">{downloading ? "Downloading original receipt..." : ""}</span>
-        </DialogFooter>
+            {kind === "pdf" && safeSource && !loading && !error ? (
+              <Button type="button" variant="default" asChild>
+                <a href={safeSource} target="_blank" rel="noreferrer noopener">
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  Open PDF
+                </a>
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onDownload}
+              disabled={!record || downloading}
+              aria-busy={downloading}
+            >
+              {downloading ? <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <Download className="h-4 w-4" aria-hidden="true" />}
+              {downloading ? "Downloading..." : "Download Original"}
+            </Button>
+            <Button type="button" variant="secondary" onClick={onClose}>
+              Close
+            </Button>
+            <span role="status" className="sr-only">{downloading ? "Downloading original receipt..." : ""}</span>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

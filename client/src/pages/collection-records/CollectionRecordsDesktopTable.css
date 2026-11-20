@@ -1,35 +1,48 @@
 /* The shared Table wrapper owns both scroll axes, including sticky headers. */
 .collection-records-table-scroll {
+  --records-number-width: 4rem;
+  --records-name-width: 16rem;
   container-type: inline-size;
   isolation: isolate;
   max-height: min(40rem, calc(var(--viewport-min-height-value) * 0.64));
-  scroll-padding-inline: 17rem var(--spacing-2);
+  scroll-padding-inline: calc(var(--records-number-width) + min(var(--records-name-width), 36%) + var(--spacing-2)) var(--spacing-2);
   scroll-padding-block: var(--spacing-16) var(--spacing-2);
 }
 
 .collection-records-table-scroll--compact {
-  scroll-padding-left: 15rem;
+  --records-name-width: 14rem;
 }
 
-.collection-records-table--compact .collection-records-table-identity {
-  width: 14rem;
-  min-width: 14rem;
+.collection-records-table-scroll--all {
+  height: 100%;
+  max-height: none;
 }
 
 .collection-records-table-scroll--actions {
   scroll-padding-right: 10rem;
 }
 
+.collection-records-table-number,
 .collection-records-table-identity,
 .collection-records-table-actions {
   position: sticky;
   z-index: var(--z-inline);
 }
 
-.collection-records-table-identity {
+.collection-records-table-number {
   left: 0;
-  width: 16rem;
-  min-width: 16rem;
+  width: var(--records-number-width);
+  min-width: var(--records-number-width);
+  max-width: var(--records-number-width);
+  padding-inline: var(--spacing-2);
+}
+
+.collection-records-table-identity {
+  --name-track: min(var(--records-name-width), 36cqi);
+  left: var(--records-number-width);
+  width: var(--name-track);
+  min-width: var(--name-track);
+  max-width: var(--name-track);
   box-shadow: inset -1px 0 hsl(var(--border));
 }
 
@@ -40,13 +53,11 @@
   box-shadow: inset 1px 0 hsl(var(--border));
 }
 
-.collection-records-table-scroll td:is(.collection-records-table-identity, .collection-records-table-actions) {
+.collection-records-table-scroll td:is(.collection-records-table-number, .collection-records-table-identity, .collection-records-table-actions) {
   background: hsl(var(--card));
 }
 
-.collection-records-table-scroll tr:hover td:is(.collection-records-table-identity, .collection-records-table-actions),
-.collection-records-table-scroll tr[data-last-viewed="true"] td:is(.collection-records-table-identity, .collection-records-table-actions),
-.collection-records-table-scroll tr[data-state="selected"] td:is(.collection-records-table-identity, .collection-records-table-actions) {
+.collection-records-table-scroll tr:is(:hover, [data-last-viewed="true"], [data-state="selected"]) td:is(.collection-records-table-number, .collection-records-table-identity, .collection-records-table-actions) {
   background: hsl(var(--muted));
 }
 
@@ -60,21 +71,21 @@
 }
 
 /* Corner cells stay above the scrolling header and opaque pinned body cells. */
-.collection-records-table-scroll th:is(.collection-records-table-identity, .collection-records-table-actions) {
+.collection-records-table-scroll th:is(.collection-records-table-number, .collection-records-table-identity, .collection-records-table-actions) {
   z-index: var(--z-sticky-content);
 }
 
-/* Narrow content panes cannot fit two pinned sides with useful room between them. */
+/* Give scrolling fields the space normally reserved by the right action column. */
 @container (max-width: 36rem) {
-  .collection-records-table-identity {
-    left: auto;
+  .collection-records-table-actions {
+    right: auto;
   }
 
-  .collection-records-table-scroll td.collection-records-table-identity {
+  .collection-records-table-scroll td.collection-records-table-actions {
     position: static;
   }
 
-  .collection-records-table-scroll th.collection-records-table-identity {
+  .collection-records-table-scroll th.collection-records-table-actions {
     z-index: var(--z-sticky-header);
   }
 }

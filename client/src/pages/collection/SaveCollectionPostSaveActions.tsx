@@ -23,12 +23,12 @@ export function SaveCollectionPostSaveActions({
       aria-live="polite"
       aria-atomic="true"
     >
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-3">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="flex min-w-0 flex-[1_1_24rem] gap-3">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden="true" />
           <div className="min-w-0 space-y-1">
             <h3 className="text-sm font-semibold text-foreground">Collection berjaya disimpan</h3>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed text-muted-foreground [overflow-wrap:anywhere]">
               {summary.amountLabel} disimpan untuk {summary.staffNickname}, batch {summary.batch},{" "}
               {summary.receiptLabel}. Pautan Saved: {summary.sourceLabel}. Customer: {summary.customerName}. Masa:{" "}
               {summary.savedAtLabel}.
@@ -36,7 +36,7 @@ export function SaveCollectionPostSaveActions({
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-3 lg:min-w-[28rem]">
+        <div className="flex max-w-full flex-wrap gap-2 max-sm:w-full max-sm:[&>*]:grow">
           <Button type="button" variant="outline" className="bg-background/80" onClick={onDismiss}>
             <PlusCircle className="h-4 w-4" aria-hidden="true" />
             Tambah rekod baru
