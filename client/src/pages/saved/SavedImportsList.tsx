@@ -104,7 +104,7 @@ export function SavedImportsList({
         <CollapsibleContent>
           <div
             className="
-              min-w-0
+              relative min-w-0
               md:max-h-[clamp(32rem,calc(100dvh-20rem),52rem)]
               md:overflow-x-auto md:overflow-y-auto md:scroll-fade-y md:overscroll-contain
               scrollbar-visible md:[scrollbar-gutter:stable]
@@ -123,7 +123,7 @@ export function SavedImportsList({
               </div>
             ) : null}
 
-            <table className="block w-full text-sm tabular-nums md:table md:min-w-[860px] md:table-fixed" aria-label="Saved imports" role="table">
+            <table className="block w-full text-sm tabular-nums md:table md:table-fixed" aria-label="Saved imports" role="table">
               <TableHeader className="hidden bg-muted md:sticky md:top-0 md:z-10 md:table-header-group">
                 <TableRow>
                   <TableHead className="px-3">

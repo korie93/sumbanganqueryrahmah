@@ -14,8 +14,8 @@ type ListRead = {
 const fileId = (number: number) => `return-${String(number).padStart(3, "0")}`;
 const fileName = (number: number) => `Synthetic Alpha file ${String(number).padStart(3, "0")}`;
 
-async function installFixture(page: Page, baseURL: string | undefined) {
-  const session = await installSessionFixture(page, baseURL, { role: "superuser" });
+async function installFixture(page: Page, baseURL: string | undefined, theme: "light" | "dark" = "light") {
+  const session = await installSessionFixture(page, baseURL, { role: "superuser", theme });
   const origin = new URL(baseURL!).origin;
   const files = Array.from({ length: 120 }, (_, index) => ({
     id: fileId(index + 1), name: fileName(index + 1), filename: `alpha-${index + 1}.csv`,
@@ -121,6 +121,39 @@ async function installFixture(page: Page, baseURL: string | undefined) {
 }
 
 type Fixture = Awaited<ReturnType<typeof installFixture>>;
+
+for (const { width, height, theme } of [
+  { width: 1280, height: 900, theme: "light" },
+  { width: 1024, height: 768, theme: "light" },
+  { width: 820, height: 1180, theme: "dark" },
+  { width: 375, height: 812, theme: "light" },
+] as const) {
+  test(`Saved layout: the list ends at pagination (${width}px, ${theme})`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height });
+    const fixture = await installFixture(page, baseURL, theme);
+    try {
+      await openSaved(page);
+      const region = page.getByTestId("saved-files-scroll-region");
+      expect(await region.evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+      const lastRow = page.getByTestId(`button-view-${fileId(20)}`);
+      await lastRow.scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+
+      await expect(lastRow).toBeInViewport();
+      const next = page.getByRole("button", { name: "Next", exact: true });
+      await expect(next).toBeInViewport();
+      const extraScroll = await page.locator(".sqr-workspace").evaluate((workspace) =>
+        document.documentElement.scrollHeight - (workspace.getBoundingClientRect().bottom + window.scrollY));
+      expect(extraScroll).toBeLessThanOrEqual(1);
+      await page.screenshot({ path: testInfo.outputPath("saved-end.png") });
+      await next.click();
+      await expectPage(page, 2, 20);
+      await checkFixture(page, fixture.session);
+    } finally {
+      fixture.cleanup();
+    }
+  });
+}
 const search = (page: Page) => page.getByTestId("input-search-saved");
 const pageSize = (page: Page) => page.getByRole("combobox", { name: "Page size for saved files", exact: true });
 
