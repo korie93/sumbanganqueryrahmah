@@ -57,7 +57,7 @@ export function UrlPreviewDialog({
       >
         <DialogHeader className={isMobile ? "border-b border-border/60 px-4 py-4 pr-12 text-left" : ""}>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          <DialogDescription className="[overflow-wrap:anywhere]">{description}</DialogDescription>
         </DialogHeader>
 
         <div className={`min-h-0 flex-1 overflow-hidden bg-background/40 ${isMobile ? "" : "rounded-md border border-border/60"}`}>

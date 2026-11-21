@@ -51,7 +51,7 @@ export function LocalMailOutboxDialogs({
             <AlertDialogTitle>Delete Local Email Preview</AlertDialogTitle>
             <AlertDialogDescription>
               Delete the local mail preview for{" "}
-              <span className="font-medium">{previewToDelete?.to || "this recipient"}</span>?
+              <span className="font-medium [overflow-wrap:anywhere]">{previewToDelete?.to || "this recipient"}</span>?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

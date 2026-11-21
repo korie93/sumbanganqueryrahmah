@@ -66,19 +66,19 @@ export function SavedDialogs({
   return (
     <>
       <AlertDialog open={deleteDialogOpen} onOpenChange={onDeleteDialogOpenChange}>
-        <AlertDialogContent className="gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("delete", event)}>
+        <AlertDialogContent className="grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-5 sm:max-w-md" onCloseAutoFocus={(event) => overlayFocus?.restore("delete", event)}>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Data?</AlertDialogTitle>
             <AlertDialogDescription>
               Remove this saved import permanently. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3">
-            <p className="break-words text-sm font-medium text-foreground">
+          <div className="min-h-0 overflow-y-auto overscroll-contain rounded-xl border border-destructive/20 bg-destructive/5 p-3">
+            <p className="[overflow-wrap:anywhere] text-sm font-medium text-foreground">
               {selectedImport?.name ?? "Selected import"}
             </p>
             {selectedImport?.filename ? (
-              <p className="mt-1 break-words text-xs text-muted-foreground">
+              <p className="mt-1 [overflow-wrap:anywhere] text-xs text-muted-foreground">
                 {selectedImport.filename}
               </p>
             ) : null}
@@ -131,7 +131,7 @@ export function SavedDialogs({
 
       <Dialog open={renameDialogOpen} onOpenChange={onRenameDialogOpenChange}>
         <DialogContent
-          className="gap-5 sm:max-w-md"
+          className="grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-5 sm:max-w-md"
           closeButtonDisabled={renaming}
           aria-busy={renaming}
           onCloseAutoFocus={(event) => overlayFocus?.restore("rename", event)}
@@ -142,21 +142,21 @@ export function SavedDialogs({
               Update the saved import name without changing the original file content.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="rounded-xl border border-border/70 bg-muted/30 p-3">
+          <div className="flex min-h-0 flex-col gap-4">
+            <div className="min-h-0 overflow-y-auto overscroll-contain rounded-xl border border-border/70 bg-muted/30 p-3">
               <p className="text-xs font-semibold uppercase tracking-label-lg text-muted-foreground">
                 Current Import
               </p>
-              <p className="mt-2 break-words text-sm font-medium text-foreground">
+              <p className="mt-2 [overflow-wrap:anywhere] text-sm font-medium text-foreground">
                 {selectedImport?.name ?? "Selected import"}
               </p>
               {selectedImport?.filename ? (
-                <p className="mt-1 break-words text-xs text-muted-foreground">
+                <p className="mt-1 [overflow-wrap:anywhere] text-xs text-muted-foreground">
                   {selectedImport.filename}
                 </p>
               ) : null}
             </div>
-            <div className="space-y-2">
+            <div className="shrink-0 space-y-2">
               <Label htmlFor="saved-import-rename">New name</Label>
               <Input
                 id="saved-import-rename"
@@ -172,7 +172,7 @@ export function SavedDialogs({
                 data-testid="input-rename"
               />
               {renameError ? (
-                <p id="saved-import-rename-error" role="alert" className="break-words text-sm text-destructive" data-testid="saved-rename-error">
+                <p id="saved-import-rename-error" role="alert" className="[overflow-wrap:anywhere] text-sm text-destructive" data-testid="saved-rename-error">
                   {renameError}
                 </p>
               ) : null}

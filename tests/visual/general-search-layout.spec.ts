@@ -90,6 +90,7 @@ async function installFixture(page: Page, baseURL: string | undefined, options: 
     if (["GET /api/analytics/login-trends", "GET /api/analytics/top-users",
       "GET /api/analytics/recent-login-activity", "GET /api/analytics/peak-hours",
       "GET /api/analytics/role-distribution"].includes(endpoint)) return respond(route, []);
+    if (endpoint === "GET /api/search/columns") return respond(route, Object.keys(searchRows(1)[0]!));
     if (endpoint === "GET /api/search/global") {
       fixture.searchQueries.push(url.search);
       const pageNumber = Number(url.searchParams.get("page"));
@@ -165,6 +166,27 @@ function assertFixtureClean(fixture: Awaited<ReturnType<typeof installFixture>>)
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
 }
+
+test("Popup layout: mobile navigation and advanced search close from the edge of their touch target", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  const fixture = await installFixture(page, baseURL, { theme: "dark", count: 3 });
+  await openSearch(page);
+  const triggers = [
+    page.getByTestId("button-advanced-search"),
+    page.locator('button[aria-controls="mobile-navigation-drawer"]:visible'),
+  ];
+  for (const trigger of triggers) {
+    await trigger.click();
+    const panel = page.getByRole("dialog");
+    const close = panel.getByRole("button", { name: "Close", exact: true });
+    const box = await bounds(close);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    await close.click({ position: { x: 4, y: 4 } });
+    await expect(panel).toBeHidden();
+  }
+  assertFixtureClean(fixture);
+});
 
 for (const theme of ["light", "dark"] as const) {
   test(`General search layout ${theme} widens results and adapts table height to short and large desktops`, async ({ page, baseURL }, testInfo) => {

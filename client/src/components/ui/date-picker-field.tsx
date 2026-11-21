@@ -111,7 +111,7 @@ export function DatePickerField({
       </PopoverTrigger>
       <PopoverContent
         className={cn(
-          "w-auto rounded-xl border border-border/80 bg-popover p-0 shadow-lg",
+          "w-auto max-h-[var(--radix-popover-content-available-height)] overflow-y-auto overscroll-y-contain rounded-xl border border-border/80 bg-popover p-0 shadow-lg",
           contentClassName,
         )}
         align="start"

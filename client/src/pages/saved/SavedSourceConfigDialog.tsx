@@ -108,7 +108,7 @@ export function SavedSourceConfigDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="gap-5 sm:max-w-xl"
+        className="grid-cols-1 grid-rows-[auto_minmax(0,1fr)_auto] gap-5 sm:max-w-xl"
         onEscapeKeyDown={(event) => { if (busy) event.preventDefault(); }}
         onInteractOutside={(event) => { if (busy) event.preventDefault(); }}
       >
@@ -119,13 +119,13 @@ export function SavedSourceConfigDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="-m-1 min-h-0 space-y-4 overflow-y-auto overscroll-contain p-1">
           <div className="rounded-xl border border-border/70 bg-background p-3">
-            <p className="break-words text-sm font-medium text-foreground">
+            <p className="[overflow-wrap:anywhere] text-sm font-medium text-foreground">
               {importItem?.name ?? "Selected Saved file"}
             </p>
             {importItem?.filename ? (
-              <p className="mt-1 break-words text-xs text-muted-foreground">{importItem.filename}</p>
+              <p className="mt-1 [overflow-wrap:anywhere] text-xs text-muted-foreground">{importItem.filename}</p>
             ) : null}
           </div>
 

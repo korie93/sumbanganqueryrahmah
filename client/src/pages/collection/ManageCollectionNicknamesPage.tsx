@@ -90,7 +90,7 @@ function ManageCollectionNicknamesPage({
           </div>
         </CardHeader>
         <CardContent
-          className="grid min-w-0 gap-4 px-4 pb-4 sm:px-5 sm:pb-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]"
+          className="grid min-w-0 grid-cols-1 gap-4 px-4 pb-4 sm:px-5 sm:pb-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]"
         >
           <GroupListPanel {...viewModels.groupList} />
 

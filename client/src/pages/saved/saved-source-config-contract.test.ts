@@ -27,7 +27,7 @@ test("source configuration dialog keeps mobile layout and accessible field relat
 
   assert.match(dialog, /<DialogTitle>Configure Collection Source<\/DialogTitle>/);
   assert.match(dialog, /<DialogDescription>/);
-  assert.match(dialog, /className="gap-5 sm:max-w-xl"/);
+  assert.match(dialog, /<DialogContent\s+className="[^"]*\bgap-5\b[^"]*\bsm:max-w-xl\b/);
   assert.match(dialog, /htmlFor="saved-source-valid-from"/);
   assert.match(dialog, /id="saved-source-valid-from"\s+type="date"/);
   assert.match(dialog, /htmlFor="saved-source-valid-to"/);

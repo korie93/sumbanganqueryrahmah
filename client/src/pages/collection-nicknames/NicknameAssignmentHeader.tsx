@@ -46,11 +46,11 @@ export function NicknameAssignmentHeader({
   return (
     <>
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-2">
+        <div className="min-w-0 space-y-2">
           <p className={isMobile ? "text-base font-semibold" : "text-sm font-semibold"}>
             2. Pilih nickname
           </p>
-          <p className={`${isMobile ? "text-sm" : "text-xs"} text-muted-foreground`}>
+          <p className={`${isMobile ? "text-sm" : "text-xs"} text-muted-foreground [overflow-wrap:anywhere]`}>
             {selectedGroup ? `Group dipilih: ${selectedGroup.leaderNickname}` : "Pilih group di bahagian Admin Groups dahulu."}
           </p>
           <div className="flex flex-wrap items-center gap-2">

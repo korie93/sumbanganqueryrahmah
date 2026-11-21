@@ -85,6 +85,7 @@ export async function installAccountManagementFixture(page: Page, baseURL: strin
   await page.emulateMedia({ colorScheme: options.theme ?? "light", reducedMotion: "reduce" });
   await page.context().addCookies([{ name: "sqr_auth_hint", value: "1", url: origin }]);
   await page.addInitScript(({ theme, user, expiresAt }) => {
+    if (window !== window.top) return;
     localStorage.setItem("theme", theme);
     sessionStorage.setItem("sessionStoredAt", String(Date.now()));
     sessionStorage.setItem("sessionExpiresAt", String(Date.parse(expiresAt)));

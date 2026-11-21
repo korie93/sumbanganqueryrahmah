@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -38,6 +39,12 @@ export function CollectionNicknameGroupFormDialogs({
   onSaveLeader,
 }: CollectionNicknameGroupFormDialogsProps) {
   const isMobile = useIsMobile();
+  const leaderTriggerClassName = cn(
+    "gap-2 [&>span]:min-w-0 [&>span]:truncate [&>svg]:shrink-0",
+    isMobile && "h-12 rounded-2xl",
+  );
+  const leaderOptionsClassName =
+    "w-[var(--radix-select-trigger-width)] [overflow-wrap:anywhere] [&_[data-radix-select-viewport]]:min-w-0";
   const createLeaderTriggerId = "create-admin-group-leader-nickname";
   const changeLeaderTriggerId = "change-admin-group-leader-nickname";
 
@@ -45,7 +52,7 @@ export function CollectionNicknameGroupFormDialogs({
     <>
       <Dialog open={createGroupOpen} onOpenChange={onCreateGroupOpenChange}>
         <DialogContent
-          className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
+          className={isMobile ? "grid-cols-1 max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "grid-cols-1 max-w-md"}
           data-floating-ai-avoid="true"
         >
           <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
@@ -55,10 +62,10 @@ export function CollectionNicknameGroupFormDialogs({
           <div className="space-y-2">
             <Label htmlFor={createLeaderTriggerId}>Leader Nickname</Label>
             <Select value={createLeaderId} onValueChange={onCreateLeaderIdChange}>
-              <SelectTrigger id={createLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
+              <SelectTrigger id={createLeaderTriggerId} className={leaderTriggerClassName}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={leaderOptionsClassName}>
                 {leaderOptions.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.nickname}
@@ -89,7 +96,7 @@ export function CollectionNicknameGroupFormDialogs({
 
       <Dialog open={changeLeaderOpen} onOpenChange={onChangeLeaderOpenChange}>
         <DialogContent
-          className={isMobile ? "max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "max-w-md"}
+          className={isMobile ? "grid-cols-1 max-w-md rounded-[1.5rem] border-border/60 p-5 pt-6 shadow-2xl" : "grid-cols-1 max-w-md"}
           data-floating-ai-avoid="true"
         >
           <DialogHeader className={isMobile ? "pr-8 text-left" : ""}>
@@ -99,10 +106,10 @@ export function CollectionNicknameGroupFormDialogs({
           <div className="space-y-2">
             <Label htmlFor={changeLeaderTriggerId}>Leader Nickname</Label>
             <Select value={changeLeaderId} onValueChange={onChangeLeaderIdChange}>
-              <SelectTrigger id={changeLeaderTriggerId} className={isMobile ? "h-12 rounded-2xl" : ""}>
+              <SelectTrigger id={changeLeaderTriggerId} className={leaderTriggerClassName}>
                 <SelectValue placeholder="Pilih leader nickname" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className={leaderOptionsClassName}>
                 {leaderOptions.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
                     {option.nickname}
