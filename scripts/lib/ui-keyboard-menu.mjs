@@ -7,11 +7,16 @@ export async function openKeyboardMenu(page, trigger, menu) {
   await trigger.focus();
   await expect(trigger, "Menu trigger should be keyboard focusable").toBeFocused({ timeout: menuTimeout });
   await page.keyboard.press("Enter");
+  await expectMenuReady(page, trigger, menu);
+}
+
+/** A visible menu can still be mounting its focus scope and Escape listener. */
+export async function expectMenuReady(page, trigger, menu) {
   await expect(trigger).toHaveAttribute("aria-expanded", "true", { timeout: menuTimeout });
   await expect(menu).toBeVisible({ timeout: menuTimeout });
   await expect.poll(
     () => menu.evaluate((element) => element.contains(document.activeElement)),
-    { message: "Keyboard opening should move focus into the menu", timeout: menuTimeout },
+    { message: "Opening the menu should move focus inside it", timeout: menuTimeout },
   ).toBe(true);
   // Radix's focus scope can mount before its dismissable-layer effect registers
   // Escape. Observe post-mount paints rather than sending the key on visibility alone.

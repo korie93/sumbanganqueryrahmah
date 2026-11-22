@@ -1,7 +1,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { closeKeyboardMenu, openKeyboardMenu } from "../../scripts/lib/ui-keyboard-menu.mjs";
+import { closeKeyboardMenu, expectMenuReady, openKeyboardMenu } from "../../scripts/lib/ui-keyboard-menu.mjs";
 
 const axeSource = readFileSync(createRequire(import.meta.url).resolve("axe-core/axe.min.js"), "utf8");
 
@@ -677,15 +677,12 @@ test("V7.9 mobile drawer owns focus, opens inline groups and restores its trigge
   await page.getByTestId("mobile-nav-group-workspace").click();
   await expect(page.getByTestId("mobile-submenu-insights")).toHaveCount(0);
   await expect(page.getByTestId("desktop-flyout-workspace")).toHaveCount(0);
-  await expect(page.getByTestId("button-user-menu-mobile")).toBeVisible();
-  await page.getByTestId("button-user-menu-mobile").click();
+  const profile = page.getByTestId("button-user-menu-mobile");
+  const profileMenu = page.getByRole("menu").filter({ has: page.getByTestId("button-logout") });
+  await profile.click();
+  await expectMenuReady(page, profile, profileMenu);
   await expect(page.getByTestId("button-logout")).toBeVisible();
-  // Visibility can precede Radix's post-mount focus scope and Escape listener.
-  await expect.poll(() => page.locator(".workspace-profile-menu").evaluate((element) => element.contains(document.activeElement))).toBe(true);
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("button-logout")).toBeHidden();
-  await expect(page.getByTestId("button-user-menu-mobile")).toBeFocused();
+  await closeKeyboardMenu(page, profile, profileMenu);
   await expect(page.getByTestId("mobile-submenu-workspace")).toBeVisible();
   await expect(drawer).toBeVisible();
   for (let index = 0; index < 18; index++) {
@@ -1016,6 +1013,9 @@ test("V7.9 mobile backdrop and search closure release scrolling and preserve pro
   await openWorkspace(page);
   const menu = page.getByTestId("button-open-mobile-nav");
   const search = page.getByTestId("button-command-search-mobile");
+  const drawer = page.getByRole("dialog", { name: "Navigation", exact: true });
+  const profile = page.getByTestId("button-user-menu-mobile");
+  const profileMenu = page.getByRole("menu").filter({ has: page.getByTestId("button-logout") });
   await expect(page.getByTestId("command-search-dialog")).toHaveCount(0);
   await expect(page.locator("#mobile-navigation-drawer")).toHaveCount(0);
   await menu.click();
@@ -1036,10 +1036,14 @@ test("V7.9 mobile backdrop and search closure release scrolling and preserve pro
     await expect(search).toBeFocused();
     await expect.poll(() => page.locator("body").evaluate((body) => getComputedStyle(body).overflow)).not.toBe("hidden");
     await menu.click();
-    await page.getByTestId("button-user-menu-mobile").click();
+    await profile.click();
+    await expectMenuReady(page, profile, profileMenu);
     await expect(page.getByTestId("button-logout")).toBeVisible();
+    await closeKeyboardMenu(page, profile, profileMenu);
+    await expect(drawer).toBeVisible();
     await page.keyboard.press("Escape");
-    await page.keyboard.press("Escape");
+    await expect(menu).toHaveAttribute("aria-expanded", "false");
+    await expect(drawer).toBeHidden();
     await expect(menu).toBeFocused();
   }
   assertFixtureClean(fixture);
