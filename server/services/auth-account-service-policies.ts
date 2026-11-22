@@ -1,6 +1,6 @@
 import type { AuthenticatedUser } from "../auth/guards";
+import { isCredentialEmail } from "../../shared/credential-email";
 import {
-  CREDENTIAL_EMAIL_REGEX,
   CREDENTIAL_USERNAME_REGEX,
   normalizeEmailInput,
 } from "../auth/credentials";
@@ -23,7 +23,7 @@ type EnsureUniqueIdentityInput = {
 export function createAuthAccountServicePolicies(storage: AuthAccountPolicyStorage) {
   const validateEmail = (email: string | null) => {
     if (!email) return;
-    if (!CREDENTIAL_EMAIL_REGEX.test(email)) {
+    if (!isCredentialEmail(email)) {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_EMAIL, "Email address is invalid.");
     }
   };

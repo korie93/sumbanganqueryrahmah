@@ -1,3 +1,4 @@
+import { isCredentialEmail } from "@shared/credential-email";
 import type { ManagedUser } from "./types";
 import {
   normalizeCredentialEmail,
@@ -38,8 +39,7 @@ export function getManagedUserEditState(target: ManagedUserEditTarget | null, dr
   }
   if (email !== normalizeCredentialEmail(target.email)) {
     profilePayload.email = email || null;
-    // Mirrors server/auth/credentials.ts and the pending-account email rule.
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (email && !isCredentialEmail(email)) {
       errors.email = "Enter a valid email address, such as name@example.com.";
     } else if (!email && target.status === "pending_activation") {
       errors.email = "Pending accounts require an email address for activation.";

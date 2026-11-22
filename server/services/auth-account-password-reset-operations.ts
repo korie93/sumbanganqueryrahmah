@@ -1,4 +1,4 @@
-import { CREDENTIAL_EMAIL_REGEX } from "../auth/credentials";
+import { isCredentialEmail } from "../../shared/credential-email";
 import { hashPassword } from "../auth/passwords";
 import type { PostgresStorage } from "../storage-postgres";
 import {
@@ -37,7 +37,7 @@ export class AuthAccountPasswordResetOperations {
       throw new AuthAccountError(400, ERROR_CODES.INVALID_IDENTIFIER, "Username or email is required.");
     }
 
-    const user = CREDENTIAL_EMAIL_REGEX.test(normalized)
+    const user = isCredentialEmail(normalized)
       ? await this.deps.storage.getUserByEmail(normalized)
       : await this.deps.storage.getUserByUsername(normalized)
         || await this.deps.storage.getUserByEmail(normalized);
