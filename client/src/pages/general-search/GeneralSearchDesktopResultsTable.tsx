@@ -99,6 +99,7 @@ export function GeneralSearchDesktopResultsTable({
       ariaLabel="General search result columns"
       className="rounded-lg border border-border"
       hint="Scroll columns"
+      hintPlacement="above"
       navigationLabel="General search table column navigation"
       showNavigationControls
       showScrollbar

@@ -124,6 +124,13 @@ for (const theme of ["light", "dark"] as const) {
   test(`Landing next desktop ${theme} at 1366 and 1440 preserves composition under strict CSP`, async ({ page, baseURL }) => {
     const fixture = await installFixture(page, baseURL, { theme });
     for (const width of [1366, 1440]) { await page.setViewportSize({ width, height: 900 }); await openLanding(page, theme); await checkLayout(page, width); }
+    for (const viewport of [{ width: 1280, height: 720 }, { width: 1366, height: 600 }]) {
+      await page.setViewportSize(viewport);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const actions = page.locator(".hero .actions").getByRole("link");
+      await expect(actions).toHaveCount(2);
+      for (const action of await actions.all()) await expect(action).toBeInViewport({ ratio: 1 });
+    }
     await checkFixture(fixture);
   });
 }

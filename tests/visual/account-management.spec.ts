@@ -75,6 +75,20 @@ for (const theme of ["light", "dark"] as const) {
   }
 }
 
+test("Account navigation keeps its overflow hint above desktop section labels and counts", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const fixture = await installAccountManagementFixture(page, baseURL);
+  await openAccountManagement(page);
+  const nav = accountWorkspace(page).getByRole("navigation", { name: "User Account Management" });
+  const hint = nav.getByText("More sections", { exact: true });
+  await expect(hint).toBeVisible();
+  const hintBox = await hint.boundingBox();
+  const resetBox = await nav.getByRole("button", { name: /Pending Password Reset Requests/ }).boundingBox();
+  expect(hintBox && resetBox && hintBox.y + hintBox.height <= resetBox.y + 1).toBe(true);
+  await selectAccountSection(page, "Local Mail Outbox");
+  await assertAccountFixtureClean(page, fixture);
+});
+
 test("Managed queries, pagination and folded filters retain the existing server query contract", async ({ page, baseURL }) => {
   const fixture = await installAccountManagementFixture(page, baseURL);
   await openAccountManagement(page);

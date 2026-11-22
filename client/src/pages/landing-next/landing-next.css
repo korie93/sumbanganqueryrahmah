@@ -163,6 +163,13 @@
 .sqr-landing-next .hero .lead{font-size:clamp(1.05rem,2vw,1.3rem);color:var(--mute-black);max-width:40ch;margin:1.75rem 0 0;text-wrap:balance;animation:sqr-landing-next-rise 1s .55s var(--ease) both}
 
 .sqr-landing-next .hero .actions{animation:sqr-landing-next-rise 1s .7s var(--ease) both}
+
+@media (min-width: 1024px) and (max-height: 800px) {
+  .sqr-landing-next .hero { padding-block: clamp(1.25rem, 4svh, 2rem); }
+  .sqr-landing-next .hero h1 { font-size: clamp(3.5rem, min(10.5vw, 14svh), 8.5rem); }
+  .sqr-landing-next .hero .lead { margin-block-start: 1.25rem; }
+  .sqr-landing-next .hero .actions { margin-block-start: 1.5rem; }
+}
 @keyframes sqr-landing-next-heroRise{from{opacity:0;transform:translate3d(0,40px,0)}to{opacity:1;transform:translate3d(0,0,0)}}
 @keyframes sqr-landing-next-rise{from{opacity:0;transform:translateY(24px)}}
 /* Hero precision radar mark */

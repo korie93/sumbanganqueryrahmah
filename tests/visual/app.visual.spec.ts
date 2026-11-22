@@ -1823,6 +1823,46 @@ for (const theme of visualThemes) {
   }
 }
 
+test("Viewer keeps the scroll hint and AI launcher clear of desktop cells", async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await installMockAuthenticatedSession(page, "dark", "superuser", true);
+  await installViewerDesign3Fixture(page);
+  try {
+    await openViewerDesign3(page);
+    const viewport = page.getByRole("region", { name: "Viewer data columns", exact: true });
+    const hint = page.getByText("Scroll columns", { exact: true });
+    const launcher = page.getByTestId("floating-ai-toggle");
+    await expect(hint).toBeVisible();
+    await expect(launcher).toBeVisible();
+    for (const sidebar of ["open", "collapsed"]) {
+      if (sidebar === "collapsed") await page.getByTestId("button-toggle-sidebar").click();
+      await expect.poll(async () => {
+        const [tableBox, hintBox, launcherBox] = await Promise.all([
+          viewport.boundingBox(), hint.boundingBox(), launcher.boundingBox(),
+        ]);
+        return !!tableBox && !!hintBox && !!launcherBox
+          && hintBox.y + hintBox.height <= tableBox.y + 1
+          && tableBox.x + tableBox.width <= launcherBox.x + 1;
+      }).toBe(true);
+    }
+  } finally {
+    await logoutVisualSession(page);
+  }
+});
+
+test("Blocked-account shield stays fully visible and retry is reachable on a short desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 600 });
+  await installMockPublicApi(page);
+  await installTheme(page, "light");
+  await page.addInitScript(() => sessionStorage.setItem("banned", "1"));
+  await page.goto("/banned");
+  await expect(page.locator(".banned-page__shield-core")).toBeInViewport({ ratio: 1 });
+  const retry = page.locator(".banned-page__retry");
+  await retry.focus();
+  await expect(retry).toBeFocused();
+  await expect(retry).toBeInViewport({ ratio: 1 });
+});
+
 test("viewer design3 column-filter zero results retain live search and recover all rows", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await installMockAuthenticatedSession(page, "light");

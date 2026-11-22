@@ -23,7 +23,7 @@ export default function Banned({ onRetryLogin }: BannedProps) {
     <main
       id="main-content"
       tabIndex={-1}
-      className="banned-page relative flex viewport-min-height items-center justify-center overflow-hidden p-4"
+      className="banned-page relative flex viewport-min-height items-center justify-center overflow-hidden p-4 md:py-16"
     >
       <div className="banned-page__pattern absolute inset-0 opacity-40" />
       

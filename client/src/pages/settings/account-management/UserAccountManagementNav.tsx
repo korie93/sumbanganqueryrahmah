@@ -1,6 +1,7 @@
 import { Inbox, LifeBuoy, Plus, Users } from "lucide-react";
 import { HorizontalScrollHint } from "@/components/HorizontalScrollHint";
 import { Badge } from "@/components/ui/badge";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getAriaCurrentPageProps } from "@/lib/aria-state-props";
 import { cn } from "@/lib/utils";
 import type { UserAccountManagementTabId } from "@/pages/settings/types";
@@ -19,9 +20,10 @@ const SECTIONS = [
 ] as const;
 
 export function UserAccountManagementNav({ activeTab, pendingResetCount, onSelect }: UserAccountManagementNavProps) {
+  const isMobile = useIsMobile();
   return (
     <nav aria-label="User Account Management" className="min-w-0 border-b border-border">
-      <HorizontalScrollHint viewportClassName="flex gap-1" hint="More sections">
+      <HorizontalScrollHint viewportClassName="flex gap-1" hint="More sections" hintPlacement={isMobile ? "overlay" : "above"}>
         {SECTIONS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}

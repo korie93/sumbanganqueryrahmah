@@ -65,7 +65,7 @@ export function CollectionRecordsDesktopTable({
             <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-muted">No.</TableHead>
             <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">Customer Name</TableHead>
             {isCompact ? (
-              <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-36 border-b border-border/70 bg-muted">{t("common.collection.records.cardAccount")}</TableHead>
+              <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-52 border-b border-border/70 bg-muted">{t("common.collection.records.cardAccount")}</TableHead>
             ) : (
               <>
                 <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.cardNumber")}</TableHead>
@@ -140,10 +140,10 @@ export function CollectionRecordsDesktopTable({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className={cn("h-9 rounded-md px-3 text-foreground", isCompact && "h-auto min-h-9 max-w-full whitespace-normal px-2 [&>svg]:shrink-0")}
+                      className={cn("h-9 rounded-md px-3 text-foreground", isCompact && "gap-1 whitespace-nowrap px-2")}
                       onClick={(event) => onViewReceipt(record, event.currentTarget)}
                     >
-                      <Eye className="mr-1.5 h-3.5 w-3.5" />
+                      <Eye className={cn("h-3.5 w-3.5 shrink-0", !isCompact && "mr-1.5")} />
                       {(record.receipts?.length || 0) > 1 ? `View (${record.receipts.length})` : "View"}
                     </Button>
                   ) : (

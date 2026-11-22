@@ -172,6 +172,11 @@
 }
 
 @media (min-width: 1024px) {
+  /* Leave the launcher's 56px hit area and its 24px edge inset clear of the data. */
+  body.viewer-page-scroll-padding:has([data-floating-ai-artwork]) .ops-page {
+    padding-inline-end: max(5.5rem, var(--safe-area-inset-right));
+  }
+
   .viewer-search-actions {
     flex: 0 1 auto;
   }

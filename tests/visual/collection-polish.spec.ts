@@ -535,7 +535,7 @@ test("Collection filter disclosure keyboard nesting and responsive handoff retai
 
 for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024, 768]) test(`Collection record modes ${theme} fit ${width}px and retain identifiers and receipt actions`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize({ width, height: 900 });
-  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 1, theme });
+  const fixture = await installFixture(page, baseURL, { count: 1, receipts: 2, theme });
   await openRecords(page);
   await expect(page.getByLabel("Search", { exact: true })).toBeVisible();
   const modes = page.getByRole("group", { name: "Paparan rekod", exact: true });
@@ -552,7 +552,18 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   for (const value of ["Synthetic Customer 1", "SYNTHETIC-ACCOUNT-1", "00009007199254740993", nickname]) {
     await expect(row.getByText(value, { exact: true })).toBeVisible();
   }
-  await expect(row.getByRole("button", { name: "View", exact: true })).toBeVisible();
+  const receipt = row.getByRole("button", { name: "View (2)", exact: true });
+  await expect(receipt).toBeVisible();
+  for (const field of [...await row.locator("dd").all(), receipt]) {
+    const lineCount = await field.evaluate((element) => {
+      const text = Array.from(element.childNodes).find((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim());
+      if (!text) throw new Error("Missing visible field text");
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      return range.getClientRects().length;
+    });
+    expect(lineCount).toBe(1);
+  }
   await expect(row.getByRole("button", { name: "Actions for record 1", exact: true })).toBeVisible();
   const amount = row.getByText(/^(?:RM\s*)?1,250\.00$/);
   await expect(amount).not.toHaveClass(/text-success/);

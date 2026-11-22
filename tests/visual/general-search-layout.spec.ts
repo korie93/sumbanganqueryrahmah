@@ -218,6 +218,8 @@ for (const theme of ["light", "dark"] as const) {
     });
     expect(owners).toBe(1);
     expect(await viewport.evaluate((node) => node.scrollWidth > node.clientWidth)).toBe(true);
+    const hint = await bounds(results.getByText("Scroll columns", { exact: true }));
+    expect(hint.y + hint.height).toBeLessThanOrEqual((await bounds(viewport)).y + 1);
     const navigation = page.getByRole("group", { name: "General search table column navigation" });
     await navigation.getByRole("button", { name: "Jump to last column" }).click();
     await expect(navigation.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");

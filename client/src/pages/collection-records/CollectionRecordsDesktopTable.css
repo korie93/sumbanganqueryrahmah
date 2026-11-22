@@ -10,7 +10,17 @@
 }
 
 .collection-records-table-scroll--compact {
-  --records-name-width: 14rem;
+  --records-number-width: 3rem;
+  --records-name-width: 13rem;
+}
+
+.collection-records-table--compact :is(th, td) {
+  padding-inline: var(--spacing-3);
+}
+
+.collection-records-table--compact .collection-records-table-actions {
+  width: 8.25rem;
+  min-width: 8.25rem;
 }
 
 .collection-records-table-scroll--all {

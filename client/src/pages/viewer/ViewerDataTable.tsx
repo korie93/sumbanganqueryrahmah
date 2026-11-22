@@ -190,10 +190,11 @@ function ViewerDataTableImpl({
   );
 
   return (
-    <div className={isMobile ? "min-w-0" : "ops-table-shell min-w-0"}>
+    <div className={isMobile ? "min-w-0" : "ops-table-shell min-w-0"} data-floating-ai-avoid={isMobile ? undefined : "true"}>
       <HorizontalScrollHint
         ariaLabel="Viewer data columns"
         hint="Scroll columns"
+        hintPlacement={isMobile ? "overlay" : "above"}
         navigationLabel="Viewer table column navigation"
         showNavigationControls
         showScrollbar
