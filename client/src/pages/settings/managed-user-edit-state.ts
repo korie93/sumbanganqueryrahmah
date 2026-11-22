@@ -1,4 +1,4 @@
-import { isCredentialEmail } from "@shared/credential-email";
+import { isCredentialEmail } from "@shared/common/credential-email";
 import type { ManagedUser } from "./types";
 import {
   normalizeCredentialEmail,

@@ -1,5 +1,5 @@
 import type { AuthenticatedUser } from "../auth/guards";
-import { isCredentialEmail } from "../../shared/credential-email";
+import { isCredentialEmail } from "../../shared/common/credential-email";
 import {
   CREDENTIAL_USERNAME_REGEX,
   normalizeEmailInput,

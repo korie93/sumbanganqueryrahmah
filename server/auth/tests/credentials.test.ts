@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isCredentialEmail } from "../../../shared/credential-email";
+import { isCredentialEmail } from "../../../shared/common/credential-email";
 import { normalizeUsernameInput } from "../credentials";
 
 test("normalizeUsernameInput applies NFKC, trims, and lowercases usernames", () => {
