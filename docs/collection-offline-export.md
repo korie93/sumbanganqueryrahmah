@@ -10,12 +10,21 @@ Gunakan **Lihat pilihan** untuk mencari atau mengeluarkan rekod. **Export piliha
 
 ## Kandungan muat turun
 
-- `Collection_Selected.xlsx` mengandungi helaian **Collection Records**, **Receipt Index** dan **Export Info**. Setiap transaksi muncul mengikut turutan pemilihan. Dua helaian data mempunyai penapis dan baris tajuk yang dibekukan.
+Dalam dialog **Export pilihan (ZIP)**, buka **Lajur Excel**. Semua 47 lajur dipilih secara lalai. Cari dan tandakan lajur yang diperlukan, atau gunakan **Kosongkan lajur** untuk bermula dengan pilihan kosong. Muat turun tersedia selepas sekurang-kurangnya satu lajur dipilih. Susunan lajur mengikut susunan laporan SQR. Pilihan kekal semasa berada di halaman, termasuk semasa mengesahkan semula amaun yang berubah.
+
+Pilihan lajur hanya mengawal buku kerja. Fail resit asal tetap disertakan dalam ZIP dan mungkin mengandungi maklumat pelanggan.
+
+**Kutipan harian** memilih Nama Pelanggan, No. Kad, No. Akaun, Jumlah Bayaran, Tarikh Bayaran dan Resit. Pilihan ini boleh disunting sebelum muat turun. Semasa mencari lajur, **Pilih hasil carian** dan **Nyahpilih hasil carian** hanya mengubah lajur yang sepadan. Kosongkan carian untuk menggunakan tindakan pada semua lajur.
+
+- `Collection_Selected.xlsx` mengandungi **Collection Records**, **Export Info** dan, apabila lajur **Resit** dipilih, **Receipt Index**. Setiap transaksi muncul mengikut turutan pemilihan. Helaian data mempunyai penapis dan baris tajuk yang dibekukan. Dalam **Collection Records**, lajur **Nama Pelanggan** turut dikunci apabila dipilih.
 - Nombor akaun, kad, IC dan telefon disimpan sebagai teks supaya sifar awal dan digit panjang kekal. Tarikh dan amaun menggunakan jenis sel Excel yang boleh disusun dan dijumlahkan. Nombor kad penuh diperoleh melalui padanan sumber yang disahkan oleh SQR.
-- Pautan pada transaksi membuka resit pertama. **Receipt Index** menyediakan satu pautan bagi setiap resit. Fail dalam folder `Receipts` mengandungi bait asal yang disimpan oleh SQR. Rekod tanpa resit ditandakan **Tiada Resit**.
+- Untuk transaksi dengan satu resit, **Lihat Resit** membuka fail asal. Bagi beberapa resit, **Lihat semua … resit** melompat ke baris pertama transaksi itu dalam **Receipt Index**. Setiap resit mempunyai pautan sendiri. Indeks hanya mengulang lajur pengenalan yang dipilih. Rekod tanpa resit ditandakan **Tiada Resit**.
+- Apabila lajur **Jumlah Bayaran** dipilih, **Export Info** memaparkan jumlah keseluruhan dan **Jumlah bayaran yang dipaparkan**. Nilai kedua dikira semula oleh Excel melalui `SUBTOTAL(109,…)` apabila baris ditapis atau disembunyikan dalam **Collection Records**.
 - `Export_Readme.txt` memberikan arahan penggunaan luar talian dan pengendalian data peribadi. Ekstrak keseluruhan ZIP dan kekalkan Excel bersama folder `Receipts` apabila memindahkan laporan.
 
 ## API dan had
+
+Medan pilihan `columns` menerima senarai ID lajur daripada `shared/common/collection-excel-columns.ts`, contohnya `["customerName", "amount", "receipt"]`. Tanpa medan ini, laporan penuh dijana. Senarai kosong, ID berulang dan ID tidak dikenali ditolak sebelum sebarang bacaan rekod.
 
 `POST /api/collection/export-selected-offline` menerima ID rekod unik. Antara muka turut menghantar `expected`, contohnya `{ "recordIds": ["<uuid>"], "expected": [{ "id": "<uuid>", "cents": 12550, "receipts": 2 }] }`. Setiap ID mesti mempunyai satu anggaran apabila medan ini dihantar. Permintaan lama yang hanya menghantar ID masih disokong. Laluan menggunakan semakan sesi, peranan Superuser, akses tab Collection dan CSRF sedia ada. Semua nilai yang dimasukkan ke dalam ZIP diperoleh daripada pelayan.
 
@@ -62,5 +71,5 @@ Dalam persekitaran ujian visual SQR, jalankan Playwright untuk `tests/visual/col
 ### Semakan manual Excel Desktop
 
 1. Ekstrak ZIP dan buka `Collection_Selected.xlsx` dalam Microsoft Excel Desktop. Semak nombor akaun dengan sifar awal, susun tarikh dan tapis status CP.
-2. Putuskan sambungan rangkaian. Klik **Lihat Resit** pada helaian utama dan pautan resit kedua pada **Receipt Index**. Kedua-duanya perlu membuka fail setempat yang sepadan. Excel mungkin meminta pengesahan sebelum membuka fail.
+2. Putuskan sambungan rangkaian. Klik **Lihat Resit** untuk satu resit. Klik **Lihat semua … resit** untuk beberapa resit, kemudian buka fail kedua pada **Receipt Index**. Excel mungkin meminta pengesahan sebelum membuka fail.
 3. Pindahkan keseluruhan folder yang diekstrak dan ulang semakan pautan. Bandingkan bilangan resit serta jumlah bayaran dengan helaian **Export Info**.

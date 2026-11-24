@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Download } from "lucide-react";
 import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS } from "@shared/common/collection-offline-export";
+import { allCollectionExcelColumnIds, type CollectionExcelColumnId } from "@shared/common/collection-excel-columns";
 import { formatCollectionCurrencyLabelFromCents } from "@shared/collection-amount-types";
 import { Button } from "@/components/ui/button";
 import { downloadBlob } from "@/lib/download";
@@ -20,6 +21,7 @@ export default function CollectionOfflineExportControls({ selection, onViewRecei
   onViewReceipt: ViewCollectionReceipt;
 }) {
   const { state, dispatch } = selection;
+  const [columns, setColumns] = useState<readonly CollectionExcelColumnId[]>(allCollectionExcelColumnIds);
   const [mode, setMode] = useState<SelectionDialogMode | null>(null);
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -59,7 +61,7 @@ export default function CollectionOfflineExportControls({ selection, onViewRecei
   }
 
   async function exportSelection() {
-    if (!count || request.current) return;
+    if (!count || !columns.length || request.current) return;
     const approved = mode === "changes" ? changes : [];
     const submitted = approved.length ? updateOfflineSelection(state, { type: "accept", estimates: approved }) : state;
     if (approved.length) {
@@ -74,7 +76,8 @@ export default function CollectionOfflineExportControls({ selection, onViewRecei
     setNotice("");
     try {
       const expected = [...submitted.items.values()].map(({ id, cents, receipts }) => ({ id, cents, receipts }));
-      const { blob, filename } = await fetchSelectedCollectionOffline([...submitted.items.keys()], controller.signal, expected);
+      const { blob, filename } = await fetchSelectedCollectionOffline([...submitted.items.keys()], controller.signal, expected,
+        columns.length === allCollectionExcelColumnIds.length ? undefined : columns);
       if (controller.signal.aborted) return;
       downloadBlob(blob, filename);
       setMode(null);
@@ -155,6 +158,7 @@ export default function CollectionOfflineExportControls({ selection, onViewRecei
       {mode ? (
         <Suspense fallback={<p role="status" className="text-sm text-muted-foreground">Membuka pilihan…</p>}>
           <SelectionDialog mode={mode} state={state} payment={payment} receipts={totals.receipts} notice={notice}
+            columns={columns} onColumnsChange={setColumns}
             changes={changes} receiptIssue={receiptIssue && state.items.has(receiptIssue.recordId) ? receiptIssue : null}
             onViewReceipt={onViewReceipt} onAccessLost={clearAfterAccessLoss}
             busy={busy} onClose={close} onExport={() => void exportSelection()}

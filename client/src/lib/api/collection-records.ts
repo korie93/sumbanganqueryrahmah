@@ -1,5 +1,6 @@
 import { apiRequest } from "../api-client";
 import { collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "@shared/common/collection-offline-export";
+import type { CollectionExcelColumnId } from "@shared/common/collection-excel-columns";
 import { createClientRandomId } from "../secure-id";
 import {
   collectionPurgeResponseSchema,
@@ -398,8 +399,8 @@ export async function fetchOfflineSelectionDetail(id: string, signal: AbortSigna
 }
 
 export async function fetchSelectedCollectionOffline(recordIds: readonly string[], signal: AbortSignal,
-  expected?: readonly CollectionOfflineExportExpectation[]) {
-  const response = await apiRequest("POST", "/api/collection/export-selected-offline", { recordIds, expected }, {
+  expected?: readonly CollectionOfflineExportExpectation[], columns?: readonly CollectionExcelColumnId[]) {
+  const response = await apiRequest("POST", "/api/collection/export-selected-offline", { recordIds, expected, columns }, {
     // The server bounds archive preparation. Keep this signal attached through the body download.
     signal,
     timeoutMs: false,

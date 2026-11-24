@@ -126,7 +126,11 @@ test("workbook keeps selected order, actual numeric/date data, governed identifi
   assert.equal(columnCell(sheet, "Resit", 2).v, "Tiada Resit");
   assert.equal(columnCell(sheet, "Resit", 2).l, undefined);
   assert.equal(cellAt(book.Sheets["Export Info"]!, "B5").v, 3000.04);
+  const subtotal = cellAt(book.Sheets["Export Info"]!, "B6");
+  assert.equal(subtotal.f, "SUBTOTAL(109,'Collection Records'!D2:D3)");
+  assert.equal(subtotal.v, 3000.04);
   const files = unzipSync(bytes);
+  assert.match(strFromU8(files["xl/worksheets/sheet1.xml"]), /xSplit="1" ySplit="1" topLeftCell="B2"/);
   for (const [number, name] of [[1, "Collection Records"], [2, "Receipt Index"]] as const) {
     const xml = strFromU8(files[`xl/worksheets/sheet${number}.xml`]);
     assert.ok(xml.includes(`<autoFilter ref="${book.Sheets[name]!["!ref"]}"/>`));
@@ -195,11 +199,49 @@ test("export extracts only the selected record with all original files and resol
     const link = columnCell(index, "Resit", i + 2).l!.Target;
     assert.match(link, /^Receipts\/[\da-f-]+_\d+\.(pdf|jpg|png|webp)$/);
     assert.deepEqual(await readFile(path.join(moved, link)), expected);
-    if (i === 0) assert.equal(columnCell(sheet, "Resit", 2).l!.Target, link);
     targets.add(link);
   }
   assert.equal(targets.size, 5);
+  assert.equal(columnCell(sheet, "Resit", 2).l!.Target, "#'Receipt Index'!A2");
   assert.match(await readFile(path.join(moved, "Export_Readme.txt"), "utf8"), /ekstrak/i);
+});
+
+test("column choices project values throughout Excel, preserve original attachments and use the projected amount address", async () => {
+  const a = record(80);
+  const b = record(81);
+  await attach(a, "jpg");
+  await attach(b, "jpg");
+  await attach(b, "pdf");
+  const dest = await outputDir();
+  const result = await createArchive([a, b], dest, new AbortController().signal, ["receipt", "amount"]);
+  const files = unzipSync(await readFile(result.path));
+  const workbook = Object.keys(files).find(name => name.endsWith("/Collection_Selected.xlsx"))!;
+  const book = openWorkbook(files[workbook]);
+  const sheet = book.Sheets["Collection Records"]!;
+  assert.equal(sheet["!ref"], "A1:B3");
+  assert.equal(cellAt(sheet, "A1").v, "Jumlah Bayaran");
+  assert.equal(cellAt(sheet, "B1").v, "Resit");
+  assert.match(cellAt(sheet, "B2").l!.Target, /^Receipts\/.+_01.jpg$/);
+  assert.equal(cellAt(sheet, "B3").v, "Lihat semua 2 resit");
+  assert.equal(cellAt(sheet, "B3").l!.Target, "#'Receipt Index'!A3");
+  const index = book.Sheets["Receipt Index"]!;
+  assert.equal(index["!ref"], "A1:C4");
+  assert.equal(cellAt(index, "A1").v, "No. Resit");
+  assert.equal(cellAt(index, "A3").v, 1);
+  assert.equal(cellAt(index, "A4").v, 2);
+  assert.equal(cellAt(book.Sheets["Export Info"]!, "B6").f, "SUBTOTAL(109,'Collection Records'!A2:A3)");
+  for (const s of Object.values(book.Sheets)) {
+    const values = XLSX.utils.sheet_to_json<unknown[]>(s, { header: 1 }).flat();
+    for (const excluded of [a.customerName, b.accountNumber, b.cardNumber, a.icNumber]) assert.ok(!values.includes(excluded));
+  }
+  assert.doesNotMatch(strFromU8(unzipSync(files[workbook])["xl/worksheets/sheet1.xml"]), /xSplit=/);
+  const nameOnly = await createArchive([a], await outputDir(), new AbortController().signal, ["customerName"]);
+  const nameFiles = unzipSync(await readFile(nameOnly.path));
+  assert.deepEqual(nameFiles[Object.keys(nameFiles).find(name => name.endsWith("_01.jpg"))!], new Uint8Array(jpg));
+  const nameBook = openWorkbook(nameFiles[Object.keys(nameFiles).find(name => name.endsWith(".xlsx"))!]);
+  assert.deepEqual(nameBook.SheetNames, ["Collection Records", "Export Info"]);
+  assert.equal(nameBook.Sheets["Collection Records"]["!ref"], "A1:A2");
+  assert.ok(!JSON.stringify(nameBook.Sheets["Export Info"]).includes("Jumlah Bayaran"));
 });
 
 test("missing, unreadable-content, duplicated or mismatched receipt metadata fails the complete archive", async () => {
