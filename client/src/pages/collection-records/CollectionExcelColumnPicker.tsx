@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { collectionExcelColumns, allCollectionExcelColumnIds, type CollectionExcelColumnId } from "@shared/common/collection-excel-columns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getAriaExpandedProps } from "@/lib/aria-state-props";
 
 type Props = {
   selected: readonly CollectionExcelColumnId[];
@@ -32,7 +33,7 @@ export function CollectionExcelColumnPicker({ selected, onChange, disabled }: Pr
   return (
     <div className="rounded-md border border-border">
       <div className="flex flex-wrap items-center justify-between gap-x-1 px-1">
-        <Button type="button" variant="ghost" aria-expanded={expanded} aria-controls={expanded ? "offline-excel-columns" : undefined}
+        <Button type="button" variant="ghost" {...getAriaExpandedProps(expanded)} aria-controls={expanded ? "offline-excel-columns" : undefined}
           className="justify-start gap-1.5 px-2" onClick={() => setExpanded(!expanded)}>
           <ChevronDown aria-hidden="true" className={expanded ? "" : "-rotate-90"} />
           Lajur Excel <span className="font-normal tabular-nums text-muted-foreground">({selected.length}/{collectionExcelColumns.length})</span>
