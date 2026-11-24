@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import { Download } from "lucide-react";
-import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS } from "@shared/collection-offline-export";
+import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS } from "@shared/common/collection-offline-export";
 import { formatCollectionCurrencyLabelFromCents } from "@shared/collection-amount-types";
 import { Button } from "@/components/ui/button";
 import { downloadBlob } from "@/lib/download";

@@ -1,6 +1,6 @@
 import path from "node:path";
 import { sql } from "drizzle-orm";
-import { COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS } from "../../shared/collection-offline-export";
+import { COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS } from "../../shared/common/collection-offline-export";
 import { HttpError } from "../http/errors";
 import type { CollectionRecord } from "../storage-postgres-collection-types";
 import type { CollectionRepositoryExecutor } from "./collection-nickname-types";

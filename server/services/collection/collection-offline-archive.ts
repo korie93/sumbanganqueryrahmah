@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { Zip, ZipPassThrough, strToU8 } from "fflate";
-import { collectionOfflineRecordId, COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS } from "../../../shared/collection-offline-export";
+import { collectionOfflineRecordId, COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS } from "../../../shared/common/collection-offline-export";
 import { HttpError } from "../../http/errors";
 import { resolveCollectionReceiptStoragePath } from "../../lib/collection-receipt-files";
 import { detectCollectionReceiptSignature, validateCollectionReceiptSecurity } from "../../lib/collection-receipt-security";

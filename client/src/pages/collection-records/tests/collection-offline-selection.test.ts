@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS } from "@shared/collection-offline-export";
+import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS } from "@shared/common/collection-offline-export";
 import { emptyOfflineSelection, getOfflineSelectionTotals, readOfflineEstimateChanges, readOfflineReceiptIssue, updateOfflineSelection } from "../collection-offline-selection";
 
 function record(id: string, amount = "0.10", receipts = 0) {

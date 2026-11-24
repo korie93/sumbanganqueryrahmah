@@ -40,7 +40,7 @@ Arkib disediakan dalam direktori sementara peribadi sebelum penghantaran dan dib
 | --- | --- |
 | Paparan, tindakan dan pemilihan | `client/src/pages/collection/CollectionRecordsPage.tsx`, `client/src/pages/collection-records/CollectionOfflineSelection.tsx`, `CollectionOfflineSelectionDialog.tsx`, `CollectionSelectionCheckbox.tsx`, `collection-offline-selection.ts`, komponen jadual desktop dan kad mudah alih |
 | Muat turun dan maklum balas | `client/src/lib/api/collection-records.ts`, `client/src/pages/collection/utils.ts` |
-| Kontrak dan kawalan permintaan | `shared/collection-offline-export.ts`, `shared/error-codes.ts`, `server/internal/apiProtection.ts`, `server/routes/collection/collection-offline-export-route.ts`, `collection-report-routes.ts` |
+| Kontrak dan kawalan permintaan | `shared/common/collection-offline-export.ts`, `shared/error-codes.ts`, `server/internal/apiProtection.ts`, `server/routes/collection/collection-offline-export-route.ts`, `collection-report-routes.ts` |
 | Rekod dan resit | `server/repositories/collection-record-read-utils.ts`, `collection-offline-export-receipts.ts`, `server/storage-postgres-collection-types.ts` |
 | Arkib dan workbook | `server/services/collection/collection-offline-archive.ts`, `collection-offline-workbook.ts`, `client/src/types/xlsx.d.ts` |
 | Regresi dan CI | Ujian pilihan dan muat turun dalam `client/src/pages/collection-records/tests/`, ujian servis, laluan HTTP dan PostgreSQL `collection-offline-export*`, `tests/visual/collection-offline-export.spec.ts`, fixture Collection, `scripts/test-auth-recovery-isolated.mjs` dan `.github/workflows/ci.yml` |

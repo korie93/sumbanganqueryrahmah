@@ -1,5 +1,5 @@
 import { parseCollectionAmountToCents } from "@shared/collection-amount-types";
-import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, type CollectionOfflineExportExpectation } from "@shared/collection-offline-export";
+import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, type CollectionOfflineExportExpectation } from "@shared/common/collection-offline-export";
 import type { CollectionRecord } from "@/lib/api/collection-types";
 
 type SelectionSource = Pick<CollectionRecord, "id" | "customerName" | "amount" | "paymentDate" | "receiptCount" | "receipts" | "receiptFile">;

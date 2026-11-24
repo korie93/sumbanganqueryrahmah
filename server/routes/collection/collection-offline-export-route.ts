@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import type { Response } from "express";
-import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "../../../shared/collection-offline-export";
+import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "../../../shared/common/collection-offline-export";
 import { parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
 import type { AuthenticatedRequest } from "../../auth/guards";
 import { badRequest, forbidden, HttpError, notFound } from "../../http/errors";

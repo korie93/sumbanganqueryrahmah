@@ -1,5 +1,5 @@
 import { apiRequest } from "../api-client";
-import { collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "@shared/collection-offline-export";
+import { collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "@shared/common/collection-offline-export";
 import { createClientRandomId } from "../secure-id";
 import {
   collectionPurgeResponseSchema,
