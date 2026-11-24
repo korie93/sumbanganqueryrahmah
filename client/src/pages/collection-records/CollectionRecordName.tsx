@@ -38,11 +38,8 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
   onViewReceipt: ViewCollectionReceipt;
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
 }) {
-  const t = useContext(CollectionRecordsTranslation);
-  const missing = t("common.collection.records.missing");
   const [open, setOpen] = useState(false);
   const name = record.customerName?.trim() || `Rekod #${number}`;
-  const receiptCount = record.receipts?.length ?? 0;
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
       setOpen(nextOpen);
@@ -53,11 +50,25 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
           {name}
         </button>
       </DialogTrigger>
-      {open && (
+      {open && <CollectionRecordDetailsContent record={record} number={number} onViewReceipt={onViewReceipt} />}
+    </Dialog>
+  );
+}
+
+export function CollectionRecordDetailsContent({ record, number, onViewReceipt }: {
+  record: CollectionRecord;
+  number?: number;
+  onViewReceipt: ViewCollectionReceipt;
+}) {
+  const t = useContext(CollectionRecordsTranslation);
+  const missing = t("common.collection.records.missing");
+  const name = record.customerName?.trim() || `Rekod ${number ?? record.id}`;
+  const receiptCount = record.receipts?.length ?? 0;
+  return (
         <DialogContent className="flex max-w-xl flex-col gap-0 overflow-hidden p-0 text-left aria-hidden:opacity-25 sm:p-0 motion-reduce:animate-none [&>button]:grid [&>button]:place-items-center [&>button]:size-8 max-md:[&>button]:size-[44px] max-md:[&>button]:top-1.5 max-md:[&>button]:right-2">
           <div className="min-w-0 shrink-0 px-4 pt-4 pr-16 sm:px-6 sm:pt-5 sm:pr-16">
             <DialogTitle className="max-h-20 overflow-y-auto wrap-anywhere text-lg leading-6">{name}</DialogTitle>
-            <DialogDescription className="sr-only">Butiran rekod #{number}</DialogDescription>
+            <DialogDescription className="sr-only">Butiran rekod {number === undefined ? record.id : `#${number}`}</DialogDescription>
           </div>
           <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-4 pt-3 pb-4 sm:px-6 sm:pb-5">
             <DetailGroup title="Bayaran" fields={[
@@ -76,7 +87,7 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
             </DetailGroup>
             {receiptCount > 0 && <CollectionReceiptBreakdownPanel key={record.id} record={record} onViewReceipt={onViewReceipt} />}
             <DetailGroup title="Butiran lain" fields={[
-              ["No.", String(number)], ["Batch", record.batch],
+              [number === undefined ? "ID Rekod" : "No.", String(number ?? record.id)], ["Batch", record.batch],
               ["IC Number", record.icNumber], ["Telefon", record.customerPhone],
               ["TOTAL DUE", formatCollectionOptionalAmount(record.totalDue, missing)],
               ["Billing Principal (OSP)", formatCollectionOptionalAmount(record.billingPrincipalOsp, missing)],
@@ -88,7 +99,5 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
             ]} />
           </div>
         </DialogContent>
-      )}
-    </Dialog>
   );
 }

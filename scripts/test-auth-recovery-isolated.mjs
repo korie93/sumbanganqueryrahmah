@@ -16,8 +16,11 @@ const inheritedKeys = ["PATH", "Path", "SystemRoot", "WINDIR", "TEMP", "TMP", "T
 const cleanEnv = Object.fromEntries(inheritedKeys.filter((key) => process.env[key]).map((key) => [key, process.env[key]]));
 const tempParent = await realpath(os.tmpdir());
 const dashboard = process.argv.includes("--collection-dashboard");
-const testDatabase = dashboard ? "sqr_dashboard_scope_test" : "sqr_auth_recovery_test";
-const testFiles = dashboard
+const offline = process.argv.includes("--collection-offline");
+const testDatabase = offline ? "sqr_collection_offline_test" : dashboard ? "sqr_dashboard_scope_test" : "sqr_auth_recovery_test";
+const testFiles = offline
+  ? ["server/repositories/tests/collection-offline-export.postgres.test.ts"]
+  : dashboard
   ? ["server/repositories/tests/collection-dashboard-account.postgres.test.ts"]
   : [
       "server/repositories/tests/auth-recovery-postgres.integration.test.ts",

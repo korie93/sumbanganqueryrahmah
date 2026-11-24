@@ -1,4 +1,5 @@
 import { apiRequest } from "../api-client";
+import { collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "@shared/common/collection-offline-export";
 import { createClientRandomId } from "../secure-id";
 import {
   collectionPurgeResponseSchema,
@@ -20,6 +21,7 @@ import type {
   UpdateCollectionPayload,
   CollectionSourceMatchesResponse,
   CollectionTeamOptionsResponse,
+  CollectionRecord,
 } from "./collection-types";
 import { z } from "zod";
 
@@ -384,6 +386,37 @@ function parseFilenameFromContentDisposition(contentDisposition: string | null):
   if (!fallbackMatch?.[1]) return null;
   const normalized = fallbackMatch[1].trim();
   return normalized || null;
+}
+
+export async function fetchOfflineSelectionDetail(id: string, signal: AbortSignal): Promise<CollectionRecord> {
+  if (!collectionOfflineRecordId.test(id)) throw new Error("ID rekod tidak sah.");
+  const path = `/api/collection/export-selected-offline/records/${encodeURIComponent(id)}`;
+  const response = await apiRequest("GET", path, undefined, { signal });
+  const { record } = await parseApiJson(response, z.object({ record: collectionRecordResponseSchema }), path);
+  if (record.id !== id) throw new Error("Butiran rekod tidak sepadan.");
+  return record as CollectionRecord;
+}
+
+export async function fetchSelectedCollectionOffline(recordIds: readonly string[], signal: AbortSignal,
+  expected?: readonly CollectionOfflineExportExpectation[]) {
+  const response = await apiRequest("POST", "/api/collection/export-selected-offline", { recordIds, expected }, {
+    // The server bounds archive preparation. Keep this signal attached through the body download.
+    signal,
+    timeoutMs: false,
+    retry: false,
+  });
+  if (response.headers.get("Content-Type")?.split(";")[0]?.trim().toLowerCase() !== "application/zip") {
+    throw new Error("Respons ZIP tidak sah. Cuba semula.");
+  }
+  const blob = await response.blob();
+  if (!blob.size) throw new Error("Fail ZIP kosong. Cuba semula.");
+  const signature = new DataView(await blob.slice(0, 4).arrayBuffer());
+  if (signature.byteLength !== 4 || signature.getUint32(0) !== 0x504b0304) {
+    throw new Error("Kandungan fail ZIP tidak sah. Cuba semula.");
+  }
+  const filename = parseFilenameFromContentDisposition(response.headers.get("Content-Disposition"));
+  const safeArchiveName = filename && /^[a-z0-9][a-z0-9_. -]{0,235}\.zip$/i.test(filename) && !filename.includes("..");
+  return { blob, filename: safeArchiveName ? filename : "SQR_Collection_Selected.zip" };
 }
 
 export async function fetchCollectionReceiptBlob(

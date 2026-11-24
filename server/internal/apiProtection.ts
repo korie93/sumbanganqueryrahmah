@@ -77,6 +77,7 @@ function clamp(value: number, min: number, max: number): number {
 
 function isHeavyRoute(pathname: string): boolean {
   return pathname.startsWith("/api/ai/")
+    || pathname === "/api/collection/export-selected-offline"
     || pathname.startsWith("/api/imports")
     || pathname.startsWith("/api/search/advanced")
     || pathname.startsWith("/api/backups");
