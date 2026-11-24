@@ -50,3 +50,8 @@ export function toCollectionDisplayDate(value: string): string {
   const [year, month, day] = value.split("-");
   return `${day}/${month}/${year}`;
 }
+/** Read-only detail rows can identify a legacy receipt by its owning record ID. */
+export function getReceiptPreviewBinaryId(recordId: string | undefined, receipt: { id: string; storagePath: string } | null) {
+  if (recordId && receipt?.id === recordId && receipt.storagePath === `/api/collection/${encodeURIComponent(recordId)}/receipt/view`) return undefined;
+  return receipt?.id;
+}

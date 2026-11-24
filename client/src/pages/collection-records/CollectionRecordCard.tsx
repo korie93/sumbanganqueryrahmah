@@ -9,6 +9,7 @@ import { formatCollectionOptionalAmount } from "./collection-coverage";
 import { buildCollectionRecordRowAriaLabel } from "./collection-record-row-aria";
 import { getCollectionCardNumberLabel } from "./utils";
 import { CollectionRecordName } from "./CollectionRecordName";
+import { CollectionRecordCheckbox } from "./CollectionSelectionCheckbox";
 
 export function CollectionRecordCard({ record, number, lastViewed, onOpenRecord, onViewReceipt, children }: {
   record: CollectionRecord;
@@ -33,9 +34,12 @@ export function CollectionRecordCard({ record, number, lastViewed, onOpenRecord,
       role="group"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="min-w-0 break-words text-base font-semibold text-foreground">
-          <CollectionRecordName record={record} number={number} onOpenRecord={onOpenRecord} onViewReceipt={onViewReceipt} />
-        </h3>
+        <div className="flex min-w-0 items-center gap-1">
+          <CollectionRecordCheckbox record={record} />
+          <h3 className="min-w-0 break-words text-base font-semibold text-foreground">
+            <CollectionRecordName record={record} number={number} onOpenRecord={onOpenRecord} onViewReceipt={onViewReceipt} />
+          </h3>
+        </div>
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
           <span aria-hidden="true">#{number}</span>
           <span className="sr-only">{t("common.collection.records.row", { number })}</span>

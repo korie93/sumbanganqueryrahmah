@@ -1,6 +1,7 @@
 import { useContext } from "react";
 import { CollectionRecordsTranslation } from "./collection-records-translation";
 import { CollectionRecordName } from "./CollectionRecordName";
+import { CollectionPageCheckbox, CollectionRecordCheckbox } from "./CollectionSelectionCheckbox";
 import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -63,7 +64,9 @@ export function CollectionRecordsDesktopTable({
         <TableHeader>
           <TableRow>
             <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-muted">No.</TableHead>
-            <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">Customer Name</TableHead>
+            <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">
+              <div className="flex min-w-0 items-center gap-1"><CollectionPageCheckbox records={paginatedRecords} />Customer Name</div>
+            </TableHead>
             {isCompact ? (
               <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-52 border-b border-border/70 bg-muted">{t("common.collection.records.cardAccount")}</TableHead>
             ) : (
@@ -108,7 +111,10 @@ export function CollectionRecordsDesktopTable({
                   {pageOffset + index + 1}
                 </TableCell>
                 <TableCell className="collection-records-table-identity py-2 font-medium">
-                  <span className="block whitespace-normal wrap-anywhere"><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={pageOffset + index + 1} /></span>
+                  <div className="flex min-w-0 items-center gap-1">
+                    <CollectionRecordCheckbox record={record} />
+                    <span className="block min-w-0 whitespace-normal wrap-anywhere"><CollectionRecordName onViewReceipt={onViewReceipt} onOpenRecord={onOpenRecord} record={record} number={pageOffset + index + 1} /></span>
+                  </div>
                   {record.id === lastViewedRecordId ? <span className="sr-only">Last opened record</span> : null}
                 </TableCell>
                 {isCompact ? (

@@ -19,6 +19,8 @@ import { CollectionRecordsSearch } from "@/pages/collection-records/CollectionRe
 import { buildCollectionRecordsActiveFilters } from "@/pages/collection-records/collection-record-active-filters";
 import { isValidDate } from "@/pages/collection/utils";
 import { CollectionRecordsTable } from "@/pages/collection-records/CollectionRecordsTable";
+import { CollectionOfflineSelection } from "@/pages/collection-records/CollectionOfflineSelection";
+import type { ViewCollectionReceipt } from "@/pages/collection-records/types";
 import { buildCollectionRecordFilterSnapshot, getCollectionRecordsRecoveryState } from "@/pages/collection-records/collection-record-filters";
 import { buildCollectionRecordsPageViewModel } from "@/pages/collection-records/collection-records-page-view-models";
 import { createCollectionRecordOverlayFocus } from "@/pages/collection-records/collection-record-overlay-focus";
@@ -154,6 +156,11 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
       activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
     ));
   };
+  const viewTableReceipt: ViewCollectionReceipt = (record, launcher, receiptId) => {
+    rememberReceiptLauncher(launcher);
+    markViewed(record.id);
+    viewModel.table.onViewReceipt(record, launcher, receiptId);
+  };
   const { items: activeFilterChips, filterCount } = useMemo(
     () => buildCollectionRecordsActiveFilters(viewModel.filters, t), [viewModel.filters, t],
   );
@@ -234,46 +241,44 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <CollectionRecordsToolbar {...viewModel.toolbar} />
         </Suspense>
 
-        <CollectionRecordsTable
-          {...viewModel.table}
-          {...recoveryState}
-          recordsLoadFailed={controller.recordsLoadFailed}
-          onClearSearch={() => {
-            viewModel.filters.onSearchInputChange("");
-            // The recovery button disappears on refresh; retain a useful focus target.
-            focusSearch();
-          }}
-          onResetFilters={() => {
-            pageFocusRef.current?.focus({ preventScroll: true });
-            viewModel.filters.onReset();
-          }}
-          onReloadRecords={() => {
-            pageFocusRef.current?.focus({ preventScroll: true });
-            viewModel.filters.onFilter();
-          }}
-          lastViewedRecordId={lastViewedRecordId}
-          onOpenRecord={(record) => markViewed(record.id)}
-          onViewReceipt={(record, launcher, receiptId) => {
-            rememberReceiptLauncher(launcher);
-            markViewed(record.id);
-            viewModel.table.onViewReceipt(record, launcher, receiptId);
-          }}
-          onEdit={(record, launcher) => {
-            const activeElement = document.activeElement;
-            overlayFocus.remember("edit", launcher ?? (
-              activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
-            ));
-            markViewed(record.id);
-            viewModel.table.onEdit(record);
-          }}
-          onDelete={(record, launcher) => {
-            const activeElement = document.activeElement;
-            overlayFocus.remember("delete", launcher ?? (
-              activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
-            ));
-            viewModel.table.onDelete(record);
-          }}
-        />
+        <CollectionOfflineSelection role={role} onViewReceipt={viewTableReceipt}>
+          <CollectionRecordsTable
+            {...viewModel.table}
+            {...recoveryState}
+            recordsLoadFailed={controller.recordsLoadFailed}
+            onClearSearch={() => {
+              viewModel.filters.onSearchInputChange("");
+              // The recovery button disappears on refresh; retain a useful focus target.
+              focusSearch();
+            }}
+            onResetFilters={() => {
+              pageFocusRef.current?.focus({ preventScroll: true });
+              viewModel.filters.onReset();
+            }}
+            onReloadRecords={() => {
+              pageFocusRef.current?.focus({ preventScroll: true });
+              viewModel.filters.onFilter();
+            }}
+            lastViewedRecordId={lastViewedRecordId}
+            onOpenRecord={(record) => markViewed(record.id)}
+            onViewReceipt={viewTableReceipt}
+            onEdit={(record, launcher) => {
+              const activeElement = document.activeElement;
+              overlayFocus.remember("edit", launcher ?? (
+                activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
+              ));
+              markViewed(record.id);
+              viewModel.table.onEdit(record);
+            }}
+            onDelete={(record, launcher) => {
+              const activeElement = document.activeElement;
+              overlayFocus.remember("delete", launcher ?? (
+                activeElement instanceof HTMLElement && activeElement !== document.body ? activeElement : null
+              ));
+              viewModel.table.onDelete(record);
+            }}
+          />
+        </CollectionOfflineSelection>
       </section>
 
       {isMobile ? (

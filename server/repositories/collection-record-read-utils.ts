@@ -16,6 +16,7 @@ import {
   buildCollectionRecordMonthlyComparisonWhereSql,
   buildCollectionRecordMonthlyRollupWhereSql,
   buildCollectionRecordDailyRollupWhereSql,
+  buildCollectionRecordConditions,
   buildCollectionRecordWhereSql,
   canUseCollectionRecordDailyRollups,
   mapCollectionAggregateRow,
@@ -29,6 +30,8 @@ import { attachCollectionReceipts } from "./collection-receipt-utils";
 import { buildProtectedCollectionPiiSelect } from "./collection-pii-select-utils";
 import { mapCollectionRecordRow } from "./collection-repository-mappers";
 import { hydrateCollectionRecordSourceAccounts } from "./collection-record-source-account-utils";
+import type { CollectionRepositoryExecutor } from "./collection-nickname-types";
+import { attachOfflineExportReceipts } from "./collection-offline-export-receipts";
 
 function normalizeQueryRows(rows: unknown[] | undefined): unknown[] {
   return Array.isArray(rows) ? rows : [];
@@ -56,7 +59,21 @@ function buildCollectionRecordOrderSql(filters?: CollectionRecordListFilters) {
 export async function listCollectionRecords(
   filters?: CollectionRecordListFilters,
 ): Promise<CollectionRecord[]> {
-  const whereSql = buildCollectionRecordWhereSql(filters);
+  if (filters?.selectedRecordIds) {
+    if (!filters.selectedRecordIds.length) return [];
+    return db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL statement_timeout = '20s'`);
+      return readCollectionRecords(tx, filters);
+    }, { isolationLevel: "repeatable read", accessMode: "read only" });
+  }
+  return readCollectionRecords(db, filters);
+}
+
+async function readCollectionRecords(executor: CollectionRepositoryExecutor, filters?: CollectionRecordListFilters) {
+  const ids = filters?.selectedRecordIds;
+  const conditions = buildCollectionRecordConditions(filters);
+  if (ids) conditions.push(sql`record.id IN (${sql.join(ids.map(id => sql`${id}::uuid`), sql`, `)})`);
+  const whereSql = conditions.length ? sql`WHERE ${sql.join(conditions, sql` AND `)}` : sql``;
   const parsedLimit = Number(filters?.limit);
   const safeLimit = Number.isFinite(parsedLimit)
     ? Math.min(2000, Math.max(1, Math.floor(parsedLimit)))
@@ -67,7 +84,7 @@ export async function listCollectionRecords(
     : 0;
   const orderSql = buildCollectionRecordOrderSql(filters);
 
-  const result = await db.execute(sql`
+  const result = await executor.execute(sql`
     SELECT
       id,
       ${buildProtectedCollectionPiiSelect("customer_name", "customer_name_encrypted", "customer_name", "customerName")},
@@ -154,8 +171,8 @@ export async function listCollectionRecords(
   `);
 
   const records = normalizeQueryRows(result.rows).map((row) => mapCollectionRecordRow(row));
-  const recordsWithSourceAccounts = await hydrateCollectionRecordSourceAccounts(db, records);
-  return attachCollectionReceipts(db, recordsWithSourceAccounts);
+  const recordsWithSourceAccounts = await hydrateCollectionRecordSourceAccounts(executor, records);
+  return ids ? attachOfflineExportReceipts(executor, recordsWithSourceAccounts) : attachCollectionReceipts(executor, recordsWithSourceAccounts);
 }
 
 export async function summarizeCollectionRecords(

@@ -1,4 +1,5 @@
 import { CollectionRecordCard } from "./CollectionRecordCard";
+import { CollectionPageCheckbox } from "./CollectionSelectionCheckbox";
 import { Suspense, lazy, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -77,6 +78,7 @@ export function CollectionRecordsTable({
   if (isMobile) {
     return (
       <div className="min-h-[180px] space-y-3">
+        <CollectionPageCheckbox records={paginatedRecords} showLabel />
         {paginatedRecords.map((record, index) => (
           <CollectionRecordCard
             key={record.id}

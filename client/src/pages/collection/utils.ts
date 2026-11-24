@@ -30,6 +30,7 @@ const COLLECTION_RECEIPT_MIME_ALIASES: Record<string, string> = {
 };
 
 export type CollectionApiErrorDetails = {
+  details?: unknown;
   status: number | null;
   code: string | null;
   requestId: string | null;
@@ -64,6 +65,8 @@ export function parseCollectionApiErrorDetails(error: unknown): CollectionApiErr
           ? String((parsed as { error?: { requestId?: unknown } }).error?.requestId)
           : null;
     return {
+      ...(normalized.success && normalized.data.error?.details !== undefined
+        ? { details: normalized.data.error.details } : {}),
       status: Number.isFinite(Number(status)) ? Number(status) : null,
       code,
       requestId,

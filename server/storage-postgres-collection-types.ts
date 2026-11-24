@@ -162,6 +162,8 @@ export type CollectionRecordCardSearchLink = {
 };
 
 export type CollectionRecordListFilters = {
+  /** Internal selection for offline export. Never populated from list query strings. */
+  selectedRecordIds?: readonly string[];
   from?: string | undefined;
   to?: string | undefined;
   search?: string | undefined;

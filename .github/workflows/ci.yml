@@ -262,6 +262,10 @@ jobs:
         timeout-minutes: 5
         run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" npm run test:collection:dashboard-postgres
 
+      - name: Verify selected offline Collection export on disposable PostgreSQL
+        timeout-minutes: 5
+        run: SQR_AUTH_TEST_PG_BIN="$(pg_config --bindir)" node scripts/test-auth-recovery-isolated.mjs --collection-offline
+
       - name: Verify role permissions with PostgreSQL
         env:
           ROLE_PERMISSIONS_POSTGRES_REQUIRED: "1"

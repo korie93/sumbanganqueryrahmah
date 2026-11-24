@@ -4,6 +4,9 @@ declare module "xlsx" {
     v: unknown;
     z?: string;
     w?: string;
+    f?: string;
+    l?: { Target: string };
+    s?: { fgColor?: { rgb?: string } };
   }
 
   export interface WorkSheet {
@@ -52,6 +55,7 @@ declare module "xlsx" {
     cellDates?: boolean;
     cellFormula?: boolean;
     cellNF?: boolean;
+    cellStyles?: boolean;
     cellText?: boolean;
     sheetRows?: number;
   }

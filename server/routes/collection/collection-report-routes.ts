@@ -1,4 +1,5 @@
 import { registerCollectionDailyRoutes } from "./collection-daily-routes";
+import { registerCollectionOfflineExportRoute } from "./collection-offline-export-route";
 import { registerCollectionRecordMutationRoutes } from "./collection-record-mutation-routes";
 import { registerCollectionReceiptRoutes } from "./collection-receipt-routes";
 import { registerCollectionSummaryRoutes } from "./collection-summary-routes";
@@ -8,6 +9,7 @@ import { registerCollectionBillingPrincipalV7Routes } from "./collection-billing
 import { registerCollectionManualSettlementRoutes } from "./collection-manual-settlement-routes";
 
 export function registerCollectionReportRoutes(context: CollectionRouteContext) {
+  registerCollectionOfflineExportRoute(context);
   registerCollectionSummaryRoutes(context);
   registerCollectionDailyRoutes(context);
   registerCollectionReceiptRoutes(context);

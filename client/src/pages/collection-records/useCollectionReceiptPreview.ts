@@ -8,7 +8,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import type { CollectionRecord } from "@/lib/api";
 import type { ReceiptPreviewKind } from "@/pages/collection-records/types";
-import { resolveReceiptPreviewKind } from "@/pages/collection-records/utils";
+import { getReceiptPreviewBinaryId, resolveReceiptPreviewKind } from "@/pages/collection-records/utils";
 import { parseApiError } from "@/pages/collection/utils";
 import { resolveReceiptImagePreviewProfile } from "./receipt-preview-image-policy";
 
@@ -51,6 +51,7 @@ export function useCollectionReceiptPreview() {
       null
     );
   }, [receiptPreviewReceiptId, receiptPreviewRecord]);
+  const binaryReceiptId = getReceiptPreviewBinaryId(receiptPreviewRecord?.id, selectedPreviewReceipt);
 
   const receiptPreviewKind = useMemo<ReceiptPreviewKind>(
     () =>
@@ -152,7 +153,7 @@ export function useCollectionReceiptPreview() {
     if (!receiptPreviewOpen || !receiptPreviewRecord) return;
 
     const activeRequestId = ++receiptPreviewRequestIdRef.current;
-    const selectedReceiptId = selectedPreviewReceipt?.id || null;
+    const selectedReceiptId = binaryReceiptId || null;
     abortReceiptPreviewRequest();
     abortReceiptDetailRequest();
     const profile = resolveReceiptImagePreviewProfile(typeof window === "undefined" ? 0 : window.innerWidth);
@@ -219,6 +220,7 @@ export function useCollectionReceiptPreview() {
     receiptPreviewRecord,
     receiptPreviewRetryAttempt,
     selectedPreviewReceipt,
+    binaryReceiptId,
   ]);
 
   const refineReceiptImage = useCallback(async () => {
@@ -235,7 +237,7 @@ export function useCollectionReceiptPreview() {
       const { prepareReceiptImageDetail } = await import("./receipt-preview-image-detail");
       if (!isCurrent()) return;
       await prepareReceiptImageDetail({
-        recordId: receiptPreviewRecord.id, receiptId: selectedPreviewReceipt?.id,
+        recordId: receiptPreviewRecord.id, receiptId: binaryReceiptId,
         signal: controller.signal, isCurrent,
         publish: (nextUrl) => {
           const previousUrl = receiptPreviewUrlRef.current;
@@ -253,7 +255,7 @@ export function useCollectionReceiptPreview() {
         setReceiptPreviewRefining(false);
       }
     }
-  }, [receiptPreviewKind, receiptPreviewOpen, receiptPreviewRecord, receiptPreviewSource, selectedPreviewReceipt?.id]);
+  }, [receiptPreviewKind, receiptPreviewOpen, receiptPreviewRecord, receiptPreviewSource, binaryReceiptId]);
 
   const handleReceiptImageZoom = useCallback((zoom: number) => {
     if (Number.isFinite(zoom) && zoom > 1) void refineReceiptImage();
@@ -275,7 +277,7 @@ export function useCollectionReceiptPreview() {
       const { downloadReceiptOriginal } = await import("./receipt-preview-image-detail");
       if (!isCurrent()) return;
       await downloadReceiptOriginal({
-        recordId: receiptPreviewRecord.id, receiptId: selectedPreviewReceipt?.id,
+        recordId: receiptPreviewRecord.id, receiptId: binaryReceiptId,
         signal: controller.signal, isCurrent,
         fallbackFileName: selectedPreviewReceipt?.originalFileName || "",
       });
@@ -297,6 +299,7 @@ export function useCollectionReceiptPreview() {
     receiptPreviewDownloading,
     receiptPreviewRecord,
     selectedPreviewReceipt,
+    binaryReceiptId,
     toast,
   ]);
 
