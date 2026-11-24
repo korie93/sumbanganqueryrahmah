@@ -123,10 +123,38 @@ test("Collection offline export keeps the exact selection through pagination, se
   expect(fixture.unexpected).toEqual([]);
 });
 
+const exportControlsModule = /\/CollectionOfflineExportControls(?:-[\w-]+\.js|\.tsx)(?:\?.*)?$/;
+
+test("Collection records remain selectable while the export controls are loading", async ({ page, baseURL }) => {
+  await installFixture(page, baseURL, { role: "superuser", count: 2, recordId });
+  let releaseControls!: () => void;
+  const pending = new Promise<void>((resolve) => { releaseControls = resolve; });
+  await page.route(exportControlsModule, async (route) => {
+    await pending;
+    await route.continue();
+  });
+  try {
+    await Promise.all([
+      page.waitForRequest(exportControlsModule),
+      page.goto("/collection/records", { waitUntil: "domcontentloaded" }),
+    ]);
+    await checkbox(page, 1).check();
+    await expect(action(page, "Export pilihan (ZIP)")).toHaveCount(0);
+  } finally {
+    releaseControls();
+  }
+  await expect(page.getByText("1 rekod dipilih", { exact: true })).toBeVisible();
+  await expect(action(page, "Export pilihan (ZIP)")).toBeEnabled();
+});
+
 for (const role of ["user", "admin", "manager"] as const) {
   test(`Collection offline export controls are absent for ${role}`, async ({ page, baseURL }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     const fixture = await installFixture(page, baseURL, { role, count: 2, recordId });
+    const controlsRequests: string[] = [];
+    page.on("request", (request) => {
+      if (exportControlsModule.test(request.url())) controlsRequests.push(request.url());
+    });
     await openRecords(page);
     await expect(action(page, customer(1))).toBeVisible();
     await expect(page.getByRole("checkbox", { name: /^Pilih (semua )?rekod/ })).toHaveCount(0);
@@ -135,6 +163,7 @@ for (const role of ["user", "admin", "manager"] as const) {
     }
     await action(page, customer(1)).click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    expect(controlsRequests).toEqual([]);
     expect(fixture.unexpected).toEqual([]);
     expect(fixture.errors).toEqual([]);
   });

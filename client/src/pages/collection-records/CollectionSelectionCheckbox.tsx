@@ -2,10 +2,11 @@ import { createContext, useContext, useEffect, useRef, type Dispatch } from "rea
 import type { CollectionRecord } from "@/lib/api/collection-types";
 import type { OfflineSelection, updateOfflineSelection } from "./collection-offline-selection";
 
-export const CollectionSelectionContext = createContext<{
+export type CollectionSelection = {
   state: OfflineSelection;
   dispatch: Dispatch<Parameters<typeof updateOfflineSelection>[1]>;
-} | null>(null);
+};
+export const CollectionSelectionContext = createContext<CollectionSelection | null>(null);
 
 const checkboxClass = "size-4 shrink-0 cursor-pointer accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
