@@ -47,10 +47,10 @@ export function CollectionExcelColumnPicker({ selected, onChange, disabled }: Pr
         <legend className="sr-only">Pilih lajur untuk fail Excel</legend>
         <Input type="search" id="offline-excel-column-search" name="excelColumnSearch" aria-label="Cari lajur Excel"
           placeholder="Cari lajur…" value={query} onChange={event => setQuery(event.target.value)} />
-        <div className="flex flex-wrap gap-1">
-          <Button type="button" size="sm" variant="ghost" disabled={selectedMatches === matches.length}
+        <div className="grid grid-cols-2 gap-1 sm:flex sm:flex-wrap">
+          <Button type="button" size="sm" variant="ghost" className="whitespace-normal max-sm:px-1" disabled={selectedMatches === matches.length}
             onClick={() => setMatches(true)}>{search ? "Pilih hasil carian" : "Pilih semua lajur"}</Button>
-          <Button type="button" size="sm" variant="ghost" disabled={!selectedMatches}
+          <Button type="button" size="sm" variant="ghost" className="whitespace-normal max-sm:px-1" disabled={!selectedMatches}
             onClick={() => setMatches(false)}>{search ? "Nyahpilih hasil carian" : "Kosongkan lajur"}</Button>
         </div>
         <div className="grid max-h-[min(26dvh,14rem)] grid-cols-1 gap-x-3 overflow-y-auto overscroll-contain sm:grid-cols-2">

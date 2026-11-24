@@ -65,7 +65,7 @@ export default function CollectionOfflineSelectionDialog({ mode, state, payment,
           <DialogTitle ref={heading} tabIndex={-1}>{review ? "Rekod dipilih" : changed ? "Semak perubahan rekod" : "Eksport rekod dipilih"}</DialogTitle>
           <DialogDescription>{review ? "Semak rekod daripada semua halaman dan carian." : changed
             ? "Jumlah bayaran atau bilangan resit berubah sejak rekod dipilih. Sahkan nilai terkini sebelum eksport."
-            : receipts ? `ZIP mengandungi fail Excel dan ${receipts} resit asal.` : "Fail Excel akan dieksport tanpa resit."}</DialogDescription>
+            : receipts ? `ZIP mengandungi fail Excel dan ${receipts} resit asal.` : "Eksport Excel tanpa resit."}</DialogDescription>
         </DialogHeader>
         <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-y border-border py-2.5 text-sm tabular-nums">
           <span>{state.items.size} rekod dipilih</span>

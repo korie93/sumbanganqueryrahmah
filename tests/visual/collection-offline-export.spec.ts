@@ -141,7 +141,7 @@ for (const width of [320, 1366]) {
     await action(page, "Export pilihan (ZIP)").click();
     const dialog = page.getByRole("dialog");
     const picker = dialog.getByRole("button", { name: /^Lajur Excel/ });
-    await expect(dialog).toHaveAccessibleDescription("Fail Excel akan dieksport tanpa resit.");
+    await expect(dialog).toHaveAccessibleDescription("Eksport Excel tanpa resit.");
     await expect(dialog.getByText(/Ekstrak ZIP/)).toHaveCount(0);
     await expect(dialog.getByRole("checkbox", { includeHidden: true })).toHaveCount(0);
     await picker.focus();
