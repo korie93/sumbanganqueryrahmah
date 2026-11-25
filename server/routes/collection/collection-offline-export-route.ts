@@ -2,6 +2,7 @@ import { mkdtemp, open, rmdir, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pipeline } from "node:stream/promises";
+import { parseCollectionExcelColumns, type CollectionExcelColumnId } from "../../../shared/common/collection-excel-columns";
 import type { Response } from "express";
 import { COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, collectionOfflineRecordId, type CollectionOfflineExportExpectation } from "../../../shared/common/collection-offline-export";
 import { parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
@@ -18,7 +19,7 @@ function isNonNegativeInteger(value: unknown): value is number {
 }
 
 function parseSelection(body: unknown) {
-  if (!body || typeof body !== "object" || Object.keys(body).some(key => key !== "recordIds" && key !== "expected") || !("recordIds" in body) ||
+  if (!body || typeof body !== "object" || Object.keys(body).some(key => key !== "recordIds" && key !== "expected" && key !== "columns") || !("recordIds" in body) ||
       !Array.isArray(body.recordIds) || !body.recordIds.length) throw badRequest("Pilih sekurang-kurangnya satu rekod.", "BAD_REQUEST");
   if (body.recordIds.length > COLLECTION_OFFLINE_EXPORT_MAX_RECORDS) {
     throw new HttpError(413, "Pilihan melebihi had rekod bagi satu eksport.", { code: "PAYLOAD_TOO_LARGE" });
@@ -42,7 +43,13 @@ function parseSelection(body: unknown) {
       expected.set(id, { id, cents: entry.cents, receipts: entry.receipts });
     }
   }
-  return { ids: [...ids], expected };
+  let columns: CollectionExcelColumnId[] | undefined;
+  if ("columns" in body) {
+    const parsed = parseCollectionExcelColumns(body.columns);
+    if (!parsed) throw badRequest("Pilih sekurang-kurangnya satu lajur Excel yang sah, tanpa ulangan.", "BAD_REQUEST");
+    columns = parsed;
+  }
+  return { ids: [...ids], expected, columns };
 }
 
 function verifyExpectedTotals(records: CollectionRecord[], expected: Map<string, CollectionOfflineExportExpectation>) {
@@ -111,7 +118,7 @@ export function registerCollectionOfflineExportRoute({ app, storage, superuserRe
     res.setHeader("Cache-Control", "private, no-store");
     try {
       if (!actor || user.role !== "superuser" || !isCollectionAccessUserSnapshotUsable(user)) throw forbidden();
-      const { ids, expected } = parseSelection(req.body);
+      const { ids, expected, columns } = parseSelection(req.body);
       selectedCount = ids.length;
       for (const [key, times] of starts) {
         const recent = times.filter(time => time > started - 60_000);
@@ -141,7 +148,7 @@ export function registerCollectionOfflineExportRoute({ app, storage, superuserRe
       verifyExpectedTotals(ordered, expected);
       controller.signal.throwIfAborted();
       directory = await mkdtemp(path.join(tmpdir(), "sqr-collection-export-"));
-      const result = await createCollectionOfflineArchive(ordered, directory, controller.signal);
+      const result = await createCollectionOfflineArchive(ordered, directory, controller.signal, columns);
       archive = result.path;
       receiptCount = result.receiptCount;
       // Persist the disclosure audit before sending any private bytes.

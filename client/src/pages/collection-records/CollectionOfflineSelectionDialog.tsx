@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
+import type { CollectionExcelColumnId } from "@shared/common/collection-excel-columns";
+import { CollectionExcelColumnPicker } from "./CollectionExcelColumnPicker";
 import { formatCollectionCurrencyLabelFromCents } from "@shared/collection-amount-types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,6 +19,8 @@ type Props = {
   receipts: number;
   notice: string;
   busy: boolean;
+  columns: readonly CollectionExcelColumnId[];
+  onColumnsChange: (columns: readonly CollectionExcelColumnId[]) => void;
   onClose: () => void;
   onExport: () => void;
   onRemove: (id: string) => void;
@@ -29,7 +33,7 @@ type Props = {
 
 const PAGE_SIZE = 25;
 
-export default function CollectionOfflineSelectionDialog({ mode, state, payment, receipts, notice, busy, onClose, onExport, onRemove, onRestoreFocus, changes, receiptIssue, onViewReceipt, onAccessLost }: Props) {
+export default function CollectionOfflineSelectionDialog({ mode, state, payment, receipts, notice, busy, columns, onColumnsChange, onClose, onExport, onRemove, onRestoreFocus, changes, receiptIssue, onViewReceipt, onAccessLost }: Props) {
   const review = mode === "review";
   const changed = mode === "changes";
   const heading = useRef<HTMLHeadingElement>(null);
@@ -55,13 +59,13 @@ export default function CollectionOfflineSelectionDialog({ mode, state, payment,
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent data-floating-ai-avoid="true"
-        className="flex min-w-0 max-w-xl flex-col gap-3 sm:gap-4 [&>*]:shrink-0 [&>ul]:min-h-12 [&>ul]:shrink"
+        className="flex min-w-0 max-w-xl flex-col gap-3 sm:gap-4 [&>*]:shrink-0 [&>ul]:min-h-12 [&>ul]:shrink [&>[data-excel-options]]:shrink"
         onCloseAutoFocus={(event) => { event.preventDefault(); onRestoreFocus(); }}>
         <DialogHeader className="min-w-0 pr-6 text-left">
           <DialogTitle ref={heading} tabIndex={-1}>{review ? "Rekod dipilih" : changed ? "Semak perubahan rekod" : "Eksport rekod dipilih"}</DialogTitle>
           <DialogDescription>{review ? "Semak rekod daripada semua halaman dan carian." : changed
             ? "Jumlah bayaran atau bilangan resit berubah sejak rekod dipilih. Sahkan nilai terkini sebelum eksport."
-            : "Muat turun fail Excel bersama resit asal dalam satu fail ZIP."}</DialogDescription>
+            : receipts ? `ZIP mengandungi fail Excel dan ${receipts} resit asal.` : "Eksport Excel tanpa resit."}</DialogDescription>
         </DialogHeader>
         <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2 border-y border-border py-2.5 text-sm tabular-nums">
           <span>{state.items.size} rekod dipilih</span>
@@ -114,14 +118,16 @@ export default function CollectionOfflineSelectionDialog({ mode, state, payment,
             ) : null}
           </>
         ) : changed ? <OfflineEstimateChanges items={state.items} changes={changes} /> : (
-          <div className="space-y-2 text-sm">
-            <p>{receipts ? `${receipts} resit dijangka.` : "Tiada resit dalam rekod dipilih. Fail ZIP mengandungi rekod Excel."}</p>
-            <p className="text-muted-foreground">Ekstrak ZIP dahulu sebelum membuka pautan resit dalam Excel.</p>
+          <div data-excel-options="" className="min-h-0 space-y-2 overflow-y-auto overscroll-contain p-0.5 text-sm">
+            <CollectionExcelColumnPicker selected={columns} onChange={onColumnsChange} disabled={busy} />
+            {receipts > 0 && <p className="text-muted-foreground">{columns.includes("receipt")
+              ? "Ekstrak ZIP dahulu untuk membuka pautan resit dalam Excel."
+              : "Resit asal tersedia dalam folder Receipts."}</p>}
           </div>
         )}
-        <DialogFooter>
+        <DialogFooter className={mode === "confirm" ? "flex-row flex-wrap justify-end" : ""}>
           <Button type="button" variant="outline" onClick={onClose}>{review ? "Tutup" : "Batal"}</Button>
-          {!review ? <Button type="button" onClick={onExport} disabled={busy || !state.items.size}
+          {!review ? <Button type="button" onClick={onExport} disabled={busy || !state.items.size || !columns.length}
             className="h-auto min-h-10 whitespace-normal"
             aria-label={busy ? "Menyediakan ZIP…" : undefined}>
             {busy ? <span role="status">Menyediakan ZIP…</span> : changed ? "Sahkan perubahan dan muat turun ZIP" : "Muat turun ZIP"}

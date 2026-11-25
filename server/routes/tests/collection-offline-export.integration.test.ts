@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { setTimeout as delay } from "node:timers/promises";
 import { unzipSync } from "fflate";
+import * as XLSX from "xlsx";
 import { createCsrfProtectionMiddleware } from "../../http/csrf";
 import type { PostgresStorage, CollectionRecordListFilters } from "../../storage-postgres";
 import { registerCollectionOfflineExportRoute } from "../collection/collection-offline-export-route";
@@ -66,6 +67,40 @@ test("preview must describe each selected record exactly once before any storage
   }
   assert.equal((await post({ recordIds: [id, missing], expected: [estimate, estimate] })).status, 400);
   assert.equal(queries.length, 0);
+});
+
+test("only a superuser can request workbook columns and invalid lists are rejected before querying", async t => {
+  const { post, queries } = await fixture(t);
+  for (const columns of [null, [], "amount", [false], ["unknown"], ["amount", "amount"]]) {
+    assert.equal((await post({ recordIds: [id], columns })).status, 400);
+  }
+  for (const role of ["user", "admin", "manager"]) {
+    assert.equal((await post({ recordIds: [id], columns: ["amount"] }, role)).status, 403);
+  }
+  assert.equal(queries.length, 0);
+  const response = await post({ recordIds: [id], columns: ["amount"] });
+  assert.equal(response.status, 200);
+  const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
+  const book = XLSX.read(zip[Object.keys(zip).find(name => name.endsWith(".xlsx"))!], { type: "array" });
+  assert.deepEqual(book.SheetNames, ["Collection Records", "Export Info"]);
+  assert.deepEqual(XLSX.utils.sheet_to_json(book.Sheets["Collection Records"], { header: 1 }), [["Jumlah Bayaran"], [10.05]]);
+});
+
+test("daily collection export delivers the six selected columns in workbook order", async t => {
+  const { post } = await fixture(t);
+  const response = await post({ recordIds: [id], columns: [
+    "customerName", "cardNumber", "accountNumber", "amount", "paymentDate", "receipt",
+  ] });
+  assert.equal(response.status, 200);
+  const zip = unzipSync(new Uint8Array(await response.arrayBuffer()));
+  const workbookPath = Object.keys(zip).find(name => name.endsWith(".xlsx"));
+  assert.ok(workbookPath);
+  const book = XLSX.read(zip[workbookPath], { type: "array" });
+  const sheet = book.Sheets["Collection Records"];
+  const [headings, row] = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+  assert.deepEqual(headings, ["Nama Pelanggan", "No. Kad", "No. Akaun", "Jumlah Bayaran", "Tarikh Bayaran", "Resit"]);
+  assert.equal(row[0], "Pelanggan Contoh");
+  assert.equal(row[3], 10.05);
 });
 
 test("verified values follow selection order; a second change requires another review before a ZIP is prepared", async t => {

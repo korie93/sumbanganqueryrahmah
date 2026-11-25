@@ -11,6 +11,7 @@ import { assertCollectionReceiptPathWithinBounds } from "../../lib/path-security
 import { COLLECTION_RECEIPT_MAX_BYTES, mapCollectionReceiptExtensionToType, mapCollectionReceiptMimeToType } from "../../routes/collection-receipt-file-type-utils";
 import type { CollectionRecord, CollectionRecordReceipt } from "../../storage-postgres-collection-types";
 import { buildCollectionOfflineWorkbook } from "./collection-offline-workbook";
+import type { CollectionExcelColumnId } from "../../../shared/common/collection-excel-columns";
 
 const ARCHIVE_LIMIT = 128 * 1024 * 1024;
 const tooLarge = () => new HttpError(413, "Eksport melebihi had. Pilih lebih sedikit rekod dan cuba lagi.", { code: "PAYLOAD_TOO_LARGE" });
@@ -68,12 +69,13 @@ async function readReceipt(receipt: CollectionRecordReceipt, position: ReceiptPo
 const readme = [
   "Eksport pilihan SQR",
   "Ekstrak keseluruhan ZIP dahulu. Buka Collection_Selected.xlsx dalam aplikasi Excel desktop.",
-  "Klik Lihat Resit atau pautan pada helaian Receipt Index. Kekalkan buku kerja dan folder Receipts dalam folder yang sama.",
+  "Jika lajur Resit dipilih, gunakan pautan dalam Excel. Semua fail resit asal tersedia dalam folder Receipts.",
   "Office mungkin meminta pengesahan untuk membuka fail setempat. Buka hanya jika anda mengenali sumber fail.",
   "Eksport ini mengandungi data peribadi. Simpan di lokasi yang dilindungi dan kongsi hanya dengan penerima yang dibenarkan.",
 ].join("\r\n");
 
-export async function createCollectionOfflineArchive(records: readonly CollectionRecord[], directory: string, signal: AbortSignal) {
+export async function createCollectionOfflineArchive(records: readonly CollectionRecord[], directory: string, signal: AbortSignal,
+  columns?: readonly CollectionExcelColumnId[]) {
   signal.throwIfAborted();
   if (!records.length || records.length > COLLECTION_OFFLINE_EXPORT_MAX_RECORDS) throw tooLarge();
   const generatedAt = new Date();
@@ -127,7 +129,7 @@ export async function createCollectionOfflineArchive(records: readonly Collectio
       }
     }
     signal.throwIfAborted();
-    await add("Collection_Selected.xlsx", buildCollectionOfflineWorkbook(records, links, generatedAt));
+    await add("Collection_Selected.xlsx", buildCollectionOfflineWorkbook(records, links, generatedAt, columns));
     await add("Export_Readme.txt", strToU8(readme));
     zip.end();
     await flush();

@@ -1,10 +1,11 @@
 import { strToU8, zipSync, type Zippable } from "fflate";
 import { parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
+import { allCollectionExcelColumnIds, collectionExcelColumns, type CollectionExcelColumnId } from "../../../shared/common/collection-excel-columns";
 import { HttpError } from "../../http/errors";
 import type { CollectionRecord } from "../../storage-postgres-collection-types";
 
 // The installed SheetJS reader does not write cell fills or frozen panes.
-// Write this bounded report as native SpreadsheetML with no macro or formula parts.
+// Write this bounded report as native SpreadsheetML with literal user data and one generated subtotal formula.
 const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 const OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -12,7 +13,8 @@ const SHEET = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const CONTENT = "application/vnd.openxmlformats-officedocument.spreadsheetml.";
 const STYLE = { text: 0, number: 1, amount: 2, date: 3, timestamp: 4, link: 5, abort: 6, cp: 7 } as const;
 type Style = keyof typeof STYLE;
-type Value = { value: string | number | null; style: Style; target?: string };
+type Value = { value: string | number | null; style: Style; target?: string; receiptIndexRow?: number;
+  filteredAmount?: { column: number; records: number } };
 type DataCell = Value | string | number | null | undefined;
 type Column = readonly [label: string, width: number];
 
@@ -68,48 +70,59 @@ function status(value: CollectionRecord["cpStatus"]): Value {
   return { value: "Unverified", style: "text" };
 }
 
-const recordColumns: Column[] = [
-  ["Nama Pelanggan", 32], ["No. Kad", 24], ["No. Akaun", 24], ["Jumlah Bayaran", 19],
-  ["Tarikh Bayaran", 18], ["Resit", 27], ["Status CP", 18], ["Record ID", 40],
-  ["No. IC", 21], ["No. Telefon", 20], ["Nickname", 23], ["Batch", 14],
-  ["Fail Sumber", 34], ["Nama Fail Asal", 34], ["Aging", 13], ["Billing Principal (OSP)", 25],
-  ["Jumlah Perlu Dibayar", 24], ["Kutipan Terkumpul", 23], ["Baki Bayaran", 19],
-  ["Ketepatan Padanan (%)", 25], ["Asas Padanan", 22], ["Tarikh Panggilan", 20],
-  ["Akhir Tempoh Panggilan", 24], ["Bilangan Resit", 19], ["Jumlah Resit", 19],
-  ["Status Semakan Resit", 24], ["Catatan Semakan Resit", 40], ["Resit Bertindih", 19],
-  ["Status CP Automatik", 22], ["Sumber Penyelesaian", 25], ["Tarikh Penyelesaian", 23],
-  ["Bayaran POOL", 19], ["Jumlah Ketika Pengesahan", 29], ["Status POOL", 21],
-  ["Kesahan POOL", 28], ["Tarikh POOL", 18], ["Sebab POOL", 30], ["Rujukan POOL", 25],
-  ["Catatan POOL", 40], ["Disahkan Oleh", 22], ["Disahkan Pada (UTC)", 24],
-  ["Sebab Pembatalan POOL", 32], ["Dibatalkan Oleh", 22], ["Dibatalkan Pada (UTC)", 25],
-  ["Direkod Oleh", 22], ["Dicipta (UTC)", 24], ["Dikemas Kini (UTC)", 24],
-];
-
-function recordRow(record: CollectionRecord, paths: readonly string[]): DataCell[] {
-  const manual = record.manualSettlement;
-  const link = paths[0] ? receiptLink(paths[0], paths.length > 1 ? `Lihat Resit (1/${paths.length})` : "Lihat Resit") : "Tiada Resit";
-  return [
-    record.customerName, record.cardNumber, record.accountNumber, money(record.amount),
-    date(record.paymentDate), link, status(record.cpStatus), record.id, record.icNumber,
-    record.customerPhone, record.collectionStaffNickname, record.batch,
-    record.sourceImportName || record.sourceFilename, record.sourceFilename, record.agingBucket,
-    money(record.billingPrincipalOsp), money(record.totalDue), money(record.cumulativeCollected),
-    money(record.remainingAmount), record.sourceMatchAccuracy, record.sourceMatchBasis,
-    date(record.callingDate), date(record.callingWindowEnd), paths.length, money(record.receiptTotalAmount),
-    record.receiptValidationStatus, record.receiptValidationMessage, record.duplicateReceiptFlag ? "Ya" : "Tidak",
-    record.automaticCpStatus ? status(record.automaticCpStatus) : null, record.effectiveSettlementSource,
-    date(record.effectiveSettlementDate), money(manual?.poolAmount), money(manual?.effectiveTotal),
-    manual?.status, manual?.validity, date(manual?.settlementDate), manual?.reason, manual?.reference,
-    manual?.note, manual?.verifiedBy, date(manual?.verifiedAt, true), manual?.revokedReason,
-    manual?.revokedBy, date(manual?.revokedAt, true), record.createdByLogin, date(record.createdAt, true),
-    date(record.updatedAt, true),
-  ];
-}
-
-const receiptColumns: Column[] = [
-  ["Record ID", 40], ["Nama Pelanggan", 32], ["No. Akaun", 24], ["No. Kad", 24],
-  ["No. Resit", 14], ["Jenis Fail", 15], ["Resit", 19],
-];
+type RecordValue = (record: CollectionRecord, paths: readonly string[], indexRow: number) => DataCell;
+const recordValues: Record<CollectionExcelColumnId, RecordValue> = {
+  customerName: record => record.customerName,
+  cardNumber: record => record.cardNumber,
+  accountNumber: record => record.accountNumber,
+  amount: record => money(record.amount),
+  paymentDate: record => date(record.paymentDate),
+  receipt: (_, paths, indexRow) => {
+    if (paths.length > 1) return { value: `Lihat semua ${paths.length} resit`, style: "link", receiptIndexRow: indexRow };
+    return paths.length ? receiptLink(paths[0], "Lihat Resit") : "Tiada Resit";
+  },
+  cpStatus: record => status(record.cpStatus),
+  recordId: record => record.id,
+  icNumber: record => record.icNumber,
+  customerPhone: record => record.customerPhone,
+  nickname: record => record.collectionStaffNickname,
+  batch: record => record.batch,
+  sourceName: record => record.sourceImportName || record.sourceFilename,
+  sourceFilename: record => record.sourceFilename,
+  aging: record => record.agingBucket,
+  billingPrincipalOsp: record => money(record.billingPrincipalOsp),
+  totalDue: record => money(record.totalDue),
+  cumulativeCollected: record => money(record.cumulativeCollected),
+  remainingAmount: record => money(record.remainingAmount),
+  sourceMatchAccuracy: record => record.sourceMatchAccuracy,
+  sourceMatchBasis: record => record.sourceMatchBasis,
+  callingDate: record => date(record.callingDate),
+  callingWindowEnd: record => date(record.callingWindowEnd),
+  receiptCount: (_, paths) => paths.length,
+  receiptTotalAmount: record => money(record.receiptTotalAmount),
+  receiptValidationStatus: record => record.receiptValidationStatus,
+  receiptValidationMessage: record => record.receiptValidationMessage,
+  duplicateReceiptFlag: record => record.duplicateReceiptFlag ? "Ya" : "Tidak",
+  automaticCpStatus: record => record.automaticCpStatus ? status(record.automaticCpStatus) : null,
+  effectiveSettlementSource: record => record.effectiveSettlementSource,
+  effectiveSettlementDate: record => date(record.effectiveSettlementDate),
+  poolAmount: record => money(record.manualSettlement?.poolAmount),
+  effectiveTotal: record => money(record.manualSettlement?.effectiveTotal),
+  poolStatus: record => record.manualSettlement?.status,
+  validity: record => record.manualSettlement?.validity,
+  settlementDate: record => date(record.manualSettlement?.settlementDate),
+  reason: record => record.manualSettlement?.reason,
+  reference: record => record.manualSettlement?.reference,
+  note: record => record.manualSettlement?.note,
+  verifiedBy: record => record.manualSettlement?.verifiedBy,
+  verifiedAt: record => date(record.manualSettlement?.verifiedAt, true),
+  revokedReason: record => record.manualSettlement?.revokedReason,
+  revokedBy: record => record.manualSettlement?.revokedBy,
+  revokedAt: record => date(record.manualSettlement?.revokedAt, true),
+  createdByLogin: record => record.createdByLogin,
+  createdAt: record => date(record.createdAt, true),
+  updatedAt: record => date(record.updatedAt, true),
+};
 
 function styles(): string {
   const fonts = [
@@ -138,7 +151,9 @@ function relationships(items: string[]): Uint8Array {
   return strToU8(`${XML}<Relationships xmlns="${PACKAGE}">${items.join("")}</Relationships>`);
 }
 
-function writeSheet(files: Zippable, index: number, columns: Column[], rows: Iterable<DataCell[]>, filter: boolean) {
+type SheetOptions = { filter?: boolean; freezeName?: boolean };
+
+function writeSheet(files: Zippable, index: number, columns: Column[], rows: Iterable<DataCell[]>, options: SheetOptions = {}) {
   const letters = columns.map((_, i) => columnName(i));
   const cells: string[] = [];
   const links: string[] = [];
@@ -155,13 +170,19 @@ function writeSheet(files: Zippable, index: number, columns: Column[], rows: Ite
       const ref = `${letters[i]}${count}`;
       const style = header ? 1 : 2 + (count % 2) * 8 + STYLE[cell.style];
       const attr = `r="${ref}" s="${style}"`;
-      if (cell.target) {
+      if (cell.receiptIndexRow !== undefined) {
+        links.push(`<hyperlink ref="${ref}" location="'Receipt Index'!A${cell.receiptIndexRow}"/>`);
+      } else if (cell.target) {
         const id = `rId${links.length + 1}`;
         links.push(`<hyperlink ref="${ref}" r:id="${id}"/>`);
         rels.push(relationship(id, "hyperlink", cell.target, true));
       }
       let encoded: string;
-      if (cell.value == null) encoded = `<c ${attr}/>`;
+      if (cell.filteredAmount && cell.filteredAmount.records > 0) {
+        const letter = columnName(cell.filteredAmount.column);
+        const range = `'Collection Records'!${letter}2:${letter}${cell.filteredAmount.records + 1}`;
+        encoded = `<c ${attr}><f>SUBTOTAL(109,${range})</f><v>${cell.value}</v></c>`;
+      } else if (cell.value == null) encoded = `<c ${attr}/>`;
       else if (typeof cell.value === "number") encoded = `<c ${attr}><v>${cell.value}</v></c>`;
       else encoded = `<c ${attr} t="inlineStr"><is><t xml:space="preserve">${inlineText(cell.value)}</t></is></c>`;
       sheetBytes += Buffer.byteLength(encoded);
@@ -176,8 +197,10 @@ function writeSheet(files: Zippable, index: number, columns: Column[], rows: Ite
   for (const data of rows) row(data, false);
   const range = `A1:${letters[letters.length - 1]}${count}`;
   const widths = columns.map(([, width], i) => `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`).join("");
-  const frozen = '<pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/>';
-  const worksheet = `${XML}<worksheet xmlns="${SHEET}" xmlns:r="${OFFICE}"><dimension ref="${range}"/><sheetViews><sheetView workbookViewId="0">${frozen}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="17"/><cols>${widths}</cols><sheetData>${cells.join("")}</sheetData>${filter ? `<autoFilter ref="${range}"/>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}</worksheet>`;
+  const pane = options.freezeName ? "bottomRight" : "bottomLeft";
+  const firstCell = options.freezeName ? "B2" : "A2";
+  const frozen = `<pane ${options.freezeName ? 'xSplit="1" ' : ""}ySplit="1" topLeftCell="${firstCell}" activePane="${pane}" state="frozen"/><selection pane="${pane}" activeCell="${firstCell}" sqref="${firstCell}"/>`;
+  const worksheet = `${XML}<worksheet xmlns="${SHEET}" xmlns:r="${OFFICE}"><dimension ref="${range}"/><sheetViews><sheetView workbookViewId="0">${frozen}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="17"/><cols>${widths}</cols><sheetData>${cells.join("")}</sheetData>${options.filter ? `<autoFilter ref="${range}"/>` : ""}${links.length ? `<hyperlinks>${links.join("")}</hyperlinks>` : ""}</worksheet>`;
   files[`xl/worksheets/sheet${index}.xml`] = strToU8(worksheet);
   if (rels.length) files[`xl/worksheets/_rels/sheet${index}.xml.rels`] = relationships(rels);
 }
@@ -186,36 +209,59 @@ export function buildCollectionOfflineWorkbook(
   records: readonly CollectionRecord[],
   receipts: ReadonlyMap<string, readonly string[]>,
   generatedAt: Date,
+  columnIds: readonly CollectionExcelColumnId[] = allCollectionExcelColumnIds,
 ): Uint8Array {
   const files: Zippable = {};
+  const selected = new Set(columnIds);
+  const columns = collectionExcelColumns.filter(column => selected.has(column.id));
+  if (!columns.length) throw new Error("Pilih sekurang-kurangnya satu lajur Excel.");
+  const amountColumn = columns.findIndex(column => column.id === "amount");
   let count = 0;
   let totalCents = 0;
   const rows = records.map(record => {
     const paths = receipts.get(record.id) ?? [];
+    const indexRow = count + 2;
     count += paths.length;
     const cents = parseCollectionAmountToCents(record.amount, { allowZero: true });
     if (cents === null || !Number.isSafeInteger(totalCents + cents)) throw new Error("Jumlah eksport tidak sah.");
     totalCents += cents;
-    return recordRow(record, paths);
+    return columns.map(column => recordValues[column.id](record, paths, indexRow));
   });
-  writeSheet(files, 1, recordColumns, rows, true);
-  function* receiptRows() {
-    for (const record of records) {
-      for (const [i, target] of (receipts.get(record.id) ?? []).entries()) {
-        yield [record.id, record.customerName, record.accountNumber, record.cardNumber,
-          i + 1, target.slice(target.lastIndexOf(".") + 1).toUpperCase(), receiptLink(target, "Lihat Resit")];
+  writeSheet(files, 1, columns.map(({ label, width }) => [label, width]), rows, {
+    filter: true, freezeName: selected.has("customerName"),
+  });
+
+  const sheets = ["Collection Records"];
+  if (selected.has("receipt")) {
+    sheets.push("Receipt Index");
+    const identifiers = (["recordId", "customerName", "accountNumber", "cardNumber"] as const)
+      .flatMap(id => columns.filter(column => column.id === id));
+    function* receiptRows() {
+      for (const record of records) {
+        for (const [i, target] of (receipts.get(record.id) ?? []).entries()) {
+          yield [...identifiers.map(column => recordValues[column.id](record, [], 0)),
+            i + 1, target.slice(target.lastIndexOf(".") + 1).toUpperCase(), receiptLink(target, "Lihat Resit")];
+        }
       }
     }
+    const indexColumns: Column[] = identifiers.map(({ label, width }) => [label, width]);
+    indexColumns.push(["No. Resit", 14], ["Jenis Fail", 15], ["Resit", 19]);
+    writeSheet(files, 2, indexColumns, receiptRows(), { filter: true });
   }
-  writeSheet(files, 2, receiptColumns, receiptRows(), true);
-  writeSheet(files, 3, [["Maklumat Eksport", 28], ["Nilai", 78]], [
-    ["Dijana (UTC)", date(generatedAt, true)], ["Bilangan Rekod", records.length],
-    ["Bilangan Resit", count], ["Jumlah Bayaran", { value: totalCents / 100, style: "amount" }],
-    ["Cara guna", "Ekstrak ZIP dahulu. Buka Collection_Selected.xlsx dan klik pautan Lihat Resit."],
-    ["Beberapa resit", "Buka Receipt Index dan tapis mengikut Record ID untuk melihat setiap resit."],
-  ], false);
 
-  const sheets = ["Collection Records", "Receipt Index", "Export Info"];
+  const info: DataCell[][] = [
+    ["Dijana (UTC)", date(generatedAt, true)], ["Bilangan Rekod", records.length], ["Bilangan Resit", count],
+  ];
+  if (amountColumn >= 0) {
+    info.push(["Jumlah Bayaran", { value: totalCents / 100, style: "amount" }],
+      ["Jumlah bayaran yang dipaparkan", { value: totalCents / 100, style: "amount",
+        filteredAmount: { column: amountColumn, records: records.length } }]);
+  }
+  info.push(["Cara guna", "Ekstrak ZIP dahulu dan kekalkan fail Excel bersama folder Receipts."]);
+  if (selected.has("receipt")) info.push(["Beberapa resit", "Klik pautan Lihat semua resit untuk membuka senarai resit transaksi."]);
+  sheets.push("Export Info");
+  writeSheet(files, sheets.length, [["Maklumat Eksport", 28], ["Nilai", 78]], info);
+
   const workbook = sheets.map((name, i) => `<sheet name="${name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("");
   files["xl/workbook.xml"] = strToU8(`${XML}<workbook xmlns="${SHEET}" xmlns:r="${OFFICE}"><bookViews><workbookView/></bookViews><sheets>${workbook}</sheets></workbook>`);
   files["xl/styles.xml"] = strToU8(styles());

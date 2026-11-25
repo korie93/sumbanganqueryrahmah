@@ -125,6 +125,108 @@ test("Collection offline export keeps the exact selection through pagination, se
 
 const exportControlsModule = /\/CollectionOfflineExportControls(?:-[\w-]+\.js|\.tsx)(?:\?.*)?$/;
 
+for (const width of [320, 1366]) {
+  test(`Superuser chooses Excel columns and keeps them after a revised estimate at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: width === 320 ? 640 : 768 });
+    await installFixture(page, baseURL, { role: "superuser", count: 1, recordId, theme: width === 320 ? "dark" : "light" });
+    const posts: unknown[] = [];
+    const revised = snapshot(1, 150000);
+    await page.route(new URL("/api/collection/export-selected-offline", baseURL).href, async route => {
+      posts.push(route.request().postDataJSON());
+      if (posts.length === 1) return exportError(route, 409, "OFFLINE_EXPORT_SELECTION_CHANGED", { changes: [revised] });
+      await fulfillTestZip(route);
+    });
+    await openRecords(page);
+    await checkbox(page, 1).check();
+    await action(page, "Export pilihan (ZIP)").click();
+    const dialog = page.getByRole("dialog");
+    const picker = dialog.getByRole("button", { name: /^Lajur Excel/ });
+    await expect(dialog).toHaveAccessibleDescription("Eksport Excel tanpa resit.");
+    await expect(dialog.getByText(/Ekstrak ZIP/)).toHaveCount(0);
+    await expect(dialog.getByRole("checkbox", { includeHidden: true })).toHaveCount(0);
+    await picker.focus();
+    await page.keyboard.press("Enter");
+    await expect(picker).toContainText("(47/47)");
+    await expect(dialog.getByRole("checkbox", { name: "Nama Pelanggan" })).toBeChecked();
+    await expect(dialog.getByRole("checkbox", { name: "Dikemas Kini (UTC)" })).toBeChecked();
+    const confirm = action(dialog, "Muat turun ZIP");
+    await expect(confirm).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole("checkbox", { name: "Jumlah Bayaran", exact: true })).toBeInViewport({ ratio: 1 });
+    await dialog.screenshot({ path: testInfo.outputPath("excel-column-picker.png") });
+    await action(dialog, "Kosongkan lajur").click();
+    const download = action(dialog, "Muat turun ZIP");
+    await expect(download).toBeDisabled();
+    await action(dialog, "Pilih semua lajur").click();
+    await expect(download).toBeEnabled();
+    await action(dialog, "Kosongkan lajur").click();
+    const search = dialog.getByRole("searchbox", { name: "Cari lajur Excel" });
+    await search.fill("Jumlah Bayaran");
+    await dialog.getByRole("checkbox", { name: "Jumlah Bayaran", exact: true }).check();
+    await search.fill("Nama Pelanggan");
+    await dialog.getByRole("checkbox", { name: "Nama Pelanggan", exact: true }).check();
+    await expect(picker).toContainText("(2/");
+    expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth + 1)).toBe(true);
+    await download.click();
+    const changed = page.getByRole("dialog", { name: "Semak perubahan rekod" });
+    const downloaded = page.waitForEvent("download");
+    await action(changed, "Sahkan perubahan dan muat turun ZIP").click();
+    await downloaded;
+    const columns = ["customerName", "amount"];
+    expect(posts).toEqual([{ ...selectionRequest(snapshot(1)), columns }, { ...selectionRequest(revised), columns }]);
+  });
+}
+
+test("daily workbook preset exports six columns and bulk search edits only its matches", async ({ page, baseURL }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await installFixture(page, baseURL, { role: "superuser", count: 1, receipts: 2, recordId });
+  const requests: unknown[] = [];
+  await page.route(new URL("/api/collection/export-selected-offline", baseURL).href, async route => {
+    requests.push(route.request().postDataJSON());
+    await fulfillTestZip(route);
+  });
+  await openRecords(page);
+  await checkbox(page, 1).check();
+  const openExport = action(page, "Export pilihan (ZIP)");
+  const dialog = page.getByRole("dialog");
+  const picker = dialog.getByRole("button", { name: /^Lajur Excel/ });
+  const daily = ["customerName", "cardNumber", "accountNumber", "amount", "paymentDate", "receipt"];
+  const expected = selectionRequest(snapshot(1, 125000, 2));
+  const download = () => Promise.all([page.waitForEvent("download"), action(dialog, "Muat turun ZIP").click()]);
+  await openExport.click();
+  await expect(dialog).toHaveAccessibleDescription("ZIP mengandungi fail Excel dan 2 resit asal.");
+  await expect(dialog.getByText(/Ekstrak ZIP/)).toBeVisible();
+  const preset = action(dialog, "Kutipan harian");
+  await preset.focus();
+  await page.keyboard.press("Enter");
+  await expect(picker).toHaveText(/6\/47/);
+  await download();
+  expect(requests).toEqual([{ ...expected, columns: daily }]);
+
+  await openExport.click();
+  await picker.click();
+  const search = dialog.getByRole("searchbox", { name: "Cari lajur Excel" });
+  await search.fill("  ReSiT ");
+  const addResults = action(dialog, "Pilih hasil carian");
+  const removeResults = action(dialog, "Nyahpilih hasil carian");
+  await expect(preset).toHaveCount(0);
+  await addResults.click();
+  await expect(addResults).toBeDisabled();
+  await expect(dialog.getByRole("checkbox", { checked: false })).toHaveCount(0);
+  await removeResults.click();
+  await expect(removeResults).toBeDisabled();
+  await expect(picker).toHaveText(/5\/47/);
+  await expect(dialog.getByText(/folder Receipts/)).toBeVisible();
+  await search.fill("nonexistent synthetic column");
+  await expect(dialog.getByText("Tiada lajur sepadan.")).toBeVisible();
+  await expect(addResults).toBeDisabled();
+  await expect(removeResults).toBeDisabled();
+  await search.fill(" ");
+  await expect(action(dialog, "Kosongkan lajur")).toBeVisible();
+  await dialog.getByRole("checkbox", { name: "Status CP", exact: true }).check();
+  await download();
+  expect(requests[1]).toEqual({ ...expected, columns: [...daily.slice(0, -1), "cpStatus"] });
+});
+
 test("Collection records remain selectable while the export controls are loading", async ({ page, baseURL }) => {
   await installFixture(page, baseURL, { role: "superuser", count: 2, recordId });
   let releaseControls!: () => void;
