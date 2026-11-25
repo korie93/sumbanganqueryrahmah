@@ -214,14 +214,21 @@ async function scrollHorizontal(page: Page, fraction: number) {
 }
 
 async function scrollVertical(page: Page, fraction: number) {
-  await viewport(page).evaluate((element, value) => {
+  const targetTop = await viewport(page).evaluate((element, value) => {
     const candidate = [...element.querySelectorAll<HTMLElement>("*")].find((node) =>
       node.scrollHeight > node.clientHeight + 1 && node.clientHeight > 0
       && /auto|scroll/.test(getComputedStyle(node).overflowY) && node.querySelector("[data-viewer-column]"));
     if (!candidate) throw new Error("Viewer must expose a vertical row scroll viewport");
-    candidate.scrollTo({ top: (candidate.scrollHeight - candidate.clientHeight) * value, behavior: "auto" });
+    const top = Math.round((candidate.scrollHeight - candidate.clientHeight) * value);
+    candidate.scrollTo({ top, behavior: "auto" });
+    return top;
   }, fraction);
-  if (fraction > 0) await expect.poll(async () => (await geometry(page)).scrollTop).toBeGreaterThan(0);
+  // The browser updates scrollTop before react-window mounts the new rows.
+  // Retry the measurement until a fully visible body cell exists at the target.
+  await expect(async () => {
+    const { scrollTop } = await geometry(page);
+    expect(Math.abs(scrollTop - targetTop)).toBeLessThanOrEqual(1);
+  }).toPass({ timeout: 15_000 });
 }
 
 async function expectAccessible(page: Page, context: string) {

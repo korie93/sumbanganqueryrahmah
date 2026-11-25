@@ -1,5 +1,5 @@
 import { strToU8, zipSync, type Zippable } from "fflate";
-import { parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
+import { formatCollectionCurrencyLabelFromCents, parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
 import { allCollectionExcelColumnIds, collectionExcelColumns, type CollectionExcelColumnId } from "../../../shared/common/collection-excel-columns";
 import { HttpError } from "../../http/errors";
 import type { CollectionRecord } from "../../storage-postgres-collection-types";
@@ -11,7 +11,11 @@ const OFFICE = "http://schemas.openxmlformats.org/officeDocument/2006/relationsh
 const PACKAGE = "http://schemas.openxmlformats.org/package/2006/relationships";
 const SHEET = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const CONTENT = "application/vnd.openxmlformats-officedocument.spreadsheetml.";
-const STYLE = { text: 0, number: 1, amount: 2, date: 3, timestamp: 4, link: 5, abort: 6, cp: 7 } as const;
+const STYLE = { text: 0, number: 1, amount: 2, date: 3, timestamp: 4, link: 5, abort: 6, cp: 7, amountLink: 8 } as const;
+const stylesPerBand = Object.keys(STYLE).length;
+const receiptPreviewLimit = 5;
+const missingReceiptAmount = "Amaun tidak direkodkan";
+export type WorkbookReceipt = { target: string; amountCents: number | null };
 type Style = keyof typeof STYLE;
 type Value = { value: string | number | null; style: Style; target?: string; receiptIndexRow?: number;
   filteredAmount?: { column: number; records: number } };
@@ -57,11 +61,12 @@ function date(value: string | Date | null | undefined, time = false): Value {
   return { value: time ? days : Math.floor(days), style };
 }
 
-function receiptLink(target: string, label: string): Value {
+function receiptLink({ target, amountCents }: WorkbookReceipt): Value {
   if (!/^Receipts\/[a-zA-Z0-9_-]+\.(?:pdf|jpe?g|png|webp)$/iu.test(target)) {
     throw new Error("Pautan resit setempat tidak sah.");
   }
-  return { value: label, style: "link", target };
+  return amountCents === null ? { value: missingReceiptAmount, style: "link", target }
+    : { value: amountCents / 100, style: "amountLink", target };
 }
 
 function status(value: CollectionRecord["cpStatus"]): Value {
@@ -70,16 +75,22 @@ function status(value: CollectionRecord["cpStatus"]): Value {
   return { value: "Unverified", style: "text" };
 }
 
-type RecordValue = (record: CollectionRecord, paths: readonly string[], indexRow: number) => DataCell;
+type RecordValue = (record: CollectionRecord, receipts: readonly WorkbookReceipt[], indexRow: number) => DataCell;
 const recordValues: Record<CollectionExcelColumnId, RecordValue> = {
   customerName: record => record.customerName,
   cardNumber: record => record.cardNumber,
   accountNumber: record => record.accountNumber,
   amount: record => money(record.amount),
   paymentDate: record => date(record.paymentDate),
-  receipt: (_, paths, indexRow) => {
-    if (paths.length > 1) return { value: `Lihat semua ${paths.length} resit`, style: "link", receiptIndexRow: indexRow };
-    return paths.length ? receiptLink(paths[0], "Lihat Resit") : "Tiada Resit";
+  receipt: (_, receipts, indexRow) => {
+    if (!receipts.length) return "Tiada Resit";
+    if (receipts.length === 1) return receiptLink(receipts[0]);
+    const lines = receipts.slice(0, receiptPreviewLimit).map(({ amountCents }, i) => {
+      const amount = amountCents === null ? missingReceiptAmount : formatCollectionCurrencyLabelFromCents(amountCents);
+      return `Resit ${i + 1} · ${amount}`;
+    });
+    if (receipts.length > receiptPreviewLimit) lines.push(`Lihat semua ${receipts.length} resit`);
+    return { value: lines.join("\n"), style: "link", receiptIndexRow: indexRow };
   },
   cpStatus: record => status(record.cpStatus),
   recordId: record => record.id,
@@ -98,7 +109,7 @@ const recordValues: Record<CollectionExcelColumnId, RecordValue> = {
   sourceMatchBasis: record => record.sourceMatchBasis,
   callingDate: record => date(record.callingDate),
   callingWindowEnd: record => date(record.callingWindowEnd),
-  receiptCount: (_, paths) => paths.length,
+  receiptCount: (_, receipts) => receipts.length,
   receiptTotalAmount: record => money(record.receiptTotalAmount),
   receiptValidationStatus: record => record.receiptValidationStatus,
   receiptValidationMessage: record => record.receiptValidationMessage,
@@ -138,7 +149,7 @@ function styles(): string {
   const formats = [xf(0, 0), xf(1, 2)];
   for (const fill of [0, 3]) {
     formats.push(xf(0, fill), xf(0, fill, 0, "right"), xf(2, fill, 164, "right"),
-      xf(0, fill, 165, "right"), xf(0, fill, 166, "right"), xf(3, fill), xf(4, 4), xf(4, 5));
+      xf(0, fill, 165, "right"), xf(0, fill, 166, "right"), xf(3, fill), xf(4, 4), xf(4, 5), xf(3, fill, 164, "right"));
   }
   return `${XML}<styleSheet xmlns="${SHEET}"><numFmts count="3"><numFmt numFmtId="164" formatCode="&quot;RM&quot; #,##0.00"/><numFmt numFmtId="165" formatCode="dd/mm/yyyy"/><numFmt numFmtId="166" formatCode="dd/mm/yyyy hh:mm:ss"/></numFmts><fonts count="${fonts.length}">${fonts.join("")}</fonts><fills count="${fills.length}">${fills.join("")}</fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${formats.length}">${formats.join("")}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
 }
@@ -163,12 +174,15 @@ function writeSheet(files: Zippable, index: number, columns: Column[], rows: Ite
   function row(values: DataCell[], header: boolean) {
     count++;
     if (values.length !== columns.length) throw new Error("Struktur kolum eksport tidak sepadan.");
-    cells.push(`<row r="${count}"${header ? ' ht="28" customHeight="1"' : ""}>`);
+    const receiptSummary = values.find((item): item is Value =>
+      typeof item === "object" && item !== null && item.receiptIndexRow !== undefined);
+    const height = header ? 28 : receiptSummary ? String(receiptSummary.value).split("\n").length * 17 : null;
+    cells.push(`<row r="${count}"${height ? ` ht="${height}" customHeight="1"` : ""}>`);
     values.forEach((item, i) => {
       const cell: Value = item && typeof item === "object" ? item
         : { value: item ?? null, style: typeof item === "number" ? "number" : "text" };
       const ref = `${letters[i]}${count}`;
-      const style = header ? 1 : 2 + (count % 2) * 8 + STYLE[cell.style];
+      const style = header ? 1 : 2 + (count % 2) * stylesPerBand + STYLE[cell.style];
       const attr = `r="${ref}" s="${style}"`;
       if (cell.receiptIndexRow !== undefined) {
         links.push(`<hyperlink ref="${ref}" location="'Receipt Index'!A${cell.receiptIndexRow}"/>`);
@@ -207,7 +221,7 @@ function writeSheet(files: Zippable, index: number, columns: Column[], rows: Ite
 
 export function buildCollectionOfflineWorkbook(
   records: readonly CollectionRecord[],
-  receipts: ReadonlyMap<string, readonly string[]>,
+  receipts: ReadonlyMap<string, readonly WorkbookReceipt[]>,
   generatedAt: Date,
   columnIds: readonly CollectionExcelColumnId[] = allCollectionExcelColumnIds,
 ): Uint8Array {
@@ -219,13 +233,13 @@ export function buildCollectionOfflineWorkbook(
   let count = 0;
   let totalCents = 0;
   const rows = records.map(record => {
-    const paths = receipts.get(record.id) ?? [];
+    const attachments = receipts.get(record.id) ?? [];
     const indexRow = count + 2;
-    count += paths.length;
+    count += attachments.length;
     const cents = parseCollectionAmountToCents(record.amount, { allowZero: true });
     if (cents === null || !Number.isSafeInteger(totalCents + cents)) throw new Error("Jumlah eksport tidak sah.");
     totalCents += cents;
-    return columns.map(column => recordValues[column.id](record, paths, indexRow));
+    return columns.map(column => recordValues[column.id](record, attachments, indexRow));
   });
   writeSheet(files, 1, columns.map(({ label, width }) => [label, width]), rows, {
     filter: true, freezeName: selected.has("customerName"),
@@ -238,14 +252,14 @@ export function buildCollectionOfflineWorkbook(
       .flatMap(id => columns.filter(column => column.id === id));
     function* receiptRows() {
       for (const record of records) {
-        for (const [i, target] of (receipts.get(record.id) ?? []).entries()) {
+        for (const [i, receipt] of (receipts.get(record.id) ?? []).entries()) {
           yield [...identifiers.map(column => recordValues[column.id](record, [], 0)),
-            i + 1, target.slice(target.lastIndexOf(".") + 1).toUpperCase(), receiptLink(target, "Lihat Resit")];
+            i + 1, receipt.target.slice(receipt.target.lastIndexOf(".") + 1).toUpperCase(), receiptLink(receipt)];
         }
       }
     }
     const indexColumns: Column[] = identifiers.map(({ label, width }) => [label, width]);
-    indexColumns.push(["No. Resit", 14], ["Jenis Fail", 15], ["Resit", 19]);
+    indexColumns.push(["No. Resit", 14], ["Jenis Fail", 15], ["Resit", 28]);
     writeSheet(files, 2, indexColumns, receiptRows(), { filter: true });
   }
 
@@ -258,7 +272,7 @@ export function buildCollectionOfflineWorkbook(
         filteredAmount: { column: amountColumn, records: records.length } }]);
   }
   info.push(["Cara guna", "Ekstrak ZIP dahulu dan kekalkan fail Excel bersama folder Receipts."]);
-  if (selected.has("receipt")) info.push(["Beberapa resit", "Klik pautan Lihat semua resit untuk membuka senarai resit transaksi."]);
+  if (selected.has("receipt")) info.push(["Pautan resit", "Klik amaun untuk membuka fail resit. Untuk transaksi dengan beberapa resit, klik pecahan amaun untuk membuka Receipt Index, kemudian pilih resit."]);
   sheets.push("Export Info");
   writeSheet(files, sheets.length, [["Maklumat Eksport", 28], ["Nilai", 78]], info);
 

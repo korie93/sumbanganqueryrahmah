@@ -18,7 +18,7 @@ Pilihan lajur hanya mengawal buku kerja. Fail resit asal tetap disertakan dalam 
 
 - `Collection_Selected.xlsx` mengandungi **Collection Records**, **Export Info** dan, apabila lajur **Resit** dipilih, **Receipt Index**. Setiap transaksi muncul mengikut turutan pemilihan. Helaian data mempunyai penapis dan baris tajuk yang dibekukan. Dalam **Collection Records**, lajur **Nama Pelanggan** turut dikunci apabila dipilih.
 - Nombor akaun, kad, IC dan telefon disimpan sebagai teks supaya sifar awal dan digit panjang kekal. Tarikh dan amaun menggunakan jenis sel Excel yang boleh disusun dan dijumlahkan. Nombor kad penuh diperoleh melalui padanan sumber yang disahkan oleh SQR.
-- Untuk transaksi dengan satu resit, **Lihat Resit** membuka fail asal. Bagi beberapa resit, **Lihat semua … resit** melompat ke baris pertama transaksi itu dalam **Receipt Index**. Setiap resit mempunyai pautan sendiri. Indeks hanya mengulang lajur pengenalan yang dipilih. Rekod tanpa resit ditandakan **Tiada Resit**.
+- Lajur **Resit** menunjukkan amaun yang direkodkan pada setiap resit. Klik amaun untuk membuka fail asal jika transaksi mempunyai satu resit. Bagi beberapa resit, lajur ini menyenaraikan nombor dan amaun bagi lima resit pertama. Klik pecahan itu untuk membuka **Receipt Index**, yang menyenaraikan semua resit transaksi. Amaun dalam indeks ialah nilai mata wang Excel yang boleh diklik. Resit yang tiada amaun tertera sebagai **Amaun tidak direkodkan**, dan rekod tanpa lampiran tertera sebagai **Tiada Resit**.
 - Apabila lajur **Jumlah Bayaran** dipilih, **Export Info** memaparkan jumlah keseluruhan dan **Jumlah bayaran yang dipaparkan**. Nilai kedua dikira semula oleh Excel melalui `SUBTOTAL(109,…)` apabila baris ditapis atau disembunyikan dalam **Collection Records**.
 - `Export_Readme.txt` memberikan arahan penggunaan luar talian dan pengendalian data peribadi. Ekstrak keseluruhan ZIP dan kekalkan Excel bersama folder `Receipts` apabila memindahkan laporan.
 
@@ -71,5 +71,5 @@ Dalam persekitaran ujian visual SQR, jalankan Playwright untuk `tests/visual/col
 ### Semakan manual Excel Desktop
 
 1. Ekstrak ZIP dan buka `Collection_Selected.xlsx` dalam Microsoft Excel Desktop. Semak nombor akaun dengan sifar awal, susun tarikh dan tapis status CP.
-2. Putuskan sambungan rangkaian. Klik **Lihat Resit** untuk satu resit. Klik **Lihat semua … resit** untuk beberapa resit, kemudian buka fail kedua pada **Receipt Index**. Excel mungkin meminta pengesahan sebelum membuka fail.
+2. Putuskan sambungan rangkaian. Klik amaun dalam lajur **Resit** untuk transaksi dengan satu resit. Untuk transaksi dengan beberapa resit, klik pecahan amaun, kemudian klik amaun resit kedua pada **Receipt Index**. Excel mungkin meminta pengesahan sebelum membuka fail.
 3. Pindahkan keseluruhan folder yang diekstrak dan ulang semakan pautan. Bandingkan bilangan resit serta jumlah bayaran dengan helaian **Export Info**.

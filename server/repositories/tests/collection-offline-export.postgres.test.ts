@@ -47,8 +47,8 @@ test("selected Collection SQL and downloaded offline ZIP reconcile on disposable
     for (const id of [active, legacy]) await writeFile(path.join(COLLECTION_RECEIPT_DIR, id + ".pdf"), pdf);
     async function attach(id: string, storagePath: string, archived: boolean) {
       await runtime.pool.query(`INSERT INTO public.collection_record_receipts
-        (id,collection_record_id,storage_path,original_file_name,original_mime_type,original_extension,file_size,deleted_at)
-        VALUES ($1,$2,$3,'Contoh.pdf','application/pdf','.pdf',$4,$5)`,
+        (id,collection_record_id,storage_path,original_file_name,original_mime_type,original_extension,file_size,deleted_at,receipt_amount)
+        VALUES ($1,$2,$3,'Contoh.pdf','application/pdf','.pdf',$4,$5,1230)`,
       [randomUUID(), id, storagePath, pdf.length, archived ? new Date() : null]);
     }
     await attach(active, addr(active), false);
@@ -131,10 +131,11 @@ test("selected Collection SQL and downloaded offline ZIP reconcile on disposable
         const book = XLSX.read(files[workbook], { type: "array" });
         const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(book.Sheets["Collection Records"]!);
         assert.deepEqual(rows.map(row => row["Record ID"]), [legacy, retired, active]);
-        assert.equal(rows[1]?.Resit, "Tiada Resit");
+        assert.deepEqual(rows.map(row => row.Resit), ["Amaun tidak direkodkan", "Tiada Resit", 12.30]);
         const index = book.Sheets["Receipt Index"]!;
         const indexed = XLSX.utils.sheet_to_json<Record<string, unknown>>(index);
         assert.deepEqual(indexed.map(row => row["Record ID"]), [legacy, active]);
+        assert.deepEqual(indexed.map(row => row.Resit), ["Amaun tidak direkodkan", 12.30]);
         const root = path.posix.dirname(workbook) + "/";
         for (const address of ["G2", "G3"]) {
           const cell = index[address] as XLSX.CellObject | undefined;

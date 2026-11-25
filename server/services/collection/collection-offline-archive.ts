@@ -4,13 +4,14 @@ import { open, unlink } from "node:fs/promises";
 import path from "node:path";
 import { Zip, ZipPassThrough, strToU8 } from "fflate";
 import { collectionOfflineRecordId, COLLECTION_OFFLINE_EXPORT_MAX_RECORDS, COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS } from "../../../shared/common/collection-offline-export";
+import { parseCollectionAmountToCents } from "../../../shared/collection-amount-types";
 import { HttpError } from "../../http/errors";
 import { resolveCollectionReceiptStoragePath } from "../../lib/collection-receipt-files";
 import { detectCollectionReceiptSignature, validateCollectionReceiptSecurity } from "../../lib/collection-receipt-security";
 import { assertCollectionReceiptPathWithinBounds } from "../../lib/path-security";
 import { COLLECTION_RECEIPT_MAX_BYTES, mapCollectionReceiptExtensionToType, mapCollectionReceiptMimeToType } from "../../routes/collection-receipt-file-type-utils";
 import type { CollectionRecord, CollectionRecordReceipt } from "../../storage-postgres-collection-types";
-import { buildCollectionOfflineWorkbook } from "./collection-offline-workbook";
+import { buildCollectionOfflineWorkbook, type WorkbookReceipt } from "./collection-offline-workbook";
 import type { CollectionExcelColumnId } from "../../../shared/common/collection-excel-columns";
 
 const ARCHIVE_LIMIT = 128 * 1024 * 1024;
@@ -90,7 +91,7 @@ export async function createCollectionOfflineArchive(records: readonly Collectio
   let written = 0;
   let receiptCount = 0;
   let complete = false;
-  const links = new Map<string, string[]>();
+  const links = new Map<string, WorkbookReceipt[]>();
   async function flush() {
     for (const chunk of chunks) {
       signal.throwIfAborted();
@@ -114,8 +115,8 @@ export async function createCollectionOfflineArchive(records: readonly Collectio
       const receipts = getOfflineExportReceipts(record);
       receiptCount += receipts.length;
       if (receiptCount > COLLECTION_OFFLINE_EXPORT_MAX_RECEIPTS) throw tooLarge();
-      const paths: string[] = [];
-      links.set(record.id, paths);
+      const attachments: WorkbookReceipt[] = [];
+      links.set(record.id, attachments);
       const seen = new Set<string>();
       for (const [index, receipt] of receipts.entries()) {
         signal.throwIfAborted();
@@ -125,7 +126,7 @@ export async function createCollectionOfflineArchive(records: readonly Collectio
         const { bytes, type } = await readReceipt(receipt, position);
         const name = "Receipts/" + record.id + "_" + String(position.receiptNumber).padStart(2, "0") + "." + type;
         await add(name, bytes);
-        paths.push(name);
+        attachments.push({ target: name, amountCents: parseCollectionAmountToCents(receipt.receiptAmount, { allowZero: true }) });
       }
     }
     signal.throwIfAborted();

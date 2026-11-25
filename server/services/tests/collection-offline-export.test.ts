@@ -208,10 +208,11 @@ test("export extracts only the selected record with all original files and resol
 
 test("column choices project values throughout Excel, preserve original attachments and use the projected amount address", async () => {
   const a = record(80);
-  const b = record(81);
-  await attach(a, "jpg");
-  await attach(b, "jpg");
-  await attach(b, "pdf");
+  const b = { ...record(81), customerName: a.customerName };
+  b.amount = "3250.00";
+  (await attach(a, "jpg")).receiptAmount = "0.00";
+  (await attach(b, "jpg")).receiptAmount = "250.00";
+  (await attach(b, "pdf")).receiptAmount = "3000.00";
   const dest = await outputDir();
   const result = await createArchive([a, b], dest, new AbortController().signal, ["receipt", "amount"]);
   const files = unzipSync(await readFile(result.path));
@@ -221,14 +222,21 @@ test("column choices project values throughout Excel, preserve original attachme
   assert.equal(sheet["!ref"], "A1:B3");
   assert.equal(cellAt(sheet, "A1").v, "Jumlah Bayaran");
   assert.equal(cellAt(sheet, "B1").v, "Resit");
+  assert.equal(cellAt(sheet, "B2").v, 0);
+  assert.equal(cellAt(sheet, "B2").w, "RM 0.00");
   assert.match(cellAt(sheet, "B2").l!.Target, /^Receipts\/.+_01.jpg$/);
-  assert.equal(cellAt(sheet, "B3").v, "Lihat semua 2 resit");
+  assert.equal(String(cellAt(sheet, "B3").v).replace(/\u00a0/g, " "), "Resit 1 · RM 250.00\nResit 2 · RM 3,000.00");
+  assert.equal(cellAt(sheet, "A3").v, 3250);
   assert.equal(cellAt(sheet, "B3").l!.Target, "#'Receipt Index'!A3");
   const index = book.Sheets["Receipt Index"]!;
   assert.equal(index["!ref"], "A1:C4");
   assert.equal(cellAt(index, "A1").v, "No. Resit");
   assert.equal(cellAt(index, "A3").v, 1);
   assert.equal(cellAt(index, "A4").v, 2);
+  assert.equal(cellAt(index, "C3").v, 250);
+  assert.equal(cellAt(index, "C4").w, "RM 3,000.00");
+  assert.equal(cellAt(index, "C3").l!.Target, `Receipts/${b.id}_01.jpg`);
+  assert.equal(cellAt(index, "C4").l!.Target, `Receipts/${b.id}_02.pdf`);
   assert.equal(cellAt(book.Sheets["Export Info"]!, "B6").f, "SUBTOTAL(109,'Collection Records'!A2:A3)");
   for (const s of Object.values(book.Sheets)) {
     const values = XLSX.utils.sheet_to_json<unknown[]>(s, { header: 1 }).flat();
@@ -242,6 +250,32 @@ test("column choices project values throughout Excel, preserve original attachme
   assert.deepEqual(nameBook.SheetNames, ["Collection Records", "Export Info"]);
   assert.equal(nameBook.Sheets["Collection Records"]["!ref"], "A1:A2");
   assert.ok(!JSON.stringify(nameBook.Sheets["Export Info"]).includes("Jumlah Bayaran"));
+});
+
+test("receipt-only export preserves missing and repeated amounts and indexes every attachment beyond the preview", async () => {
+  const r = record(82);
+  for (const amount of [null, "45.67", "45.67", "1.00", "2.00", "8.90"]) {
+    const file = await attach(r, "pdf");
+    file.receiptAmount = amount;
+    file.extractedAmount = "999.99";
+  }
+  const result = await createArchive([r], await outputDir(), new AbortController().signal, ["receipt"]);
+  const files = unzipSync(await readFile(result.path));
+  const workbook = Object.keys(files).find(name => name.endsWith("/Collection_Selected.xlsx"))!;
+  const book = openWorkbook(files[workbook]);
+  const summary = cellAt(book.Sheets["Collection Records"]!, "A2");
+  assert.equal(summary.l!.Target, "#'Receipt Index'!A2");
+  const lines = String(summary.v).split("\n");
+  assert.equal(lines.length, 6);
+  assert.equal(lines[0], "Resit 1 · Amaun tidak direkodkan");
+  assert.equal(lines[lines.length - 1], "Lihat semua 6 resit");
+  const index = book.Sheets["Receipt Index"]!;
+  const expected = ["Amaun tidak direkodkan", 45.67, 45.67, 1, 2, 8.9];
+  expected.forEach((value, i) => {
+    const link = columnCell(index, "Resit", i + 2);
+    assert.equal(link.v, value);
+    assert.equal(link.l!.Target, `Receipts/${r.id}_0${i + 1}.pdf`);
+  });
 });
 
 test("missing, unreadable-content, duplicated or mismatched receipt metadata fails the complete archive", async () => {
