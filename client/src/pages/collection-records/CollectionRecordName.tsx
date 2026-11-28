@@ -1,5 +1,5 @@
 import { CollectionRecordsTranslation } from "./collection-records-translation";
-import { useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,8 @@ import { formatCollectionOptionalAmount, getCollectionCpStatusLabel, getCollecti
 import { getCollectionRecordSourceLabel } from "./collection-source-label";
 import { getCollectionCardNumberLabel } from "./utils";
 import { CollectionReceiptBreakdownPanel } from "./CollectionReceiptBreakdownPanel";
+
+export const OpenCollectionRecord = createContext<((record: CollectionRecord) => void) | null>(null);
 
 function DetailGroup({ title, fields, children }: {
   title: string;
@@ -39,25 +41,32 @@ export function CollectionRecordName({ record, number, onOpenRecord, onViewRecei
   onOpenRecord?: ((record: CollectionRecord) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  const browse = useContext(OpenCollectionRecord);
   const name = record.customerName?.trim() || `Rekod #${number}`;
+  const button = (
+    <button type="button" data-record-trigger={record.id} aria-haspopup="dialog"
+      onClick={browse ? () => browse(record) : undefined}
+      className="min-h-8 max-w-full cursor-pointer rounded-sm text-left font-medium whitespace-normal wrap-anywhere text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+      {name}
+    </button>
+  );
+  if (browse) return button;
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
       setOpen(nextOpen);
       if (nextOpen) onOpenRecord?.(record);
     }}>
-      <DialogTrigger asChild>
-        <button type="button" className="min-h-8 max-w-full cursor-pointer rounded-sm text-left font-medium whitespace-normal wrap-anywhere text-primary underline decoration-primary/40 underline-offset-4 hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-          {name}
-        </button>
-      </DialogTrigger>
+      <DialogTrigger asChild>{button}</DialogTrigger>
       {open && <CollectionRecordDetailsContent record={record} number={number} onViewReceipt={onViewReceipt} />}
     </Dialog>
   );
 }
 
-export function CollectionRecordDetailsContent({ record, number, onViewReceipt }: {
+export function CollectionRecordDetailsContent({ record, number, onViewReceipt, navigation, onCloseAutoFocus }: {
   record: CollectionRecord;
   number?: number;
+  navigation?: ReactNode;
+  onCloseAutoFocus?: (event: Event) => void;
   onViewReceipt: ViewCollectionReceipt;
 }) {
   const t = useContext(CollectionRecordsTranslation);
@@ -65,12 +74,15 @@ export function CollectionRecordDetailsContent({ record, number, onViewReceipt }
   const name = record.customerName?.trim() || `Rekod ${number ?? record.id}`;
   const receiptCount = record.receipts?.length ?? 0;
   return (
-        <DialogContent className="flex max-w-xl flex-col gap-0 overflow-hidden p-0 text-left aria-hidden:opacity-25 sm:p-0 motion-reduce:animate-none [&>button]:grid [&>button]:place-items-center [&>button]:size-8 max-md:[&>button]:size-[44px] max-md:[&>button]:top-1.5 max-md:[&>button]:right-2">
+        <DialogContent onCloseAutoFocus={onCloseAutoFocus} className="flex max-w-xl flex-col gap-0 overflow-hidden p-0 text-left aria-hidden:opacity-25 sm:p-0 motion-reduce:animate-none [&>button]:grid [&>button]:place-items-center [&>button]:size-8 max-md:[&>button]:size-[44px] max-md:[&>button]:top-1.5 max-md:[&>button]:right-2">
           <div className="min-w-0 shrink-0 px-4 pt-4 pr-16 sm:px-6 sm:pt-5 sm:pr-16">
-            <DialogTitle className="max-h-20 overflow-y-auto wrap-anywhere text-lg leading-6">{name}</DialogTitle>
+            <div className="flex items-start justify-between gap-2">
+              <DialogTitle aria-live="polite" aria-atomic="true" className="min-w-0 max-h-20 self-center overflow-y-auto wrap-anywhere text-lg leading-6">{name}</DialogTitle>
+              {navigation}
+            </div>
             <DialogDescription className="sr-only">Butiran rekod {number === undefined ? record.id : `#${number}`}</DialogDescription>
           </div>
-          <div className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-4 pt-3 pb-4 sm:px-6 sm:pb-5">
+          <div key={record.id} className="min-h-0 space-y-4 overflow-y-auto overscroll-contain px-4 pt-3 pb-4 sm:px-6 sm:pb-5">
             <DetailGroup title="Bayaran" fields={[
               [t("common.collection.records.cardNumber"), getCollectionCardNumberLabel(record.cardNumber), "wide"],
               [t("common.collection.records.accountNumber"), record.accountNumber || "-", "wide"],

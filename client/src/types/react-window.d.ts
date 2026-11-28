@@ -16,6 +16,7 @@ declare module "react-window" {
     itemCount: number;
     itemSize: number;
     itemData: T;
+    itemKey?: (index: number, data: T) => React.Key;
     overscanCount?: number;
     outerElementType?: React.ElementType;
     innerElementType?: React.ElementType;

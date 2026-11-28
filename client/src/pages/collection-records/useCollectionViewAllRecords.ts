@@ -64,9 +64,11 @@ export function useCollectionViewAllRecords({
   const viewAllRequestIdRef = useRef(0);
   const viewAllAbortControllerRef = useRef<AbortController | null>(null);
   const viewAllCacheRef = useRef(createCollectionRecordsCache(12));
+  const displayedPage = useRef<{ page: number; pageSize: number } | null>(null);
 
   const [viewAllOpen, setViewAllOpen] = useState(false);
   const [viewAllLoading, setViewAllLoading] = useState(false);
+  const [pageFailed, setPageFailed] = useState(false);
   const [viewAllRecords, setViewAllRecords] = useState<CollectionRecord[]>([]);
   const [viewAllFiltersSnapshot, setViewAllFiltersSnapshot] =
     useState<CollectionRecordFilters | null>(null);
@@ -91,6 +93,8 @@ export function useCollectionViewAllRecords({
   const closeViewAll = useCallback(() => {
     viewAllRequestIdRef.current += 1;
     abortViewAllRequest();
+    displayedPage.current = null;
+    setPageFailed(false);
     setViewAllOpen(false);
     setViewAllLoading(false);
     setViewAllRecords([]);
@@ -109,6 +113,7 @@ export function useCollectionViewAllRecords({
   }, [buildCurrentFilters, searchInput, viewAllLoading]);
 
   useEffect(() => {
+    isMountedRef.current = true;
     const viewAllCache = viewAllCacheRef.current;
 
     return () => {
@@ -130,9 +135,11 @@ export function useCollectionViewAllRecords({
     );
     const cacheKey = buildCollectionRecordsCacheKey(requestFilters);
     const cachedEntry = viewAllCacheRef.current.get(cacheKey);
+    setPageFailed(false);
 
     if (cachedEntry) {
       abortViewAllRequest();
+      displayedPage.current = { page: viewAllPage, pageSize: viewAllPageSize };
       setViewAllRecords(cachedEntry.records);
       setViewAllTotalRecords(
         typeof cachedEntry.totalRecords === "number"
@@ -169,6 +176,7 @@ export function useCollectionViewAllRecords({
           totalRecords: nextTotalRecords,
           totalAmount: nextTotalAmount,
         });
+        displayedPage.current = { page: viewAllPage, pageSize: viewAllPageSize };
         setViewAllRecords(nextRecords);
         setViewAllTotalRecords(nextTotalRecords);
         setViewAllTotalAmount(nextTotalAmount);
@@ -179,9 +187,16 @@ export function useCollectionViewAllRecords({
           !isMountedRef.current ||
           requestId !== viewAllRequestIdRef.current
         ) return;
-        setViewAllRecords([]);
-        setViewAllTotalRecords(0);
-        setViewAllTotalAmount(0);
+        setPageFailed(true);
+        const previous = displayedPage.current;
+        if (previous && previous.pageSize === viewAllPageSize && previous.page !== viewAllPage) {
+          setViewAllPage(previous.page);
+        } else {
+          displayedPage.current = null;
+          setViewAllRecords([]);
+          setViewAllTotalRecords(0);
+          setViewAllTotalAmount(0);
+        }
         toast({
           title: "Failed to Load Full Records",
           description: parseApiError(error),
@@ -217,6 +232,7 @@ export function useCollectionViewAllRecords({
 
     const handleCollectionDataChanged = () => {
       viewAllCacheRef.current.clear();
+      displayedPage.current = null;
       if (!viewAllOpen || !viewAllFiltersSnapshot) return;
       setViewAllRefreshToken((previous) => previous + 1);
     };
@@ -233,6 +249,7 @@ export function useCollectionViewAllRecords({
     viewAll: {
       open: viewAllOpen,
       loading: viewAllLoading,
+      pageFailed,
       fromDate: viewAllFiltersSnapshot?.from || "",
       toDate: viewAllFiltersSnapshot?.to || "",
       records: viewAllRecords,

@@ -32,6 +32,7 @@ test("Activity header retains moderation gate, filter state and refresh disabled
   const common = {
     activityCount: 11, canModerateActivity: false, filters: {}, isMobile: true,
     loading: true, onOpenBulkDeleteDialog: () => undefined, onRefresh: () => undefined,
+    updatesPaused: false, onToggleAutomaticUpdates: () => undefined,
     onToggleFilters: () => undefined, selectedCount: 2, showFilters: true,
   };
   const readonly = renderToStaticMarkup(createElement(ActivityPageHeader, common));

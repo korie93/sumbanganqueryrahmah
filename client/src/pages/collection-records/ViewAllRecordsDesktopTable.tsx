@@ -46,26 +46,30 @@ export function ViewAllRecordsDesktopTable({
   return (
     <Table
       className="min-w-[1960px] text-sm"
-      containerProps={{ className: "collection-records-table-scroll collection-records-table-scroll--all" }}
+      containerProps={{
+        role: "region",
+        "aria-label": "All collection records, scroll to view more columns and rows",
+        className: "collection-records-table-scroll collection-records-table-scroll--all",
+      }}
     >
       <TableHeader>
         <TableRow>
           <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-background">No.</TableHead>
-          <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-background">Customer Name</TableHead>
+          <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-background">{t("common.collection.records.customerName")}</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.cardNumber")}</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.accountNumber")}</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Amount</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Payment Date</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Receipt</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">IC Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Customer Phone Number</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Batch</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">TOTAL DUE</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Billing Principal (OSP)</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">CP Status</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Aging</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Match</TableHead>
-          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">Staff Nickname</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.amount")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.receipts.paymentDate")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.receipt")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.icNumber")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.customerPhone")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.batch")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.breakdown.due")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.billingPrincipal")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.cpStatus")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.aging")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.match")}</TableHead>
+          <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.staffNickname")}</TableHead>
           <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-background/95 sqr-backdrop-blur">{t("common.collection.records.sourceFile")}</TableHead>
         </TableRow>
       </TableHeader>

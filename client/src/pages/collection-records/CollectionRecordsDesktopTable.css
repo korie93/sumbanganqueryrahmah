@@ -85,8 +85,40 @@
   z-index: var(--z-sticky-content);
 }
 
+/* Size the desktop menu to the space available beside the pinned identity. */
+@container (max-width: 70rem) {
+  .collection-records-table-scroll--actions {
+    scroll-padding-right: 4.5rem;
+  }
+
+  .collection-records-table-scroll--actions .collection-records-table--compact {
+    min-width: 58rem;
+  }
+
+  .collection-records-table-scroll .collection-records-table-actions {
+    width: 4rem;
+    min-width: 4rem;
+    padding-inline: var(--spacing-1);
+    text-align: center;
+  }
+
+  .collection-records-table-actions button {
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+  }
+
+  .collection-records-table-actions .collection-record-actions-label {
+    display: none;
+  }
+}
+
 /* Give scrolling fields the space normally reserved by the right action column. */
 @container (max-width: 36rem) {
+  .collection-records-table-scroll--actions {
+    scroll-padding-right: var(--spacing-2);
+  }
+
   .collection-records-table-actions {
     right: auto;
   }

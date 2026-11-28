@@ -8,6 +8,7 @@ import {
   getVisibleActivityColumns,
 } from "@/pages/activity/activity-column-preferences";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
+import "./ActivityDesktopLogsTable.css";
 
 export function ActivityDesktopLogsTable({
   actionLoading,
@@ -41,48 +42,44 @@ export function ActivityDesktopLogsTable({
   return (
     <HorizontalScrollHint
       ariaLabel="Activity log columns"
-      hint="Scroll table"
       navigationLabel="Activity table column navigation"
       showNavigationControls
-      showScrollbar
-      viewportClassName="overscroll-x-contain pb-2"
+      framedTable
+      viewportClassName="activity-log-viewport overscroll-x-contain"
     >
       <div
         role="table"
         aria-colcount={columns.length + (canModerateActivity ? 2 : 0)}
         aria-rowcount={activities.length + 1}
-        className="w-full rounded-lg border border-border bg-card/60 text-sm"
+        className="w-full text-sm"
         data-density={density}
         style={{ minWidth: `${tableMinWidth}px` }}
       >
-        <div className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]">
-          <ActivityDesktopLogsHeader
-            allVisibleSelected={allVisibleSelected}
+        <ActivityDesktopLogsHeader
+          allVisibleSelected={allVisibleSelected}
+          canModerateActivity={canModerateActivity}
+          columns={columns}
+          gridTemplateColumns={gridTemplateColumns}
+          onToggleSelectAllVisible={onToggleSelectAllVisible}
+          partiallySelected={partiallySelected}
+        />
+        {activities.map((activity) => (
+          <ActivityDesktopLogRow
+            key={activity.id}
+            actionLoading={actionLoading}
+            activity={activity}
             canModerateActivity={canModerateActivity}
             columns={columns}
             density={density}
             gridTemplateColumns={gridTemplateColumns}
-            onToggleSelectAllVisible={onToggleSelectAllVisible}
-            partiallySelected={partiallySelected}
+            isSelected={selectedActivityIds.has(activity.id)}
+            onBanClick={onBanClick}
+            onDeleteClick={onDeleteClick}
+            onKickClick={onKickClick}
+            onInvestigateClick={onInvestigateClick}
+            onToggleSelected={onToggleSelected}
           />
-          {activities.map((activity) => (
-            <ActivityDesktopLogRow
-              key={activity.id}
-              actionLoading={actionLoading}
-              activity={activity}
-              canModerateActivity={canModerateActivity}
-              columns={columns}
-              density={density}
-              gridTemplateColumns={gridTemplateColumns}
-              isSelected={selectedActivityIds.has(activity.id)}
-              onBanClick={onBanClick}
-              onDeleteClick={onDeleteClick}
-              onKickClick={onKickClick}
-              onInvestigateClick={onInvestigateClick}
-              onToggleSelected={onToggleSelected}
-            />
-          ))}
-        </div>
+        ))}
       </div>
     </HorizontalScrollHint>
   );

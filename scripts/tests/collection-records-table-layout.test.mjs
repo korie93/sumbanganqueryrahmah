@@ -75,7 +75,7 @@ test("compact records keep primary fields in eight columns without coloring amou
       assert.ok(content.includes(value));
     }
     assert.doesNotMatch(content, /2140px|text-success/);
-    assert.doesNotMatch(content, /<th[^>]*>(?:IC Number|Customer Phone Number|TOTAL DUE|Billing Principal \(OSP\)|CP Status|Aging|Match|Fail sumber)<\/th>/);
+    assert.doesNotMatch(content, /<th[^>]*>(?:No\. kad pengenalan|Telefon pelanggan|Jumlah perlu dibayar|Prinsipal bil \(OSP\)|Status CP|Tempoh tunggakan|Padanan|Fail sumber)<\/th>/);
     assert.doesNotMatch(content, /000000000001<\/td>|0100000000<\/td>/);
   }
   assert.match(markup.compact, /aria-label="Actions for record 51"/);

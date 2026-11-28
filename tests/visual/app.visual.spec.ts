@@ -1262,6 +1262,153 @@ test.describe("Collection layout polish", () => {
   }
 });
 
+for (const theme of ["light", "dark"] as const) {
+  test(`Activity desktop fits the screen and pins the leading User column in ${theme} mode`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width: 1100, height: 600 });
+    await installMockAuthenticatedSession(page, theme);
+    await page.goto("/monitor?section=activity");
+    const viewport = page.getByRole("region", { name: "Activity log columns" });
+    const identityHeader = viewport.getByRole("columnheader", { name: "User", exact: true });
+    const identity = viewport.locator('[data-testid^="activity-row-"]').first().getByText("visual.operator", { exact: false }).first();
+    await expect(identityHeader).toBeVisible();
+    const shortHeight = await viewport.evaluate((el) => el.clientHeight);
+    await page.setViewportSize({ width: 1100, height: 1080 });
+    await expect.poll(() => viewport.evaluate((el) => el.clientHeight)).toBeGreaterThan(shortHeight + 100);
+    await viewport.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+    await expect.poll(() => viewport.evaluate((el) => el.scrollLeft)).toBeGreaterThan(300);
+    const left = await viewport.evaluate((el) => el.getBoundingClientRect().left);
+    const header = await identityHeader.boundingBox();
+    const name = await identity.boundingBox();
+    expect(Math.abs(header!.x - left)).toBeLessThan(2);
+    expect(await identity.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    expect(name!.x).toBeGreaterThanOrEqual(left);
+    expect(name!.x + name!.width).toBeLessThanOrEqual(header!.x + header!.width + 1);
+    await identity.scrollIntoViewIfNeeded();
+    expect(await identity.evaluate((el) => {
+      const { left, top, width, height } = el.getBoundingClientRect();
+      return el.contains(document.elementFromPoint(left + width / 2, top + height / 2));
+    })).toBe(true);
+    await testInfo.attach("leading-user", { body: await viewport.screenshot({ path: testInfo.outputPath("leading-user.png") }), contentType: "image/png" });
+    await page.getByTestId("button-activity-columns").click();
+    await page.getByRole("button", { name: "Move User down", exact: true }).click();
+    await page.keyboard.press("Escape");
+    await viewport.evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+    await expect.poll(async () => (await identityHeader.boundingBox())!.x).toBeLessThan(left - 10);
+  });
+}
+
+for (const width of [390, 1100]) test(`Activity automatic updates preserve the reading position and respect pause, manual refresh and resume at ${width}px`, async ({ page }, testInfo) => {
+  await page.setViewportSize({ width, height: width < 768 ? 844 : 600 });
+  await page.clock.install();
+  await installMockAuthenticatedSession(page, "light");
+  let releaseAutomatic = () => {};
+  const gate = new Promise<void>((resolve) => { releaseAutomatic = resolve; });
+  let requests = 0;
+  await page.route("**/api/activity/page?**", async (route) => {
+    const version = ++requests;
+    if (version === 2) await gate;
+    const rows = version === 5 ? [visualActivityRows.at(-1)!, ...visualActivityRows.slice(0, -1)] : visualActivityRows;
+    await jsonResponse(route, {
+      activities: rows.map(row => ({ ...row, username: `reader.${version}.${row.id}` })),
+      pagination: { page: 1, pageSize: 20, total: visualActivityRows.length, totalPages: 1,
+        hasNextPage: false, hasPreviousPage: false, limit: 20, offset: 0, mode: "offset" },
+      summary: { onlineCount: 3, idleCount: 0, logoutCount: 5, kickedCount: 0 },
+    });
+  });
+  try {
+    await page.goto("/monitor?section=activity");
+    const viewport = width < 768
+      ? page.locator(".activity-log-mobile-viewport")
+      : page.getByRole("region", { name: "Activity log columns" });
+    const row = page.getByTestId("activity-row-visual-activity-3");
+    const checkbox = row.getByRole("checkbox");
+    const pause = page.getByTestId("button-toggle-activity-updates");
+    const manual = page.getByTestId("button-refresh");
+    await expect(row).toContainText("reader.1.");
+    await viewport.evaluate(el => { el.scrollTop = 80; el.scrollLeft = 40; });
+    await checkbox.evaluate(el => el.focus({ preventScroll: true }));
+    const scrollTop = await viewport.evaluate(el => el.scrollTop);
+    expect(scrollTop).toBeGreaterThan(0);
+    const notify = () => page.evaluate(() => { window.dispatchEvent(new Event("activity-heartbeat-synced")); });
+    await notify();
+    await expect.poll(() => requests).toBe(2);
+    await expect(checkbox).toBeFocused();
+    await expect(row).toContainText("reader.1.");
+    expect(await viewport.evaluate(el => el.scrollTop)).toBe(scrollTop);
+    await pause.click();
+    await expect(pause).toHaveAccessibleName(/Resume updates|Sambung kemas kini/);
+    releaseAutomatic();
+    await notify();
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange")));
+    await page.clock.fastForward(30_100);
+    await expect(row).toContainText("reader.1.");
+    expect(requests).toBe(2);
+    await manual.click();
+    await expect(row).toContainText("reader.3.");
+    await expect(pause).toHaveAccessibleName(/Resume updates|Sambung kemas kini/);
+    await pause.click();
+    await expect(row).toContainText("reader.4.");
+    await expect(pause).toHaveAccessibleName(/Pause updates|Jeda kemas kini/);
+    await checkbox.evaluate(el => el.focus({ preventScroll: true }));
+    const resumedScrollTop = await viewport.evaluate(el => el.scrollTop);
+    const resumedScrollLeft = await viewport.evaluate(el => el.scrollLeft);
+    await page.clock.fastForward(30_100);
+    await expect(row).toContainText("reader.5.");
+    await expect(checkbox).toBeFocused();
+    expect(await viewport.evaluate(el => el.scrollTop)).toBe(resumedScrollTop);
+    expect(await viewport.evaluate(el => el.scrollLeft)).toBe(resumedScrollLeft);
+    await testInfo.attach("activity-refresh-controls", { body: await pause.locator("..").screenshot({ path: testInfo.outputPath("activity-refresh-controls.png") }), contentType: "image/png" });
+  } finally {
+    releaseAutomatic();
+  }
+});
+
+test("Activity automatic updates respect unapplied filters, foreground requests and retry after failure", async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 700 });
+  await installMockAuthenticatedSession(page, "dark");
+  const queries: string[] = [];
+  let releaseFilter = () => {};
+  const filterGate = new Promise<void>((resolve) => { releaseFilter = resolve; });
+  await page.route("**/api/activity/page?**", async (route) => {
+    const username = new URL(route.request().url()).searchParams.get("username") ?? "";
+    queries.push(username);
+    const version = queries.length;
+    if (version === 3) await filterGate;
+    if (version === 4) return jsonResponse(route, { message: "Unavailable" }, 400);
+    await jsonResponse(route, {
+      activities: [{ ...visualActivityRows[0], username: `result.${version}` }],
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1, hasNextPage: false, hasPreviousPage: false, limit: 20, offset: 0, mode: "offset" },
+      summary: { onlineCount: 1, idleCount: 0, logoutCount: 0, kickedCount: 0 },
+    });
+  });
+  const heartbeat = () => page.evaluate(() => { window.dispatchEvent(new Event("activity-heartbeat-synced")); });
+  try {
+    await page.goto("/monitor?section=activity");
+    const row = page.getByTestId("activity-row-visual-activity-1");
+    const manual = page.getByTestId("button-refresh");
+    await expect(row).toContainText("result.1");
+    await page.getByTestId("button-toggle-filters").click();
+    await page.getByTestId("input-filter-username").fill("synthetic");
+    await heartbeat();
+    await expect(row).toContainText("result.2");
+    await page.getByTestId("button-apply-filters").click();
+    await expect.poll(() => queries.length).toBe(3);
+    await heartbeat();
+    releaseFilter();
+    await expect(row).toContainText("result.3");
+    await expect(manual).toBeEnabled();
+    await heartbeat();
+    await expect(page.getByText("Aktiviti tidak dapat dimuat semula", { exact: true })).toBeVisible();
+    await expect(row).toContainText("result.3");
+    await manual.click();
+    await expect(row).toContainText("result.5");
+    await expect(page.getByText("Aktiviti tidak dapat dimuat semula", { exact: true })).toHaveCount(0);
+    expect(queries).toEqual(["", "", "synthetic", "synthetic", "synthetic"]);
+  } finally {
+    releaseFilter();
+  }
+});
+
 test("dashboard scaling and data tables preserve reachable content", async ({ page }) => {
   test.setTimeout(90_000);
   await installMockAuthenticatedSession(page, "light");
@@ -1335,11 +1482,25 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     await page.evaluate(() => {
       document.documentElement.style.fontSize = "";
     });
-    await page.setViewportSize({ width: 1100, height: 900 });
+    // Keep the eight fixture rows taller than the adaptive viewport for the keyboard check.
+    await page.setViewportSize({ width: 1100, height: 700 });
     await page.goto("/monitor?section=activity", { waitUntil: "domcontentloaded" });
 
     const activityRow = page.locator('[data-testid^="activity-row-"]').first();
     await expect(activityRow).toBeVisible();
+    const activityScrollport = page.getByRole("region", { name: "Activity log columns" });
+    // Users must be able to scroll rows before ever moving to the last column.
+    expect(await activityScrollport.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+    await activityScrollport.focus();
+    await activityScrollport.press("PageDown");
+    await expect.poll(() => activityScrollport.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    expect(await activityScrollport.evaluate((node) => node.scrollLeft)).toBe(0);
+    const stickyOffset = await activityScrollport.evaluate((node) =>
+      node.querySelector('[role="row"]')!.getBoundingClientRect().top - node.getBoundingClientRect().top - node.clientTop);
+    expect(Math.abs(stickyOffset)).toBeLessThanOrEqual(1);
+    await activityScrollport.press("Home");
+    await expect.poll(() => activityScrollport.evaluate((node) => node.scrollTop)).toBe(0);
+    await page.setViewportSize({ width: 1100, height: 900 });
     const comfortableActivityHeight = (await activityRow.boundingBox())?.height ?? 0;
     await page.getByTestId("activity-density-compact").click();
     await expect(activityRow).toHaveAttribute("data-density", "compact");
@@ -1358,7 +1519,6 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
       activityHeaderOrder.indexOf("Logout"),
     );
 
-    const activityScrollport = page.getByRole("region", { name: "Activity log columns" });
     await expect(activityScrollport).toBeVisible();
     const activityScrollNavigation = page.getByRole("group", {
       name: "Activity table column navigation",

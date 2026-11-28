@@ -7,26 +7,25 @@ const source = readFileSync(
   "utf8",
 );
 
-test("desktop activity header and rows share the same vertical scrollport", () => {
-  const scrollportStart = source.indexOf(
-    'className="max-h-[408px] overflow-y-auto [scrollbar-gutter:stable]"',
-  );
+test("desktop activity header and rows share the bounded column navigation viewport", () => {
+  const scrollportStart = source.indexOf("<HorizontalScrollHint");
   const headerIndex = source.indexOf("<ActivityDesktopLogsHeader");
   const rowIndex = source.indexOf("{activities.map");
-  const scrollportEnd = source.indexOf("</div>", rowIndex);
+  const scrollportEnd = source.indexOf("</HorizontalScrollHint>", rowIndex);
 
   assert.ok(scrollportStart >= 0);
   assert.ok(headerIndex > scrollportStart);
   assert.ok(rowIndex > headerIndex);
   assert.ok(scrollportEnd > rowIndex);
+  assert.doesNotMatch(source, /overflow-y-(auto|scroll)/);
 });
 
 test("desktop activity columns use a visible, keyboard-accessible horizontal scrollport", () => {
   assert.match(source, /ariaLabel="Activity log columns"/);
   assert.match(source, /navigationLabel="Activity table column navigation"/);
   assert.match(source, /showNavigationControls/);
-  assert.match(source, /showScrollbar/);
-  assert.match(source, /viewportClassName="overscroll-x-contain pb-2"/);
+  assert.match(source, /framedTable/);
+  assert.match(source, /viewportClassName="activity-log-viewport overscroll-x-contain"/);
   assert.match(source, /getActivityGridTemplateColumns/);
   assert.match(source, /getActivityTableMinWidth/);
   assert.match(source, /role="table"/);

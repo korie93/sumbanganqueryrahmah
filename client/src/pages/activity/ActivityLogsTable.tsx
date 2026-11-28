@@ -1,4 +1,4 @@
-import { Suspense, lazy } from "react";
+import { Component, Suspense, lazy, type ReactNode } from "react";
 import { Activity as ActivityIcon } from "lucide-react";
 import { notifyFloatingAiLayoutReady } from "@/components/floating-ai-dom-utils";
 import { AppPaginationBar } from "@/components/data/AppPaginationBar";
@@ -24,6 +24,58 @@ function ActivityDesktopLogsTableFallback() {
       Loading activity table...
     </div>
   );
+}
+
+type ActivityLogSurfaceProps = { activities: ActivityLogsTableProps["activities"]; children: ReactNode };
+type ReadingPosition = {
+  focused: HTMLElement | null;
+  viewport: HTMLElement;
+  top: number;
+  left: number;
+};
+
+// Moving a keyed row can temporarily detach its focused control from the DOM.
+// Capture focus before React moves the row and restore it before the next paint.
+class ActivityLogSurface extends Component<ActivityLogSurfaceProps, unknown, ReadingPosition | null> {
+  private element: HTMLDivElement | null = null;
+
+  private attach = (element: HTMLDivElement | null) => {
+    this.element = element;
+    notifyFloatingAiLayoutReady(element);
+  };
+
+  getSnapshotBeforeUpdate(previous: ActivityLogSurfaceProps) {
+    if (previous.activities === this.props.activities || !this.element) return null;
+    const viewport = this.element.querySelector<HTMLElement>(".activity-log-viewport, .activity-log-mobile-viewport");
+    if (!viewport) return null;
+    const focused = this.element.ownerDocument.activeElement;
+    return {
+      focused: focused instanceof HTMLElement && this.element.contains(focused) ? focused : null,
+      viewport, top: viewport.scrollTop, left: viewport.scrollLeft,
+    };
+  }
+
+  componentDidUpdate(_previous: ActivityLogSurfaceProps, _state: unknown, position?: ReadingPosition | null) {
+    if (!position) return;
+    const { focused, viewport, top, left } = position;
+    const doc = viewport.ownerDocument;
+    if (focused && doc.activeElement === doc.body) {
+      const target = focused.isConnected ? focused : this.element?.querySelector<HTMLElement>("[data-testid='button-toggle-logs']");
+      target?.focus({ preventScroll: true });
+    }
+    if (viewport.isConnected) {
+      if (viewport.scrollTop !== top) viewport.scrollTop = top;
+      if (viewport.scrollLeft !== left) viewport.scrollLeft = left;
+    }
+  }
+
+  render() {
+    return (
+      <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true" ref={this.attach} data-floating-ai-layout="true">
+        {this.props.children}
+      </div>
+    );
+  }
 }
 
 export function ActivityLogsTable({
@@ -58,7 +110,7 @@ export function ActivityLogsTable({
 
   return (
     <Collapsible open={logsOpen} onOpenChange={onLogsOpenChange}>
-      <div className="rounded-lg border border-border bg-card p-3 sm:p-4" data-floating-ai-avoid="true" ref={notifyFloatingAiLayoutReady} data-floating-ai-layout="true">
+      <ActivityLogSurface activities={activities}>
         <ActivityLogsTableHeader
           totalItems={totalItems}
           logsOpen={logsOpen}
@@ -139,7 +191,7 @@ export function ActivityLogsTable({
             />
           </div>
         </CollapsibleContent>
-      </div>
+      </ActivityLogSurface>
     </Collapsible>
   );
 }

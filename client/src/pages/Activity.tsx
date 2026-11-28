@@ -2,9 +2,6 @@ import { OperationalPage } from "@/components/layout/OperationalPage";
 import { ActivityPageContent } from "@/pages/activity/ActivityPageContent";
 import { ActivityPageHeader } from "@/pages/activity/ActivityPageHeader";
 import { useActivityPageState } from "@/pages/activity/useActivityPageState";
-import {
-  hasActiveActivityFilters,
-} from "@/pages/activity/utils";
 
 export default function Activity() {
   const {
@@ -18,6 +15,9 @@ export default function Activity() {
     bannedUsers,
     errorMessage,
     loading,
+    updatesPaused,
+    toggleAutomaticUpdates,
+    manualRefreshPending,
     actionLoading,
     kickDialogOpen,
     setKickDialogOpen,
@@ -45,7 +45,6 @@ export default function Activity() {
     setDateToOpen,
     logsOpen,
     setLogsOpen,
-    requestActivityPage,
     refreshCurrentView,
     page,
     pageSize,
@@ -77,9 +76,11 @@ export default function Activity() {
         canModerateActivity={canModerateActivity}
         filters={filters}
         isMobile={isMobile}
-        loading={loading}
+        loading={loading || manualRefreshPending}
+        updatesPaused={updatesPaused}
+        onToggleAutomaticUpdates={toggleAutomaticUpdates}
         onOpenBulkDeleteDialog={() => setBulkDeleteDialogOpen(true)}
-        onRefresh={() => requestActivityPage(hasActiveActivityFilters(filters))}
+        onRefresh={refreshCurrentView}
         onToggleFilters={() => setShowFilters((previous) => !previous)}
         selectedCount={selectedActivityIds.size}
         showFilters={showFilters}

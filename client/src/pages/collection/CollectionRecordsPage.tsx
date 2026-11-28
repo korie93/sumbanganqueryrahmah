@@ -245,6 +245,8 @@ function CollectionRecordsPage({ role }: CollectionRecordsPageProps) {
           <CollectionRecordsTable
             {...viewModel.table}
             {...recoveryState}
+            previousPage={viewModel.toolbar.hasPreviousPage ? viewModel.toolbar.onPrevPage : undefined}
+            nextPage={viewModel.toolbar.hasNextPage ? viewModel.toolbar.onNextPage : undefined}
             recordsLoadFailed={controller.recordsLoadFailed}
             onClearSearch={() => {
               viewModel.filters.onSearchInputChange("");

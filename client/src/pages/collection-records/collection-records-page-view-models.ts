@@ -50,6 +50,7 @@ export function buildCollectionRecordsPageViewModel(
     viewAll: {
       open: controller.viewAll.open,
       loading: controller.viewAll.loading,
+      pageFailed: controller.viewAll.pageFailed,
       fromDate: controller.viewAll.fromDate,
       toDate: controller.viewAll.toDate,
       viewAllRecords: controller.viewAll.records,

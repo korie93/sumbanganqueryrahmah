@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getActivityPage, getBannedUsers } from "@/lib/api";
+import type { ActivityPageQuery } from "@/lib/api/activity";
 import { logClientError } from "@/lib/client-logger";
 import { readActivityFeedErrorMessage } from "@/pages/activity/activity-feed-error-utils";
 import {
@@ -20,6 +21,7 @@ const DEFAULT_ACTIVITY_SORT_BY: ActivitySortBy = "loginTime";
 const DEFAULT_ACTIVITY_SORT_ORDER: ActivitySortOrder = "desc";
 
 type ActivityFeedQueryOverrides = {
+  refresh?: "automatic" | "manual";
   page?: number | undefined;
   pageSize?: number | undefined;
   sortBy?: ActivitySortBy | undefined;
@@ -34,6 +36,8 @@ export function useActivityFeedState({
   const [bannedUsers, setBannedUsers] = useState<BannedUser[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [updatesPaused, setUpdatesPaused] = useState(false);
+  const [manualRefreshPending, setManualRefreshPending] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_ACTIVITY_PAGE_SIZE);
   const [totalItems, setTotalItems] = useState(0);
@@ -49,6 +53,9 @@ export function useActivityFeedState({
 
   const activeRequestIdRef = useRef(0);
   const fetchControllerRef = useRef<AbortController | null>(null);
+  const automaticControllerRef = useRef<AbortController | null>(null);
+  const updatesPausedRef = useRef(false);
+  const requestedQueryRef = useRef<ActivityPageQuery | null>(null);
   const mountedRef = useRef(true);
   const pageRef = useRef(1);
   const pageSizeRef = useRef(DEFAULT_ACTIVITY_PAGE_SIZE);
@@ -93,12 +100,17 @@ export function useActivityFeedState({
     useFilters = false,
     overrides: ActivityFeedQueryOverrides = {},
   ) => {
+    const automatic = overrides.refresh === "automatic";
+    // A heartbeat must never cancel a page change or a slow manual refresh.
+    if (automatic && (updatesPausedRef.current || fetchControllerRef.current)) return;
     const requestId = ++activeRequestIdRef.current;
     fetchControllerRef.current?.abort();
     const controller = new AbortController();
     fetchControllerRef.current = controller;
+    automaticControllerRef.current = automatic ? controller : null;
     setErrorMessage(null);
-    setLoading(true);
+    if (!overrides.refresh) setLoading(true);
+    setManualRefreshPending(overrides.refresh === "manual");
 
     try {
       const currentFilters = filtersRef.current;
@@ -107,16 +119,16 @@ export function useActivityFeedState({
       const requestedPageSize = overrides.pageSize ?? pageSizeRef.current;
       const requestedSortBy = overrides.sortBy ?? sortByRef.current;
       const requestedSortOrder = overrides.sortOrder ?? sortOrderRef.current;
-      const activityResponse = await getActivityPage(
-        {
-          page: requestedPage,
-          pageSize: requestedPageSize,
-          sortBy: requestedSortBy,
-          sortOrder: requestedSortOrder,
-          ...(shouldApplyFilters ? currentFilters : {}),
-        },
-        { signal: controller.signal },
-      );
+      // Replay the applied query for automatic updates; filters may be mid-edit.
+      const query = automatic && requestedQueryRef.current ? requestedQueryRef.current : {
+        page: requestedPage,
+        pageSize: requestedPageSize,
+        sortBy: requestedSortBy,
+        sortOrder: requestedSortOrder,
+        ...(shouldApplyFilters ? currentFilters : {}),
+      };
+      requestedQueryRef.current = query;
+      const activityResponse = await getActivityPage(query, { signal: controller.signal });
 
       if (!isActiveActivityFeedRequest(controller, requestId)) {
         return;
@@ -128,12 +140,13 @@ export function useActivityFeedState({
       setPageSize(activityResponse.pagination.pageSize);
       setTotalItems(activityResponse.pagination.total);
       setTotalPages(activityResponse.pagination.totalPages);
-      setSortBy(requestedSortBy);
-      setSortOrder(requestedSortOrder);
+      requestedQueryRef.current = { ...query, page: activityResponse.pagination.page, pageSize: activityResponse.pagination.pageSize };
+      setSortBy(query.sortBy);
+      setSortOrder(query.sortOrder);
       pageRef.current = activityResponse.pagination.page;
       pageSizeRef.current = activityResponse.pagination.pageSize;
-      sortByRef.current = requestedSortBy;
-      sortOrderRef.current = requestedSortOrder;
+      sortByRef.current = query.sortBy;
+      sortOrderRef.current = query.sortOrder;
 
       if (canModerateActivity) {
         const bannedResponse = await getBannedUsers({ signal: controller.signal });
@@ -156,6 +169,8 @@ export function useActivityFeedState({
       }
       if (shouldFinalizeRequest) {
         setLoading(false);
+        setManualRefreshPending(false);
+        automaticControllerRef.current = null;
       }
     }
   }, [canModerateActivity, filtersRef, isActiveActivityFeedRequest, recordActivityFeedFailure]);
@@ -171,17 +186,34 @@ export function useActivityFeedState({
     void fetchActivities(useFilters, overrides).catch(handleUnexpectedActivityFeedFailure);
   }, [fetchActivities, handleUnexpectedActivityFeedFailure]);
 
+  const toggleAutomaticUpdates = useCallback(() => {
+    const paused = !updatesPausedRef.current;
+    updatesPausedRef.current = paused;
+    setUpdatesPaused(paused);
+    if (paused) {
+      const automaticRequest = automaticControllerRef.current;
+      if (automaticRequest && fetchControllerRef.current === automaticRequest) {
+        automaticRequest.abort();
+        fetchControllerRef.current = null;
+        automaticControllerRef.current = null;
+      }
+    } else {
+      runFetchActivities(true, { refresh: "automatic" });
+    }
+  }, [runFetchActivities]);
+
   useEffect(() => {
     runFetchActivities(false);
   }, [runFetchActivities]);
 
   useEffect(() => {
+    if (updatesPaused) return;
     const refreshVisibleActivity = () => {
       const visibilityState =
         typeof document === "undefined" ? undefined : document.visibilityState;
 
       if (shouldAutoRefreshVisibleActivity(filtersRef.current, visibilityState)) {
-        runFetchActivities(false);
+        runFetchActivities(false, { refresh: "automatic" });
       }
     };
 
@@ -199,7 +231,7 @@ export function useActivityFeedState({
       if (typeof document !== "undefined" && document.visibilityState !== "visible") {
         return;
       }
-      runFetchActivities(true);
+      runFetchActivities(true, { refresh: "automatic" });
     };
 
     if (typeof document !== "undefined") {
@@ -218,10 +250,10 @@ export function useActivityFeedState({
       }
       window.clearInterval(interval);
     };
-  }, [filtersRef, runFetchActivities]);
+  }, [filtersRef, runFetchActivities, updatesPaused]);
 
   const refreshCurrentView = useCallback(() => {
-    runFetchActivities(true);
+    runFetchActivities(true, { refresh: "manual" });
   }, [runFetchActivities]);
 
   const handlePageChange = useCallback((nextPage: number) => {
@@ -262,6 +294,9 @@ export function useActivityFeedState({
     bannedUsers,
     errorMessage,
     loading,
+    manualRefreshPending,
+    updatesPaused,
+    toggleAutomaticUpdates,
     page,
     pageSize,
     totalItems,

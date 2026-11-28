@@ -46,9 +46,11 @@ export function CollectionRecordActions({
           variant="outline"
           className="min-h-11 gap-2 rounded-md sm:min-h-9"
           aria-label={`Actions for record ${recordNumber}`}
+          aria-description={record.customerName?.trim() || undefined}
+          title={record.customerName?.trim() ? `Actions for ${record.customerName.trim()}` : undefined}
         >
           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
-          Actions
+          <span className="collection-record-actions-label">Actions</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
