@@ -224,7 +224,9 @@ for (const [width, theme] of [[320, "dark"], [390, "light"], [800, "light"], [10
       else {
         const headers = await parent.getByRole("columnheader").allTextContents();
         const identifiers = mode === "list" ? [en ? "Card / Account" : "Kad / Akaun"] : [cardLabel, accountLabel];
-        const expected = ["No.", "Customer Name", ...identifiers, "Amount", "Payment Date", "Receipt"];
+        const expected = en
+          ? ["No.", "Customer Name", ...identifiers, "Amount", "Payment date", "Receipt"]
+          : ["No.", "Nama pelanggan", ...identifiers, "Jumlah", "Tarikh bayaran", "Resit"];
         expect(headers.slice(0, expected.length)).toEqual(expected);
         const table = parent.getByRole("table");
         const cells = table.locator("tbody tr").first().getByRole("cell");

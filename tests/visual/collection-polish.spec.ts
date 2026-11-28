@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { filterSourceName, installFixture, nickname, now, openRecords, receiptPng } from "./helpers/collection-records-fixture";
+import { pageDownAndWaitForScrollEnd } from "./helpers/table-scroll";
 
 // Render production routes against a static build and synthetic HTTP only.
 // No application server, database, dotenv, real accounts or receipt files.
@@ -687,7 +688,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
   const number = scroll.locator("tbody .collection-records-table-number").first();
   const actions = scroll.locator("tbody .collection-records-table-actions").first();
   await scroll.focus();
-  await scroll.press("PageDown");
+  await pageDownAndWaitForScrollEnd(scroll);
   await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
   expect(await scroll.evaluate((element) => element.scrollLeft)).toBe(0);
   await scroll.press("Home");

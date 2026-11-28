@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { expectColumnNavigation, pageDownAndWaitForScrollEnd } from "./helpers/table-scroll";
 
 type VisualTheme = "light" | "dark";
 type VisualRole = "superuser" | "admin" | "user" | "manager";
@@ -1493,7 +1494,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     // Users must be able to scroll rows before ever moving to the last column.
     expect(await activityScrollport.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
     await activityScrollport.focus();
-    await activityScrollport.press("PageDown");
+    await pageDownAndWaitForScrollEnd(activityScrollport);
     await expect.poll(() => activityScrollport.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
     expect(await activityScrollport.evaluate((node) => node.scrollLeft)).toBe(0);
     const stickyOffset = await activityScrollport.evaluate((node) =>
@@ -1524,21 +1525,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     const activityScrollNavigation = page.getByRole("group", {
       name: "Activity table column navigation",
     });
-    await expect(activityScrollNavigation).toBeVisible();
-    await expect(
-      activityScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
-    ).toBeDisabled();
-    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("0%");
-    await activityScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
-    await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-    await activityScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
-    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("100%");
-    await expect(
-      activityScrollNavigation.getByRole("button", { name: "Jump to last column" }),
-    ).toBeDisabled();
-    await activityScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
-    await expect.poll(() => activityScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
-    await expect(activityScrollNavigation.getByRole("progressbar")).toHaveText("0%");
+    await expectColumnNavigation(activityScrollNavigation, activityScrollport);
     const activityMetrics = await activityScrollport.evaluate((element) => ({
       clientWidth: element.clientWidth,
       overflowX: getComputedStyle(element).overflowX,
@@ -1583,21 +1570,7 @@ test("dashboard scaling and data tables preserve reachable content", async ({ pa
     const viewerScrollNavigation = page.getByRole("group", {
       name: "Viewer table column navigation",
     });
-    await expect(viewerScrollNavigation).toBeVisible();
-    await expect(
-      viewerScrollNavigation.getByRole("button", { name: "Scroll columns left" }),
-    ).toBeDisabled();
-    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("0%");
-    await viewerScrollNavigation.getByRole("button", { name: "Scroll columns right" }).click();
-    await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
-    await viewerScrollNavigation.getByRole("button", { name: "Jump to last column" }).click();
-    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("100%");
-    await expect(
-      viewerScrollNavigation.getByRole("button", { name: "Jump to last column" }),
-    ).toBeDisabled();
-    await viewerScrollNavigation.getByRole("button", { name: "Jump to first column" }).click();
-    await expect.poll(() => viewerScrollport.evaluate((element) => element.scrollLeft)).toBe(0);
-    await expect(viewerScrollNavigation.getByRole("progressbar")).toHaveText("0%");
+    await expectColumnNavigation(viewerScrollNavigation, viewerScrollport);
     const viewerRow = viewerScrollport.locator("tbody tr").first();
     await expect(viewerRow).toBeVisible();
     const comfortableViewerHeight = (await viewerRow.boundingBox())?.height ?? 0;
