@@ -8,6 +8,7 @@ import {
   getVisibleActivityColumns,
 } from "@/pages/activity/activity-column-preferences";
 import type { ActivityDesktopLogsTableProps } from "@/pages/activity/activity-desktop-logs-shared";
+import "@/components/data/table-scroll-frame.css";
 import "./ActivityDesktopLogsTable.css";
 
 export function ActivityDesktopLogsTable({

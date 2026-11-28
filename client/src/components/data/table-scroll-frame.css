@@ -1,0 +1,17 @@
+/* Keep the outline fixed while native scrollbars and sticky cells move inside it. */
+.table-scroll-frame {
+  min-width: 0;
+  overflow: clip;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-surface);
+  background: hsl(var(--card));
+}
+
+.table-scroll-frame > [tabindex] {
+  scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+}
+
+.table-scroll-frame:has(> :focus-visible) {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}

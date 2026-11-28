@@ -17,6 +17,7 @@ import {
 } from "@/pages/collection-records/collection-coverage";
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionRecordActions } from "./CollectionRecordActions";
+import "@/components/data/table-scroll-frame.css";
 import "./CollectionRecordsDesktopTable.css";
 
 type CollectionRecordsDesktopTableProps = CollectionRecordsTableProps & {

@@ -1269,6 +1269,7 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/monitor?section=activity");
     const viewport = page.getByRole("region", { name: "Activity log columns" });
     const identityHeader = viewport.getByRole("columnheader", { name: "User", exact: true });
+    await expect(viewport.locator("..")).toHaveCSS("overflow-x", "clip");
     const identity = viewport.locator('[data-testid^="activity-row-"]').first().getByText("visual.operator", { exact: false }).first();
     await expect(identityHeader).toBeVisible();
     const shortHeight = await viewport.evaluate((el) => el.clientHeight);

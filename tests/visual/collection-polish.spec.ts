@@ -483,6 +483,7 @@ test("Collection popup navigation crosses pages inside View All and returns to i
   await openRecords(page);
   await page.getByRole("button", { name: "View All", exact: true }).click();
   const list = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection", exact: true });
+  await expect(list.locator(".table-scroll-frame")).toHaveCSS("overflow-x", "clip");
   await list.getByRole("button", { name: "Synthetic Customer 10", exact: true }).click();
   const next = page.getByRole("button", { name: "Rekod seterusnya", exact: true });
   fixture.failLists = true;
@@ -680,6 +681,7 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
   await page.getByRole("group", { name: "Paparan rekod", exact: true }).getByRole("button", { name: "Lengkap", exact: true }).click();
   const scroll = page.locator(".collection-records-table-scroll");
   await expect(scroll.locator("tbody tr")).toHaveCount(20);
+  await expect(scroll.locator("..")).toHaveCSS("overflow-x", "clip");
   await scroll.scrollIntoViewIfNeeded();
   const customer = scroll.locator("tbody .collection-records-table-identity").first();
   const number = scroll.locator("tbody .collection-records-table-number").first();

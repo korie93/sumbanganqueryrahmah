@@ -1,4 +1,5 @@
 import { CollectionRecordCard } from "./CollectionRecordCard";
+import "@/components/data/table-scroll-frame.css";
 import { CollectionRecordBrowser } from "./CollectionRecordBrowser";
 import { Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
