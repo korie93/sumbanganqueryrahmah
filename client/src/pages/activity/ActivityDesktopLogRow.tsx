@@ -35,7 +35,7 @@ export function ActivityDesktopLogRow({
       case "user":
         return (
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <span
                 className="truncate font-medium text-foreground"
                 title={activity.username}
@@ -90,9 +90,7 @@ export function ActivityDesktopLogRow({
     <div
       role="row"
       aria-label={buildActivityRowAriaLabel(activity, browserLabel)}
-      className={`grid h-full items-center gap-3 border-b border-border/70 px-3 hover:bg-muted/50 ${
-        density === "compact" ? "py-2" : "py-3"
-      }`}
+      className="grid h-full items-center gap-3 border-b border-border/70 px-3 hover:bg-muted/50"
       style={{ gridTemplateColumns }}
       data-density={density}
       data-testid={`activity-row-${activity.id}`}
@@ -107,7 +105,7 @@ export function ActivityDesktopLogRow({
         </div>
       ) : null}
       {columns.map((column) => (
-        <div key={column} role="cell" className="min-w-0">
+        <div key={column} role="cell" className={column === "user" && columns[0] === "user" ? "min-w-0 activity-log-pinned-user" : "min-w-0"}>
           {renderColumn(column)}
         </div>
       ))}

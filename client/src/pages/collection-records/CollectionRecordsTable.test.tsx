@@ -79,7 +79,9 @@ test("record loading preserves its exact accessible status markup", () => {
     onDelete: () => undefined,
     canDeleteRow: () => false,
   }));
-  assert.equal(markup, '<div role="status" class="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">Loading records...</div>');
+  const status = markup.match(/<div role="status"[^>]*>[^<]*<\/div>/g);
+  assert.deepEqual(status, ['<div role="status" class="rounded-lg border border-border bg-card px-4 py-6 text-center text-sm text-muted-foreground">Loading records...</div>']);
+  assert.doesNotMatch(markup, /<button\b|data-record-trigger|role="dialog"/);
 });
 
 test("mobile collection opens details through the name and respects action access", () => {
@@ -233,20 +235,23 @@ function renderDesktopRecords(overrides: Partial<CollectionRecordsTableProps> & 
 }
 
 function getDesktopHeaders(markup: string) {
-  return Array.from(markup.matchAll(/<th\b[^>]*>([^<]*)<\/th>/g), (match) => match[1]);
+  // Customer Name shares its header with the page-selection control.
+  return Array.from(markup.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g),
+    ([, content]) => content!.split(/<[^>]+>/).join("").trim());
 }
 
 test("desktop defaults to eight compact columns with complete authorized Account and Card strings", () => {
   const markup = renderDesktopRecords();
+  assert.match(markup, /<div class="table-scroll-frame\b[^"]*"><div[^>]*role="region"[^>]*>/);
   assert.deepEqual(getDesktopHeaders(markup), [
-    "No.", "Customer Name", "Kad / Akaun", "Amount", "Payment Date", "Receipt", "Staff Nickname", "Actions",
+    "No.", "Nama pelanggan", "Kad / Akaun", "Jumlah", "Tarikh bayaran", "Resit", "Nama panggilan staf", "Tindakan",
   ]);
   assert.match(markup, /collection-records-table--compact min-w-\[64rem\] table-fixed/);
   assert.match(markup, /<dt[^>]*>Nombor akaun<\/dt><dd>0000007788<\/dd>/);
   assert.match(markup, /<dt[^>]*>Nombor kad<\/dt><dd>00009007199254740993<\/dd>/);
   assert.match(markup, /<dl class="space-y-1\.5 whitespace-normal wrap-anywhere"/);
   assert.match(markup, /<td[^>]*whitespace-normal wrap-anywhere[^>]*>SW\.AFIQAH_1332<\/td>/);
-  assert.doesNotMatch(markup, /880101105432|0123456789|IC Number|Customer Phone Number|TOTAL DUE/);
+  assert.doesNotMatch(markup, /880101105432|0123456789|No\. kad pengenalan|Telefon pelanggan|Jumlah perlu dibayar/);
   assert.match(markup, />View<\/button>/);
   assert.match(markup, /aria-label="Actions for record 1"/);
   assert.equal((markup.match(/<td\b/g) ?? []).length, 8);
@@ -255,8 +260,8 @@ test("desktop defaults to eight compact columns with complete authorized Account
 test("full desktop view retains all eighteen columns and full supplied record values", () => {
   const markup = renderDesktopRecords({ viewMode: "full" });
   assert.deepEqual(getDesktopHeaders(markup), [
-    "No.", "Customer Name", "Nombor kad", "Nombor akaun", "Amount", "Payment Date", "Receipt", "IC Number", "Customer Phone Number", "Batch",
-    "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Staff Nickname", "Fail sumber", "Actions",
+    "No.", "Nama pelanggan", "Nombor kad", "Nombor akaun", "Jumlah", "Tarikh bayaran", "Resit", "No. kad pengenalan", "Telefon pelanggan", "Kelompok",
+    "Jumlah perlu dibayar", "Prinsipal bil (OSP)", "Status CP", "Tempoh tunggakan", "Padanan", "Nama panggilan staf", "Fail sumber", "Tindakan",
   ]);
   assert.equal((markup.match(/<td\b/g) ?? []).length, 18);
   for (const value of ["0000007788", "00009007199254740993", collectionRecord.icNumber, collectionRecord.customerPhone]) {
@@ -283,7 +288,7 @@ test("compact desktop omits Actions when no row is editable or deletable without
   const markup = renderDesktopRecords({ canEdit: false, canDeleteRow: () => false });
   assert.equal(getDesktopHeaders(markup).length, 7);
   assert.equal((markup.match(/<td\b/g) ?? []).length, 7);
-  assert.doesNotMatch(markup, /Actions|collection-records-table-actions|collection-records-table-scroll--actions/);
+  assert.doesNotMatch(markup, /Tindakan|Actions|collection-records-table-actions|collection-records-table-scroll--actions/);
   assert.match(markup, />View<\/button>/);
   for (const access of [{ canEdit: true, canDeleteRow: () => false }, { canEdit: false, canDeleteRow: () => true }]) {
     const allowedMarkup = renderDesktopRecords(access);

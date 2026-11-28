@@ -303,10 +303,11 @@ export function ActivityMobileLogsList({
         </div>
       ) : null}
       <FixedSizeList
-        className="rounded-2xl"
+        className="activity-log-mobile-viewport rounded-2xl [overflow-anchor:none]"
         height={listHeight}
         itemCount={activities.length}
         itemData={itemData}
+        itemKey={(index, data) => data.activities[index]!.id}
         itemSize={ACTIVITY_MOBILE_ROW_HEIGHT_PX}
         overscanCount={4}
         width="100%"

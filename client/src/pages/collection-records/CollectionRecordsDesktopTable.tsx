@@ -17,6 +17,7 @@ import {
 } from "@/pages/collection-records/collection-coverage";
 import { getCollectionCardNumberLabel } from "@/pages/collection-records/utils";
 import { CollectionRecordActions } from "./CollectionRecordActions";
+import "@/components/data/table-scroll-frame.css";
 import "./CollectionRecordsDesktopTable.css";
 
 type CollectionRecordsDesktopTableProps = CollectionRecordsTableProps & {
@@ -52,20 +53,21 @@ export function CollectionRecordsDesktopTable({
   const showActionsColumn = !isCompact || hasRowActions;
 
   return (
+    <div className="table-scroll-frame @container">
       <Table
         aria-label="Collection records"
         className={cn("text-sm", isCompact ? "collection-records-table--compact min-w-[64rem] table-fixed" : "min-w-[2140px]")}
         containerProps={{
           role: "region",
           "aria-label": "Collection records, scroll to view more columns and rows",
-          className: cn("collection-records-table-scroll rounded-lg border border-border bg-card", isCompact && "collection-records-table-scroll--compact", hasRowActions && "collection-records-table-scroll--actions"),
+          className: cn("collection-records-table-scroll", isCompact && "collection-records-table-scroll--compact", hasRowActions && "collection-records-table-scroll--actions"),
         }}
       >
         <TableHeader>
           <TableRow>
             <TableHead className="collection-records-table-number sticky top-0 border-b border-border/70 bg-muted">No.</TableHead>
             <TableHead className="collection-records-table-identity sticky top-0 border-b border-border/70 bg-muted">
-              <div className="flex min-w-0 items-center gap-1"><CollectionPageCheckbox records={paginatedRecords} />Customer Name</div>
+              <div className="flex min-w-0 items-center gap-1"><CollectionPageCheckbox records={paginatedRecords} />{t("common.collection.records.customerName")}</div>
             </TableHead>
             {isCompact ? (
               <TableHead className="sticky top-0 z-[var(--z-sticky-header)] w-52 border-b border-border/70 bg-muted">{t("common.collection.records.cardAccount")}</TableHead>
@@ -75,24 +77,24 @@ export function CollectionRecordsDesktopTable({
                 <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.accountNumber")}</TableHead>
               </>
             )}
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", isCompact && "w-28")}>Amount</TableHead>
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Payment Date</TableHead>
-            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>Receipt</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", isCompact && "w-28")}>{t("common.collection.records.amount")}</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>{t("common.collection.receipts.paymentDate")}</TableHead>
+            <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted", isCompact && "w-28")}>{t("common.collection.records.receipt")}</TableHead>
             {!isCompact && (
               <>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">IC Number</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Customer Phone Number</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Batch</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">TOTAL DUE</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">Billing Principal (OSP)</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">CP Status</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Aging</TableHead>
-                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Match</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.icNumber")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.customerPhone")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.batch")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">{t("common.collection.breakdown.due")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right">{t("common.collection.records.billingPrincipal")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.cpStatus")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.aging")}</TableHead>
+                <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.match")}</TableHead>
               </>
             )}
-            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">Staff Nickname</TableHead>
+            <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.staffNickname")}</TableHead>
             {!isCompact && <TableHead className="sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted">{t("common.collection.records.sourceFile")}</TableHead>}
-            {showActionsColumn && <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", hasRowActions && "collection-records-table-actions")}>Actions</TableHead>}
+            {showActionsColumn && <TableHead className={cn("sticky top-0 z-[var(--z-sticky-header)] border-b border-border/70 bg-muted text-right", hasRowActions && "collection-records-table-actions")}>{t("common.collection.records.actions")}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -188,5 +190,6 @@ export function CollectionRecordsDesktopTable({
             ))}
         </TableBody>
       </Table>
+    </div>
   );
 }

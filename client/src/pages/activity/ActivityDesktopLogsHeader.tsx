@@ -6,7 +6,6 @@ export function ActivityDesktopLogsHeader({
   allVisibleSelected,
   canModerateActivity,
   columns,
-  density,
   gridTemplateColumns,
   onToggleSelectAllVisible,
   partiallySelected,
@@ -14,9 +13,7 @@ export function ActivityDesktopLogsHeader({
   return (
     <div
       role="row"
-      className={`sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted px-3 text-left text-sm font-medium text-muted-foreground ${
-        density === "compact" ? "py-2" : "py-3"
-      }`}
+      className="sticky top-0 z-[var(--z-sticky-header)] grid items-center gap-3 border-b border-border bg-muted px-3 text-left text-sm font-medium text-muted-foreground"
       style={{ gridTemplateColumns }}
     >
       {canModerateActivity ? (
@@ -29,7 +26,7 @@ export function ActivityDesktopLogsHeader({
         </div>
       ) : null}
       {columns.map((column) => (
-        <div key={column} role="columnheader">
+        <div key={column} role="columnheader" className={column === "user" && columns[0] === "user" ? "activity-log-pinned-user" : undefined}>
           {ACTIVITY_COLUMN_DEFINITIONS.find((definition) => definition.id === column)?.label}
         </div>
       ))}

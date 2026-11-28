@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { filterSourceName, installFixture, nickname, now, openRecords, receiptPng } from "./helpers/collection-records-fixture";
+import { pageDownAndWaitForScrollEnd } from "./helpers/table-scroll";
 
 // Render production routes against a static build and synthetic HTTP only.
 // No application server, database, dotenv, real accounts or receipt files.
@@ -324,7 +325,7 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   await expect(compact).toHaveAttribute("aria-pressed", "true");
   await expect(full).toHaveAttribute("aria-pressed", "false");
   await expect(table.getByRole("columnheader")).toHaveCount(8);
-  await expect(table.getByRole("columnheader", { name: "IC Number", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("columnheader", { name: "No. kad pengenalan", exact: true })).toHaveCount(0);
   const sourceFilename = "Synthetic source with long descriptive name.xlsx";
   await expect(table.getByText(sourceFilename, { exact: true })).toHaveCount(0);
   const row = table.locator("tbody tr").first();
@@ -370,7 +371,7 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   await expect(full).toHaveAttribute("aria-pressed", "true");
   await expect(compact).toHaveAttribute("aria-pressed", "false");
   await expect(table.getByRole("columnheader")).toHaveCount(18);
-  for (const heading of ["IC Number", "Customer Phone Number", "TOTAL DUE", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Fail sumber"]) {
+  for (const heading of ["No. kad pengenalan", "Telefon pelanggan", "Jumlah perlu dibayar", "Prinsipal bil (OSP)", "Status CP", "Tempoh tunggakan", "Padanan", "Fail sumber"]) {
     await expect(table.getByRole("columnheader", { name: heading, exact: true })).toHaveCount(1);
   }
   await expect(row.getByText("880101105432", { exact: true })).toHaveCount(1);
@@ -385,6 +386,28 @@ for (const theme of ["light", "dark"] as const) for (const width of [1366, 1024,
   expect(fixture.errors).toEqual([]);
 });
 
+for (const locale of ["ms", "en"] as const) {
+  test(`Collection table headings follow the saved ${locale} language in all desktop views`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width: 1100, height: 850 });
+    await installFixture(page, baseURL, { count: 2, theme: locale === "ms" ? "light" : "dark" });
+    await page.addInitScript((language) => localStorage.setItem("sqr.auth.locale", language), locale);
+    await openRecords(page);
+    const compact = locale === "ms"
+      ? ["No.", "Nama pelanggan", "Kad / Akaun", "Jumlah", "Tarikh bayaran", "Resit", "Nama panggilan staf", "Tindakan"]
+      : ["No.", "Customer Name", "Card / Account", "Amount", "Payment date", "Receipt", "Staff Nickname", "Actions"];
+    const full = locale === "ms"
+      ? ["No.", "Nama pelanggan", "Nombor kad", "Nombor akaun", "Jumlah", "Tarikh bayaran", "Resit", "No. kad pengenalan", "Telefon pelanggan", "Kelompok", "Jumlah perlu dibayar", "Prinsipal bil (OSP)", "Status CP", "Tempoh tunggakan", "Padanan", "Nama panggilan staf", "Fail sumber", "Tindakan"]
+      : ["No.", "Customer Name", "Card Number", "Account Number", "Amount", "Payment date", "Receipt", "IC Number", "Customer Phone Number", "Batch", "Total due", "Billing Principal (OSP)", "CP Status", "Aging", "Match", "Staff Nickname", "Source File", "Actions"];
+    const headers = page.getByRole("table", { name: "Collection records", exact: true }).getByRole("columnheader");
+    await expect(headers).toHaveText(compact);
+    await page.getByRole("table", { name: "Collection records", exact: true }).locator("..").screenshot({ path: testInfo.outputPath("compact-headings.png") });
+    await page.getByRole("button", { name: "Lengkap", exact: true }).click();
+    await expect(headers).toHaveText(full);
+    await page.getByRole("button", { name: "View All", exact: true }).click();
+    await expect(page.getByRole("dialog").getByRole("columnheader")).toHaveText(full.slice(0, -1));
+  });
+}
+
 test("Collection names open the selected read-only row even when two customers have the same name", async ({ page, baseURL }) => {
   const name = "Synthetic Customer";
   const fixture = await installFixture(page, baseURL, {
@@ -398,13 +421,90 @@ test("Collection names open the selected read-only row even when two customers h
   await expect(dialog.getByText("SYNTHETIC-ACCOUNT-2", { exact: true })).toBeVisible();
   await expect(dialog.getByText("••••0993", { exact: true })).toBeVisible();
   await expect(dialog).not.toContainText("SYNTHETIC-ACCOUNT-1");
-  await expect(dialog.getByRole("button")).toHaveCount(1);
+  const previous = dialog.getByRole("button", { name: "Rekod sebelumnya" });
+  const next = dialog.getByRole("button", { name: "Rekod seterusnya" });
+  await expect(next).toBeDisabled();
+  await previous.press("Enter");
+  await expect(dialog.getByText("SYNTHETIC-ACCOUNT-1", { exact: true })).toBeVisible();
+  await expect(previous).toBeDisabled();
+  await expect(dialog.getByRole("button")).toHaveCount(3);
   await expect(dialog.getByText("Tiada resit", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(triggers.nth(1)).toBeFocused();
+  await expect(triggers.nth(0)).toBeFocused();
   expect(fixture.mutations).toEqual([]);
   expect(fixture.unexpected).toEqual([]);
   expect(fixture.errors).toEqual([]);
+});
+
+for (const width of [390, 1366]) {
+  test(`Collection popup navigation follows the filtered cursor and returns focus at ${width}px`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width, height: 850 });
+    const fixture = await installFixture(page, baseURL, { count: 52, paginate: true, theme: width === 390 ? "dark" : "light" });
+    await openRecords(page);
+    await page.getByLabel("Search", { exact: true }).fill("Synthetic Customer");
+    await expect.poll(() => fixture.listRequests.some((q) => new URLSearchParams(q).get("search") === "Synthetic Customer")).toBe(true);
+    await page.getByRole("button", { name: "Synthetic Customer 50", exact: true }).click();
+    const forward = page.getByRole("button", { name: "Rekod seterusnya", exact: true });
+    const back = page.getByRole("button", { name: "Rekod sebelumnya", exact: true });
+    fixture.failLists = true;
+    await forward.click();
+    await expect(page.getByText("Failed to Load Records").first()).toBeVisible();
+    await expect(forward).toBeEnabled();
+    await expect(page.getByRole("dialog", { name: "Synthetic Customer 50", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByText("Failed to Load Records", { exact: true })).toBeHidden();
+    fixture.failLists = false;
+    await forward.click();
+    await expect(page.getByRole("dialog", { name: "Synthetic Customer 51", exact: true })).toBeVisible();
+    await back.click();
+    await expect(page.getByRole("dialog", { name: "Synthetic Customer 50", exact: true })).toBeVisible();
+    await forward.click();
+    await forward.press("Enter");
+    const last = page.getByRole("dialog", { name: "Synthetic Customer 52", exact: true });
+    await expect(last).toBeVisible();
+    await expect(forward).toBeDisabled();
+    await expect(last.getByText("SYNTHETIC-ACCOUNT-52", { exact: true })).toBeVisible();
+    expect(new URLSearchParams(fixture.listRequests.at(-1)).get("search")).toBe("Synthetic Customer");
+    await last.screenshot({ path: testInfo.outputPath("record-navigation.png") });
+    await last.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Synthetic Customer 52", exact: true })).toBeFocused();
+    await page.getByLabel("Search", { exact: true }).fill("Customer 1");
+    await page.getByRole("button", { name: "Synthetic Customer 1", exact: true }).click();
+    await forward.click();
+    const nextMatch = page.getByRole("dialog", { name: "Synthetic Customer 10", exact: true });
+    await expect(nextMatch).toBeVisible();
+    await nextMatch.getByRole("button", { name: "Close", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Synthetic Customer 10", exact: true })).toBeFocused();
+    expect(fixture.mutations).toEqual([]);
+  });
+}
+
+test("Collection popup navigation crosses pages inside View All and returns to its own list", async ({ page, baseURL }) => {
+  const fixture = await installFixture(page, baseURL, { count: 12, paginate: true, receipts: 1 });
+  await openRecords(page);
+  await page.getByRole("button", { name: "View All", exact: true }).click();
+  const list = page.getByRole("dialog", { name: "Senarai Penuh Rekod Collection", exact: true });
+  await expect(list.locator(".table-scroll-frame")).toHaveCSS("overflow-x", "clip");
+  await list.getByRole("button", { name: "Synthetic Customer 10", exact: true }).click();
+  const next = page.getByRole("button", { name: "Rekod seterusnya", exact: true });
+  fixture.failLists = true;
+  await next.click();
+  await expect(page.getByText("Failed to Load Full Records").first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Synthetic Customer 10", exact: true })).toBeVisible();
+  await expect(next).toBeEnabled();
+  // Dismiss the error notification before exercising the nested dialogs' Escape order.
+  await page.keyboard.press("Escape");
+  fixture.failLists = false;
+  await next.click();
+  const details = page.getByRole("dialog", { name: "Synthetic Customer 11", exact: true });
+  const receipt = details.getByRole("button", { name: "Lihat resit", exact: true });
+  await receipt.click();
+  const preview = await expectReceiptImage(page);
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(receipt).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(list.getByRole("button", { name: "Synthetic Customer 11", exact: true })).toBeFocused();
 });
 
 test("Collection record modes preserve filtered page, totals and export scope without refetching", async ({ page, baseURL }) => {
@@ -543,6 +643,38 @@ test("Collection record load failure offers retry without claiming that no recor
   expect(fixture.errors).toEqual([]);
 });
 
+for (const theme of ["light", "dark"] as const) {
+  test(`Collection desktop actions leave the payment date readable in ${theme} mode`, async ({ page, baseURL }, testInfo) => {
+    await page.setViewportSize({ width: 1100, height: 850 });
+    await installFixture(page, baseURL, { theme, count: 20 });
+    await openRecords(page);
+    const table = page.getByRole("table", { name: "Collection records", exact: true });
+    const row = table.locator("tbody tr").first();
+    const action = row.getByRole("button", { name: "Actions for record 1", exact: true });
+    const label = action.getByText("Actions", { exact: true });
+    await expect(action).toHaveAccessibleDescription("Synthetic Customer 1");
+    await expect(label).toBeHidden();
+    const target = await bounds(action);
+    expect(target.width).toBeGreaterThanOrEqual(44);
+    expect(target.height).toBeGreaterThanOrEqual(44);
+    const date = row.getByText("04/10/2026", { exact: true });
+    const dateRight = await date.evaluate((element) => {
+      const text = document.createRange();
+      text.selectNodeContents(element);
+      return text.getBoundingClientRect().right;
+    });
+    expect(dateRight).toBeLessThanOrEqual((await bounds(action.locator(".."))).x);
+    await testInfo.attach("compact-actions", { body: await table.locator("..").screenshot({ path: testInfo.outputPath("compact-actions.png") }), contentType: "image/png" });
+    await action.focus();
+    await action.press("Enter");
+    await expect(page.getByRole("menuitem", { name: "Edit", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(action).toBeFocused();
+    await page.setViewportSize({ width: 1920, height: 1080 });
+    await expect(label).toBeVisible();
+  });
+}
+
 for (const theme of ["light", "dark"] as const) for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 600 }]) test(`Collection polish ${theme} ${viewport.width}x${viewport.height} pins identity/actions and one vertical header`, async ({ page, baseURL }, testInfo) => {
   await page.setViewportSize(viewport);
   const fixture = await installFixture(page, baseURL, { theme });
@@ -550,18 +682,26 @@ for (const theme of ["light", "dark"] as const) for (const viewport of [{ width:
   await page.getByRole("group", { name: "Paparan rekod", exact: true }).getByRole("button", { name: "Lengkap", exact: true }).click();
   const scroll = page.locator(".collection-records-table-scroll");
   await expect(scroll.locator("tbody tr")).toHaveCount(20);
+  await expect(scroll.locator("..")).toHaveCSS("overflow-x", "clip");
   await scroll.scrollIntoViewIfNeeded();
   const customer = scroll.locator("tbody .collection-records-table-identity").first();
   const number = scroll.locator("tbody .collection-records-table-number").first();
   const actions = scroll.locator("tbody .collection-records-table-actions").first();
+  await scroll.focus();
+  await pageDownAndWaitForScrollEnd(scroll);
+  await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  expect(await scroll.evaluate((element) => element.scrollLeft)).toBe(0);
+  await scroll.press("Home");
+  await expect.poll(() => scroll.evaluate((element) => element.scrollTop)).toBe(0);
   await scroll.evaluate((element) => { element.scrollLeft = 500; });
   const numberBounds = await bounds(number);
   expect(Math.abs(numberBounds.x - (await bounds(scroll)).x)).toBeLessThan(3);
   expect(Math.abs((await bounds(customer)).x - numberBounds.x - numberBounds.width)).toBeLessThan(2);
   const actionBounds = await bounds(actions);
-  const scrollBounds = await bounds(scroll);
-  expect(Math.abs(actionBounds.x + actionBounds.width - scrollBounds.x - scrollBounds.width)).toBeLessThan(3);
-  const header = scroll.getByRole("columnheader", { name: "Customer Name", exact: true });
+  // Classic scrollbars occupy space beside the pinned action column.
+  const contentRight = await scroll.evaluate((node) => node.getBoundingClientRect().left + node.clientLeft + node.clientWidth);
+  expect(Math.abs(actionBounds.x + actionBounds.width - contentRight)).toBeLessThan(3);
+  const header = scroll.getByRole("columnheader", { name: "Nama pelanggan", exact: true });
   const headerTop = (await bounds(header)).y;
   await scroll.evaluate((element) => { element.scrollTop = 220; });
   await expect.poll(async () => Math.abs((await bounds(header)).y - headerTop)).toBeLessThan(2);

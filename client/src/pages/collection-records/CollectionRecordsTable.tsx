@@ -1,4 +1,5 @@
 import { CollectionRecordCard } from "./CollectionRecordCard";
+import { CollectionRecordBrowser } from "./CollectionRecordBrowser";
 import { CollectionPageCheckbox } from "./CollectionSelectionCheckbox";
 import { Suspense, lazy, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,8 @@ export interface CollectionRecordsTableProps extends CollectionRecordsEmptyState
   visibleRecords: CollectionRecord[];
   paginatedRecords: CollectionRecord[];
   pageOffset: number;
+  previousPage?: (() => void) | undefined;
+  nextPage?: (() => void) | undefined;
   canEdit: boolean;
   lastViewedRecordId?: string | null | undefined;
   onViewReceipt: ViewCollectionReceipt;
@@ -37,7 +40,17 @@ function renderRecordsLoading(label = "Loading records table...") {
   );
 }
 
-export function CollectionRecordsTable({
+export function CollectionRecordsTable(props: CollectionRecordsTableProps) {
+  return (
+    <CollectionRecordBrowser records={props.paginatedRecords} offset={props.pageOffset}
+      loading={props.loadingRecords} failed={props.recordsLoadFailed} previousPage={props.previousPage}
+      nextPage={props.nextPage} onOpenRecord={props.onOpenRecord} onViewReceipt={props.onViewReceipt}>
+      <CollectionRecordsTableView {...props} />
+    </CollectionRecordBrowser>
+  );
+}
+
+function CollectionRecordsTableView({
   loadingRecords,
   visibleRecords,
   paginatedRecords,

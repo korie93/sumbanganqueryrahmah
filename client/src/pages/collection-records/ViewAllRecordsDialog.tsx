@@ -1,4 +1,6 @@
 import { CollectionRecordCard } from "./CollectionRecordCard";
+import "@/components/data/table-scroll-frame.css";
+import { CollectionRecordBrowser } from "./CollectionRecordBrowser";
 import { Suspense, lazy } from "react";
 import { Button } from "@/components/ui/button";
 import { mobileFullscreenDialogViewportClassName } from "@/components/ui/dialog-viewport";
@@ -27,6 +29,7 @@ const ViewAllRecordsDesktopTable = lazy(() =>
 export interface ViewAllRecordsDialogProps {
   open: boolean;
   loading: boolean;
+  pageFailed?: boolean;
   fromDate: string;
   toDate: string;
   viewAllRecords: CollectionRecord[];
@@ -53,6 +56,7 @@ function ViewAllRecordsDesktopTableFallback() {
 export function ViewAllRecordsDialog({
   open,
   loading,
+  pageFailed,
   fromDate,
   toDate,
   viewAllRecords,
@@ -82,6 +86,10 @@ export function ViewAllRecordsDialog({
           <DialogTitle>Senarai Penuh Rekod Collection</DialogTitle>
           <DialogDescription>{dialogDescription}</DialogDescription>
         </DialogHeader>
+        <CollectionRecordBrowser records={viewAllRecords} offset={(page - 1) * pageSize} loading={loading} failed={pageFailed}
+          previousPage={page > 1 ? () => onPageChange(page - 1) : undefined}
+          nextPage={page < totalPages ? () => onPageChange(page + 1) : undefined}
+          onOpenRecord={onOpenRecord} onViewReceipt={onViewReceipt}>
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div
             className={
@@ -142,7 +150,7 @@ export function ViewAllRecordsDialog({
               className={
                 isMobile
                   ? "min-h-0 flex-1 overflow-hidden pt-3"
-                  : "min-h-0 flex-1 overflow-hidden rounded-[1.5rem] border border-border/60 bg-background shadow-sm"
+                  : "table-scroll-frame min-h-0 flex-1"
               }
             >
               {isMobile ? (
@@ -184,6 +192,7 @@ export function ViewAllRecordsDialog({
             </div>
           </div>
         </div>
+        </CollectionRecordBrowser>
       </DialogContent>
     </Dialog>
   );

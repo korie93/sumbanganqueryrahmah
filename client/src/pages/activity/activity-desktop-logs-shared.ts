@@ -28,7 +28,6 @@ export interface ActivityDesktopLogsHeaderProps {
   allVisibleSelected: boolean;
   canModerateActivity: boolean;
   columns: ActivityColumnId[];
-  density: TableDensity;
   gridTemplateColumns: string;
   onToggleSelectAllVisible: (checked: boolean) => void;
   partiallySelected: boolean;

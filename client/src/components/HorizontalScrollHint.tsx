@@ -21,6 +21,7 @@ type HorizontalScrollHintProps = {
   onScroll?: UIEventHandler<HTMLDivElement>;
   showNavigationControls?: boolean;
   showScrollbar?: boolean;
+  framedTable?: boolean;
 };
 
 type HorizontalOverflowState = {
@@ -45,6 +46,7 @@ export function HorizontalScrollHint({
   onScroll,
   showNavigationControls = false,
   showScrollbar = false,
+  framedTable = false,
 }: HorizontalScrollHintProps) {
   const localViewportRef = useRef<HTMLDivElement>(null);
   const viewportRef = suppliedViewportRef ?? localViewportRef;
@@ -223,7 +225,7 @@ export function HorizontalScrollHint({
       ref={viewportRef}
       aria-label={ariaLabel}
       className={cn(
-        "horizontal-scroll-hint overflow-x-auto",
+        framedTable ? "overflow-auto" : "horizontal-scroll-hint overflow-x-auto",
         showScrollbar ? "horizontal-scroll-hint--visible scrollbar-visible" : "",
         viewportClassName,
       )}
@@ -234,6 +236,16 @@ export function HorizontalScrollHint({
       {children}
     </div>
   );
+
+  // The navigation buttons remain outside the frame so neither scrollbar is covered.
+  if (framedTable) {
+    return (
+      <div className={cn("min-w-0", className)}>
+        {navigationControls}
+        <div className="table-scroll-frame">{viewport}</div>
+      </div>
+    );
+  }
 
   const indicators = overflowState.canScroll ? (
     <>

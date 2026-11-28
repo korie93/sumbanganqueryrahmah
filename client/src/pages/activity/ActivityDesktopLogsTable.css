@@ -1,0 +1,35 @@
+.activity-log-viewport {
+  max-height: clamp(16rem, calc(var(--viewport-min-height-value) - 22rem), 44rem);
+  /* Live row reordering must not make the browser anchor to a moved session. */
+  overflow-anchor: none;
+}
+
+.activity-log-viewport [role="table"] {
+  --activity-cell-padding: var(--spacing-3);
+}
+
+.activity-log-viewport [role="table"][data-density="compact"] {
+  --activity-cell-padding: var(--spacing-2);
+}
+
+.activity-log-viewport [role="row"] > * {
+  padding-block: var(--activity-cell-padding);
+}
+
+.activity-log-pinned-user {
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: var(--z-inline);
+  align-self: stretch;
+  display: grid;
+  align-items: center;
+  margin-inline: calc(0px - var(--spacing-2));
+  padding-inline: var(--spacing-2);
+  background: hsl(var(--card));
+  box-shadow: inset -1px 0 hsl(var(--border));
+}
+
+.activity-log-pinned-user[role="columnheader"],
+[role="row"]:hover > .activity-log-pinned-user {
+  background: hsl(var(--muted));
+}
